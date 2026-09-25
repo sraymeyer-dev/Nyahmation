@@ -6,7 +6,7 @@ import { packProject, unpackProject } from './projectFile';
 
 function sample() {
   const root = createPart({ name: 'body', kind: 'group' });
-  let project = createProject({ characters: [{ id: 'c', name: 'Pip', root }] });
+  let project = createProject({ layers: [{ id: 'c', name: 'Pip', kind: 'character', root }] });
   project = setPartPose(project, root.id, 'x', 0, 10);
   project = { ...project, assets: [{ id: 'voice', name: 'line1.wav', mimeType: 'audio/wav' }] };
   const assets = new Map([['voice', new Uint8Array([82, 73, 70, 70, 1, 2, 3])]]);

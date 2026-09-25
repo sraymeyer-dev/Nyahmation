@@ -7,3 +7,5 @@ export * from './tracks';
 export * from './geometry';
 export * from './evaluate';
 export * from './project';
+export * from './pathEdit';
+export * from './edit';

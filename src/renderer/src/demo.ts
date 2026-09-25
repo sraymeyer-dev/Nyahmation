@@ -93,7 +93,7 @@ export function createDemoProject(): Project {
     fps: 24,
     durationFrames: 72,
     background: '#fdf6e3',
-    characters: [{ id: 'pip', name: 'Pip', root }],
+    layers: [{ id: 'pip', name: 'Pip', kind: 'character', root }],
   });
   project = { ...project, drawingSets: [MOUTHS] };
 

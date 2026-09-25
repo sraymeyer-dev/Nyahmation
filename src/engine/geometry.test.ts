@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { ellipsePath, pathCommands, pathToSvgData, polygonPath, rectPath } from './geometry';
+import {
+  ellipsePath,
+  pathBounds,
+  pathCommands,
+  pathToSvgData,
+  polygonPath,
+  rectPath,
+  regularPolygonPath,
+  roundedRectPath,
+  starPath,
+  transformPath,
+} from './geometry';
 
 describe('primitives', () => {
   it('a rectangle is a closed path of four corners', () => {
@@ -44,5 +55,42 @@ describe('primitives', () => {
 
   it('an empty path draws nothing', () => {
     expect(pathCommands({ closed: true, points: [] })).toEqual([]);
+  });
+});
+
+describe('more primitives', () => {
+  it('rounded rectangles fit their box', () => {
+    const b = pathBounds(roundedRectPath(10, 20, 100, 50, 12));
+    expect(b.minX).toBeCloseTo(10);
+    expect(b.minY).toBeCloseTo(20);
+    expect(b.maxX).toBeCloseTo(110);
+    expect(b.maxY).toBeCloseTo(70);
+    expect(roundedRectPath(0, 0, 10, 10, 0).points).toHaveLength(4);
+  });
+
+  it('polygons and stars have the right number of corners, pointing up', () => {
+    const hex = regularPolygonPath(0, 0, 10, 6);
+    expect(hex.points).toHaveLength(6);
+    expect(hex.points[0]!.anchor.y).toBeCloseTo(-10);
+    expect(starPath(0, 0, 10, 4, 5).points).toHaveLength(10);
+  });
+});
+
+describe('pathBounds', () => {
+  it('includes the bulge of curves, not the handles', () => {
+    const b = pathBounds(ellipsePath(50, 50, 20, 10));
+    expect(b.minX).toBeCloseTo(30, 6);
+    expect(b.maxX).toBeCloseTo(70, 6);
+    expect(b.minY).toBeCloseTo(40, 6);
+    expect(b.maxY).toBeCloseTo(60, 6);
+  });
+});
+
+describe('transformPath', () => {
+  it('moves anchors and turns handles', () => {
+    const t = transformPath(ellipsePath(0, 0, 10, 10), [0, 1, -1, 0, 5, 0]); // rotate 90°, shift x
+    expect(t.points[0]!.anchor.x).toBeCloseTo(15);
+    expect(t.points[0]!.anchor.y).toBeCloseTo(0);
+    expect(t.points[0]!.handleOut!.y).toBeCloseTo(5.5228, 3);
   });
 });

@@ -51,7 +51,7 @@ export interface ShapeStyle {
   fillRule: 'nonzero' | 'evenodd';
 }
 
-export type PartKind = 'group' | 'shape' | 'switch';
+export type PartKind = 'group' | 'shape' | 'switch' | 'image';
 
 export interface Part {
   id: string;
@@ -62,8 +62,10 @@ export interface Part {
   joint: Joint;
   opacity: number;
   visible: boolean;
+  /** Locked parts (and their children) can't be selected on the canvas. */
+  locked?: boolean;
   /**
-   * Stacking order within the whole character (higher draws on top).
+   * Stacking order within the whole layer (higher draws on top).
    * Independent of the parent/child tree, so a child can sit behind its parent.
    */
   drawOrder: number;
@@ -74,16 +76,32 @@ export interface Part {
   /** kind === 'switch' */
   drawingSetId?: string;
   restDrawing?: string;
+  /** kind === 'image': drawn with its top-left corner at the part's (0, 0). */
+  image?: ImageRef;
 }
 
-/** How a character's motion is sampled: every frame, every 2nd or every 3rd. */
+export interface ImageRef {
+  assetId: string;
+  width: number;
+  height: number;
+}
+
+/** How a layer's motion is sampled: every frame, every 2nd or every 3rd. */
 export type Stepping = 1 | 2 | 3;
 
-export interface Character {
+export type LayerKind = 'character' | 'background';
+
+/**
+ * One sheet in the scene's stack (docs/DESIGN.md §8a): a character rig or a
+ * piece of scenery. Its root part is a group; hiding or locking the root
+ * hides or locks the layer.
+ */
+export interface Layer {
   id: string;
   name: string;
+  kind: LayerKind;
   root: Part;
-  /** Overrides the scene's stepping for this character. */
+  /** Overrides the scene's stepping for this layer. */
   stepping?: Stepping;
 }
 
@@ -156,8 +174,8 @@ export interface Scene {
   durationFrames: number;
   background: string;
   stepping: Stepping;
-  /** Drawn in list order: later characters are on top. */
-  characters: Character[];
+  /** Drawn in list order: later layers are on top. */
+  layers: Layer[];
   tracks: Track[];
 }
 

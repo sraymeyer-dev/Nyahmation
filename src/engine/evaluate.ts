@@ -1,10 +1,12 @@
+import { walkParts } from './edit';
 import { evaluateContinuous, evaluateDiscrete } from './interpolate';
 import { IDENTITY, localMatrix, multiply, type Mat2D } from './math';
 import { collectAnchors, steppedFrame } from './stepping';
 import { isContinuousChannel } from './tracks';
 import type {
   Channel,
-  Character,
+  ImageRef,
+  Layer,
   Part,
   PartKind,
   Pose,
@@ -20,7 +22,7 @@ export interface ResolvedPart {
   id: string;
   name: string;
   kind: PartKind;
-  characterId: string;
+  layerId: string;
   /** Drawing coordinates → scene coordinates. */
   world: Mat2D;
   /** The animated local transform (useful for editing tools). */
@@ -29,12 +31,15 @@ export interface ResolvedPart {
   opacity: number;
   /** False if this part or any ancestor is hidden. */
   visible: boolean;
+  /** True if this part or any ancestor is locked. */
+  locked: boolean;
   drawOrder: number;
   paths?: VectorPath[];
   style?: ShapeStyle;
   drawingSetId?: string;
   /** The drawing key a switch layer shows on this frame. */
   drawing?: string;
+  image?: ImageRef;
 }
 
 export interface ResolvedScene {
@@ -58,11 +63,6 @@ function indexTracks(tracks: readonly Track[]): TrackIndex {
   return index;
 }
 
-function* walk(part: Part): Generator<Part> {
-  yield part;
-  for (const child of part.children) yield* walk(child);
-}
-
 /**
  * The single source of truth for what is on screen: preview, scrubbing, onion
  * skinning and export all call this. It is pure and deterministic.
@@ -72,25 +72,30 @@ export function evaluateScene(project: Project, frame: number): ResolvedScene {
   const { scene } = project;
   const tracks = indexTracks(scene.tracks);
   const parts: ResolvedPart[] = [];
-  for (const character of scene.characters) {
-    parts.push(...evaluateCharacter(character, frame, scene.stepping, tracks));
+  for (const layer of scene.layers) {
+    parts.push(...evaluateLayer(layer, frame, scene.stepping, tracks));
   }
   return { frame, width: scene.width, height: scene.height, background: scene.background, parts };
 }
 
-function evaluateCharacter(
-  character: Character,
+/** The scene with no animation applied: what Build mode shows (docs/DESIGN.md §9.0). */
+export function evaluateRestPose(project: Project): ResolvedScene {
+  return evaluateScene({ ...project, scene: { ...project.scene, tracks: [] } }, 0);
+}
+
+function evaluateLayer(
+  layer: Layer,
   frame: number,
   sceneStepping: Project['scene']['stepping'],
   tracks: TrackIndex,
 ): ResolvedPart[] {
   // Motion is sampled at the stepped frame; discrete channels (mouths,
   // visibility, draw order) always use the real frame, so they stay on ones.
-  const stepping = character.stepping ?? sceneStepping;
+  const stepping = layer.stepping ?? sceneStepping;
   let motionFrame = frame;
   if (stepping !== 1) {
     const poseLists: Pose<unknown>[][] = [];
-    for (const part of walk(character.root)) {
+    for (const part of walkParts(layer.root)) {
       for (const track of tracks.get(part.id)?.values() ?? []) {
         if (isContinuousChannel(track.channel)) poseLists.push(track.poses);
       }
@@ -99,7 +104,7 @@ function evaluateCharacter(
   }
 
   const out: ResolvedPart[] = [];
-  const visit = (part: Part, parentWorld: Mat2D, parentOpacity: number, parentVisible: boolean) => {
+  const visit = (part: Part, parentWorld: Mat2D, parentOpacity: number, parentVisible: boolean, parentLocked: boolean) => {
     const partTracks = tracks.get(part.id);
     const cont = (channel: Channel, rest: number) => {
       const track = partTracks?.get(channel);
@@ -120,16 +125,18 @@ function evaluateCharacter(
     const world = multiply(parentWorld, localMatrix(local, part.joint.pivot));
     const opacity = parentOpacity * Math.min(Math.max(cont('opacity', part.opacity), 0), 1);
     const visible = parentVisible && disc('visible', part.visible);
+    const locked = parentLocked || part.locked === true;
 
     const resolved: ResolvedPart = {
       id: part.id,
       name: part.name,
       kind: part.kind,
-      characterId: character.id,
+      layerId: layer.id,
       world,
       local,
       opacity,
       visible,
+      locked,
       drawOrder: disc('drawOrder', part.drawOrder),
     };
     if (part.kind === 'shape') {
@@ -139,11 +146,13 @@ function evaluateCharacter(
       if (part.drawingSetId) resolved.drawingSetId = part.drawingSetId;
       const drawing = disc<string | undefined>('drawing', part.restDrawing);
       if (drawing !== undefined) resolved.drawing = drawing;
+    } else if (part.kind === 'image' && part.image) {
+      resolved.image = part.image;
     }
     out.push(resolved);
-    for (const child of part.children) visit(child, world, opacity, visible);
+    for (const child of part.children) visit(child, world, opacity, visible, locked);
   };
-  visit(character.root, IDENTITY, 1, true);
+  visit(layer.root, IDENTITY, 1, true, false);
 
   // Stable sort: equal draw orders keep tree order (parents before children).
   return out.sort((a, b) => a.drawOrder - b.drawOrder);

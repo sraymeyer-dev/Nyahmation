@@ -1,8 +1,8 @@
 import { isContinuousChannel } from './tracks';
-import type { Character, Part, PartKind, Project, Scene, Stepping, Track } from './types';
+import type { Layer, LayerKind, Part, PartKind, Project, Scene, Stepping, Track } from './types';
 
 /** Bump when the saved format changes, and add a migration from the old version. */
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 
 export class ProjectFormatError extends Error {
   override name = 'ProjectFormatError';
@@ -25,6 +25,10 @@ export function createPart(init: { name: string; kind: PartKind } & Partial<Omit
   };
 }
 
+export function createLayer(kind: LayerKind, name: string, children: Part[] = []): Layer {
+  return { id: createId(), name, kind, root: createPart({ name, kind: 'group', children }) };
+}
+
 export function createProject(scene: Partial<Scene> = {}): Project {
   return {
     format: 'nyahmation',
@@ -36,7 +40,7 @@ export function createProject(scene: Partial<Scene> = {}): Project {
       durationFrames: 240,
       background: '#ffffff',
       stepping: 1,
-      characters: [],
+      layers: [],
       tracks: [],
       ...scene,
     },
@@ -50,7 +54,16 @@ export function createProject(scene: Partial<Scene> = {}): Project {
  * version-n document into a version-(n+1) document.
  */
 export type Migration = (raw: Record<string, unknown>) => Record<string, unknown>;
-export const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+export const MIGRATIONS: Readonly<Record<number, Migration>> = {
+  // v2: the scene's `characters` became a stack of `layers` (characters and backgrounds).
+  1: (raw) => {
+    const scene = { ...(raw.scene as Record<string, unknown>) };
+    const characters = Array.isArray(scene.characters) ? scene.characters : [];
+    scene.layers = characters.map((c: Record<string, unknown>) => ({ ...c, kind: 'character' }));
+    delete scene.characters;
+    return { ...raw, scene };
+  },
+};
 
 export function migrateProject(
   raw: Record<string, unknown>,
@@ -97,7 +110,7 @@ export function validateProject(project: Project): void {
     if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) fail(`scene ${key} must be a positive whole number`);
   }
   if (!isStepping(scene.stepping)) fail('scene stepping must be 1, 2 or 3');
-  if (!Array.isArray(scene.characters) || !Array.isArray(scene.tracks)) fail('scene characters/tracks missing');
+  if (!Array.isArray(scene.layers) || !Array.isArray(scene.tracks)) fail('scene layers/tracks missing');
   if (!Array.isArray(project.drawingSets) || !Array.isArray(project.assets)) fail('drawing sets/assets missing');
 
   const partIds = new Set<string>();
@@ -108,9 +121,10 @@ export function validateProject(project: Project): void {
     if (!Array.isArray(part.children)) fail(`part ${part.name} has no children list`);
     part.children.forEach(checkPart);
   };
-  scene.characters.forEach((c: Character) => {
-    if (c.stepping !== undefined && !isStepping(c.stepping)) fail(`character ${c.name} has invalid stepping`);
-    checkPart(c.root);
+  scene.layers.forEach((layer: Layer) => {
+    if (layer.kind !== 'character' && layer.kind !== 'background') fail(`layer ${layer.name} has an unknown kind`);
+    if (layer.stepping !== undefined && !isStepping(layer.stepping)) fail(`layer ${layer.name} has invalid stepping`);
+    checkPart(layer.root);
   });
 
   const seen = new Set<string>();

@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v0.6. Requirements baseline for the MVP. Phase 0 (foundations) is built; see §16.
+> **Status:** v0.7. Requirements baseline for the MVP. Phase 0 is built and phase 1 (drawing) is in progress; see §16.
 > **Last updated:** 2026-09-25
 
 ---
@@ -186,7 +186,7 @@ This refines §6.2: IK is a posing tool **except** for pinned chains, which are 
 ## 7. Libraries
 
 - **L1** The library is a **folder on disk** (default: `Documents/Nyahmation Library`). Each item is a file, so the library can be backed up or synced like any other folder.
-- **L2** Item kinds: **Shape** (any drawing), **Drawing set** (mouths, eyes, hands, brows), **Character** (a full rig).
+- **L2** Item kinds: **Shape** (any drawing), **Drawing set** (mouths, eyes, hands, brows), **Character** (a full rig), **Background** (a set of background layers).
 - **L3** Every item has a name, tags and a thumbnail. The library panel is searchable. Drag an item onto the canvas, or onto a switch layer.
 - **L4** Subfolders for organizing, such as `Mouths/Round style` or `Hands/Cartoon`.
 - **L5** Proposed: when you use a library item, the **project gets its own copy**. The project never breaks if the library changes later. An "update from library" command could come later.
@@ -232,7 +232,42 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 
 ---
 
+## 8a. Scene layers and backgrounds
+
+A scene is a **stack of layers**, like sheets of glass in a traditional animation camera stand: the sky at the back, then hills, then the room, then the characters, then foreground props that pass in front of them.
+
+### 8a.1 Must have (phase 1)
+- **BG1** A scene holds an ordered stack of **layers**. Each layer is either a **character** (a rig) or a **background** (scenery). Background layers can sit behind, between or in front of characters.
+- **BG2** A background layer holds anything a character can: vector shapes, SVG imports and images, grouped and named. Its parts can be animated the same way, such as a swaying tree or a flickering sign.
+- **BG3** Layers can be renamed, reordered, hidden and locked. A locked layer can't be selected on the canvas, so you don't bump the scenery while posing a character.
+
+### 8a.2 Should have (phase 5)
+- **BG4** **Parallax depth** per layer. When the camera (A11) pans or zooms, distant layers move less and foreground layers move more, which gives a sense of depth. Depth 0 is fixed to the camera (a sky), 1 moves with the world, and above 1 is foreground.
+- **BG5** **Scrolling and tiling.** A layer can repeat horizontally and scroll at a set speed, for walk cycles on a "treadmill" and scenery passing a car window.
+- **BG6** **Atmosphere.** Per-layer blur (depth of field) and haze (fading distant layers toward the sky color).
+- **BG7** **Gradient skies** and fills (with D10 gradients).
+- **BG8** **Background library items** (L2): save a set of background layers and reuse it in other projects.
+
+## 8b. Effects: glow and shadow (phase 5)
+
+- **FX1** Each part, group or layer can have an **effects stack**:
+  - **Drop shadow**: color, opacity, offset (angle and distance), blur.
+  - **Outer glow**: color, opacity, size, strength.
+  - (Could) **Inner shadow** and **inner glow**.
+- **FX2** **Effects on a group apply to the group as a whole.** A shadow on a character's root casts one shadow of the whole character. If each part cast its own shadow, the shadows would double up and look darker wherever parts overlap, such as the arm over the torso. Technically, the group is drawn to an off-screen image first and the effect is applied to that image.
+- **FX3** Effect settings are **animatable** like any other value, such as a glow that pulses or a shadow that lengthens.
+- **FX4** **Blend modes** per part or layer: Normal, Multiply (for shading), Screen and Add (for light and glows), Overlay.
+- **FX5** (Could) A **contact shadow** preset: a soft ellipse on the ground that follows a character's feet.
+- **FX6** **Performance.** Blur is the most expensive thing Nyahmation will draw, especially on the reference machine. Effects follow the preview quality setting (N9), and the results for parts that don't change (most scenery) are cached. The export always renders effects at full quality.
+
 ## 9. Animation
+
+### 9.0 Build mode and Animate mode
+Nyahmation has two modes:
+- **Build**: draw shapes, edit points, arrange parts, and later set joints. Changes here edit the character itself (its rest pose and drawings), on every frame.
+- **Animate**: pose the character on the timeline. Changes here are poses (A2).
+
+Without this split, dragging a part would be ambiguous: does it mean "this arm is attached here" or "on this frame, move the arm"? Spine, a professional cutout animation tool, uses the same two modes (it calls them Setup and Animate). This is not a keyframe record mode: in Animate mode every change is still simply a pose.
 
 ### 9.1 Must have
 - **A1** **Timeline**: frame ruler, playhead, one row per part (collapsible into a single character row), pose marks, audio waveform and lip-sync lanes.
@@ -275,7 +310,7 @@ Hand-drawn animation often changes the picture only every 2nd frame ("on twos"):
 ### 9.2 Should have
 - **A10** Custom easing curve editor.
 - **A11** **Camera**: pan, zoom and rotate the view, animated like any part.
-- **A12** Backgrounds (images or vector layers) and multiple characters per scene.
+- **A12** Multiple characters per scene (the layer stack, §8a).
 - **A13** Copy and paste poses between frames and characters. Mirror a pose (swap left and right).
 
 ---
@@ -378,7 +413,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 | App shell | Electron (built with electron-vite, packaged with electron-builder) |
 | Language | TypeScript everywhere |
 | UI panels | React |
-| State and undo | Immutable document store using Immer, whose change patches give undo/redo |
+| State and undo | Immutable project data; undo keeps a list of earlier snapshots, which share all unchanged data so they cost little memory (D-31) |
 | Rendering | Canvas 2D with `Path2D`, plus a separate overlay canvas for handles, joints and onion skins |
 | Geometry | Our own Bézier and IK code. Libraries (such as bezier-js or paper.js) are evaluated for the hard parts: boolean operations and path offsetting. |
 | Video | FFmpeg binary bundled per platform, driven as a child process |
@@ -441,11 +476,11 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | Phase | Theme | Scope |
 |---|---|---|
 | **0** ✅ | Foundations | Electron skeleton; engine (data model, Smooth interpolation, stepping, parent/child evaluation) with unit tests; save/load `.nyah`; demo puppet test harness. |
-| **1** | Draw | Canvas, pen tool, primitives, point editing, fill and stroke, outliner, undo; SVG and PNG import. |
+| **1** | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
 | **2** | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
 | **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 export**. |
 | **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. |
-| **5** | Polish | Camera, backgrounds, draw-order swaps, ProRes/PNG export, easing curve editor. |
+| **5** | Polish | Camera; parallax, scrolling and atmosphere for backgrounds (BG4–BG8); glow, shadow and blend modes (FX1–FX6); draw-order swaps; ProRes/PNG export; easing curve editor. |
 | **6+** | Stretch | Automatic lip sync (Rhubarb), mirror poses, animation cycles, gradients and boolean operations. |
 
 **MVP = Phases 0–4.** Success test: *make a 10-second clip of a character who takes a few steps without the feet sliding, waves, and speaks one line of dialogue, lip-synced, exported as MP4 with audio.*
@@ -480,9 +515,13 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-22 | Drawing sets can contain PNG images as well as vector drawings, with a warning for enlarged PNGs | **Decided** |
 | D-23 | Support older Intel Macs (universal Mac build) as well as Apple Silicon and Windows | **Decided** |
 | D-24 | 2020 Intel MacBook Air (macOS 15) is the reference machine for performance | **Decided** |
-| D-25 | Draw order is a stacking number per character, separate from the parent/child tree (R10) | Proposed |
-| D-26 | Stepping restarts at any pose of any part of the character (ST5) | Proposed |
-| D-27 | A part's first pose after frame 0 also records its previous state on frame 0 (A2a) | Proposed |
+| D-25 | Draw order is a stacking number per character, separate from the parent/child tree (R10) | **Decided** |
+| D-26 | Stepping restarts at any pose of any part of the character (ST5) | **Decided** |
+| D-27 | A part's first pose after frame 0 also records its previous state on frame 0 (A2a) | **Decided** |
+| D-28 | A scene is a stack of character and background layers (§8a) | **Decided** |
+| D-29 | Glow and shadow effects on groups apply to the group as a whole (FX2) | Proposed |
+| D-30 | Separate Build and Animate modes (§9.0) | Proposed |
+| D-31 | Undo keeps snapshots of the (immutable) project, which share unchanged data, instead of Immer patches | Proposed |
 
 ---
 
@@ -514,6 +553,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v0.7 (2026-09-25):** Added scene layers and backgrounds (§8a), glow and shadow effects (§8b), and Build/Animate modes (§9.0). D-25 to D-27 confirmed.
 - **v0.6 (2026-09-25):** Phase 0 built. Recorded decisions from implementation: joint-based positions, draw order separate from the tree (R10), character-wide step restarts (ST5), and the first-pose rule (A2a). Updated the source layout.
 - **v0.5 (2026-09-25):** Reference machine set (2020 Intel MacBook Air, macOS 15). Added a preview quality setting (N9). Mouths and camera on ones confirmed. No open questions left.
 - **v0.4 (2026-09-25):** Part poses decided. SVG-only vector import (PDF/AI/EPS dropped); PNG import now a Must. Added on ones/twos/threes (§9.1b), lip-sync auto-advance (LS3a), PNG drawings in sets with an enlargement warning (S5–S6), and Intel Mac support.

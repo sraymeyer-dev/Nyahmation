@@ -3,7 +3,7 @@ import { evaluateScene, type ResolvedScene } from './evaluate';
 import { applyToPoint } from './math';
 import { createPart, createProject } from './project';
 import { setPartPose } from './tracks';
-import type { Character, Part, Project } from './types';
+import type { Layer, Part, Project } from './types';
 
 /** body (group at 100,100) → arm (joint 10,0) → hand (joint 20,0 along the arm); body → mouth (switch). */
 function rig(): { project: Project; body: Part; arm: Part; hand: Part; mouth: Part } {
@@ -21,8 +21,8 @@ function rig(): { project: Project; body: Part; arm: Part; hand: Part; mouth: Pa
     rest: { x: 100, y: 100, rotation: 0, scaleX: 1, scaleY: 1 },
     children: [arm, mouth],
   });
-  const character: Character = { id: 'c1', name: 'Test', root: body };
-  const project = createProject({ characters: [character] });
+  const layer: Layer = { id: 'c1', name: 'Test', kind: 'character', root: body };
+  const project = createProject({ layers: [layer] });
   return { project, body, arm, hand, mouth };
 }
 
@@ -71,7 +71,7 @@ describe('evaluateScene', () => {
       rest: { x: 50, y: 50, rotation: 33, scaleX: 2, scaleY: 0.5 },
       joint: { pivot: { x: 5, y: 7 } },
     });
-    const project = createProject({ characters: [{ id: 'c', name: 'c', root: p }] });
+    const project = createProject({ layers: [{ id: 'c', name: 'c', kind: 'character', root: p }] });
     const joint = applyToPoint(evaluateScene(project, 0).parts[0]!.world, { x: 5, y: 7 });
     expect(joint.x).toBeCloseTo(50);
     expect(joint.y).toBeCloseTo(50);
@@ -158,7 +158,7 @@ describe('evaluateScene', () => {
         ...project,
         scene: {
           ...project.scene,
-          characters: project.scene.characters.map((c) => ({ ...c, stepping: 1 as const })),
+          layers: project.scene.layers.map((c) => ({ ...c, stepping: 1 as const })),
         },
       };
       expect(rotationAt(onOnes, arm.id, 2)).toBeCloseTo(10);

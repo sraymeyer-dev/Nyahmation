@@ -50,3 +50,31 @@ export function lerp(a: number, b: number, t: number): number {
 export function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
 }
+
+export function invert(m: Mat2D): Mat2D {
+  const det = m[0] * m[3] - m[1] * m[2];
+  if (Math.abs(det) < 1e-12) return IDENTITY;
+  const a = m[3] / det;
+  const b = -m[1] / det;
+  const c = -m[2] / det;
+  const d = m[0] / det;
+  return [a, b, c, d, -(a * m[4] + c * m[5]), -(b * m[4] + d * m[5])];
+}
+
+/**
+ * The Transform that reproduces `m` as localMatrix(transform, pivot).
+ * Exact unless `m` contains skew (possible after non-uniform scaling a
+ * rotated parent), in which case the skew is dropped.
+ */
+export function decompose(m: Mat2D, pivot: Vec2): Transform {
+  const scaleX = Math.hypot(m[0], m[1]);
+  const rotation = Math.atan2(m[1], m[0]) / DEG_TO_RAD;
+  const det = m[0] * m[3] - m[1] * m[2];
+  const scaleY = scaleX === 0 ? Math.hypot(m[2], m[3]) : det / scaleX;
+  const joint = applyToPoint(m, pivot);
+  return { x: joint.x, y: joint.y, rotation, scaleX, scaleY };
+}
+
+export function distance(a: Vec2, b: Vec2): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
