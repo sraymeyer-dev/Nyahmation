@@ -408,7 +408,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 
 ## 13. Non-functional requirements
 
-- **N1** Runs on **macOS (both Apple Silicon and older Intel Macs)** and **Windows 10/11** from one codebase. The Mac app is a universal build (it contains both Apple Silicon and Intel code), and FFmpeg is bundled for both.
+- **N1** Runs on **macOS (both Apple Silicon and older Intel Macs)** and **Windows 10/11** from one codebase. The Mac app is built for one chip at a time (Intel or Apple Silicon), on a Mac of that kind, with a matching FFmpeg bundled.
 - **N2** Real-time preview (24–60 fps) for a 1080p scene with about 2 characters of about 50 parts each, **measured on the reference machine (see N8)**. On slower machines, export only takes longer; it never loses quality.
 - **N3** The preview looks exactly like the export: one renderer does both.
 - **N4** Every edit can be undone. Autosave means no lost work.
@@ -461,7 +461,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 - **macOS Gatekeeper**: without an Apple Developer ID ($99/yr), the Mac shows a warning the first time the app is opened. Right-click → Open gets past it.
 - **Intel Mac minimum macOS version**: Electron supports the same macOS versions as Chrome, currently about macOS 12 or newer. The reference Mac runs macOS 15 Sequoia, so this is fine. Sequoia is the last macOS version this model can install, but Chrome and Electron normally keep supporting a macOS version for several years after that.
 - **Universal Mac build** is roughly twice the size, since it contains code for both kinds of processor.
-- **FFmpeg in the Mac app**: the bundled FFmpeg matches the Mac that builds the app. A universal app built on an Intel Mac carries Intel FFmpeg, which Apple Silicon Macs run through Rosetta.
+- **FFmpeg in the Mac app**: the bundled FFmpeg matches the Mac that builds the app, so the Mac app is built per chip rather than universal (D-23). An Intel build also runs on Apple Silicon through Rosetta.
 - **FFmpeg licensing**: the H.264 encoder (x264) is GPL-licensed. That's fine for personal use; revisit if Nyahmation is ever distributed.
 
 ---
@@ -543,7 +543,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-20 | Mouths and the camera stay on ones even when a character is on twos; steps restart at every pose | **Decided** |
 | D-21 | Lip-sync entry auto-advances the playhead (1 frame by default) | **Decided** |
 | D-22 | Drawing sets can contain PNG images as well as vector drawings, with a warning for enlarged PNGs | **Decided** |
-| D-23 | Support older Intel Macs (universal Mac build) as well as Apple Silicon and Windows | **Decided** |
+| D-23 | Support older Intel Macs as well as Apple Silicon and Windows. Mac apps are built per chip (Intel or Apple Silicon), not universal, because the bundled FFmpeg is one chip's program | **Decided** |
 | D-24 | 2020 Intel MacBook Air (macOS 15) is the reference machine for performance | **Decided** |
 | D-25 | Draw order is a stacking number per character, separate from the parent/child tree (R10) | **Decided** |
 | D-26 | Stepping restarts at any pose of any part of the character (ST5) | **Decided** |

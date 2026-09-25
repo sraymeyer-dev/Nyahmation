@@ -7,16 +7,19 @@
   "author": "Nyahmation",
   "main": "./out/main/index.js",
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "postinstall": "node scripts/setup.mjs",
+    "predev": "node scripts/setup.mjs",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "electron-vite build && playwright test",
+    "test:e2e": "node scripts/setup.mjs && electron-vite build && playwright test",
     "check": "npm run typecheck && npm run test",
-    "dist:mac": "electron-vite build && electron-builder --mac --universal",
-    "dist:win": "electron-vite build && electron-builder --win"
+    "dist:mac": "node scripts/setup.mjs && electron-vite build && electron-builder --mac",
+    "dist:win": "node scripts/setup.mjs && electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "fflate": "^0.8.3",

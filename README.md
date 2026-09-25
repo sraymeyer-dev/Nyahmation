@@ -33,7 +33,9 @@ node -v    # should print v22.something or higher
 npm install
 ```
 
-This takes a few minutes the first time: it downloads Electron (about 100 MB) and the other parts.
+This takes a few minutes the first time: it downloads Electron (about 100 MB), FFmpeg (for video export) and the other parts.
+
+Newer versions of npm print warnings like `npm warn allow-scripts … not yet covered by allowScripts` and `npm warn deprecated …`. They are harmless: Nyahmation downloads Electron and FFmpeg itself and doesn't need those steps approved. If a download is interrupted, run `npm run setup` to finish it.
 
 **4. Start Nyahmation.**
 
@@ -55,7 +57,7 @@ Instead of starting from Terminal each time, you can build a normal app:
 npm run dist:mac
 ```
 
-This makes `release/Nyahmation-0.0.1-universal.dmg` (it takes several minutes). Open it and drag Nyahmation to Applications.
+This makes `release/Nyahmation-0.0.1.dmg` on an Intel Mac, or `release/Nyahmation-0.0.1-arm64.dmg` on Apple Silicon (it takes several minutes). The app is built for the kind of Mac you build it on. Open it and drag Nyahmation to Applications.
 
 The app isn't signed with a paid Apple Developer ID, so macOS Sequoia blocks it the first time. To allow it once: try to open it, click **Done**, then go to **System Settings → Privacy & Security**, scroll down to the message about Nyahmation, click **Open Anyway**, and confirm with your password. After that it opens normally.
 
@@ -135,7 +137,7 @@ npm run test:e2e  # builds the app and drives it with Playwright (on Linux, run 
 Run on the machine for that platform:
 
 ```sh
-npm run dist:mac  # macOS universal .dmg (Intel + Apple Silicon), in release/
+npm run dist:mac  # macOS .dmg for this Mac's chip (Intel or Apple Silicon), in release/
 npm run dist:win  # Windows installer, in release/
 ```
 

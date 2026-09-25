@@ -15,9 +15,10 @@ fileAssociations:
     role: Editor
 mac:
   category: public.app-category.graphics-design
+  # Built for the Mac it's made on (Intel or Apple Silicon): the bundled
+  # FFmpeg is downloaded for that chip only, so a universal app can't carry it.
   target:
     - target: dmg
-      arch: [universal]
 win:
   target:
     - target: nsis
