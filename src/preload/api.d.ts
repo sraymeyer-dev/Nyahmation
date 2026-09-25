@@ -41,6 +41,18 @@ export interface LibraryApi {
   reveal(): Promise<void>;
 }
 
+export type ExportFormat = 'mp4' | 'png';
+
+export interface ExportApi {
+  /** Asks where to save: a .mp4 file, or a folder for PNG frames. Null if cancelled. */
+  choose(format: ExportFormat, suggestedName: string): Promise<string | null>;
+  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number }): Promise<number>;
+  /** MP4: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
+  frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
+  end(session: number): Promise<{ path: string }>;
+  cancel(session: number): Promise<void>;
+}
+
 /** Commands sent from the native menu (see src/main/menu.ts). */
 export type MenuCommand =
   | 'new'
@@ -70,7 +82,8 @@ export type MenuCommand =
   | 'toggleGrid'
   | 'toggleSnap'
   | 'saveToLibrary'
-  | 'autoChainRoots';
+  | 'autoChainRoots'
+  | 'export';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -82,6 +95,7 @@ export interface NyahApi {
   /** Subscribes to native menu commands. Returns an unsubscribe function. */
   onMenuCommand(listener: (command: MenuCommand) => void): () => void;
   library: LibraryApi;
+  export: ExportApi;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }

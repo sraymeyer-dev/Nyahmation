@@ -18,6 +18,13 @@ const api: NyahApi = {
     remove: (relPath) => ipcRenderer.invoke('library:remove', relPath),
     reveal: () => ipcRenderer.invoke('library:reveal'),
   },
+  export: {
+    choose: (format, name) => ipcRenderer.invoke('export:choose', format, name),
+    begin: (options) => ipcRenderer.invoke('export:begin', options),
+    frame: (session, index, bytes) => ipcRenderer.invoke('export:frame', session, index, bytes),
+    end: (session) => ipcRenderer.invoke('export:end', session),
+    cancel: (session) => ipcRenderer.invoke('export:cancel', session),
+  },
 };
 
 contextBridge.exposeInMainWorld('nyah', api);

@@ -1,5 +1,6 @@
 import { locatePart, restParentMatrix, restWorldMatrix, updatePart, walkParts } from './edit';
 import { evaluateScene, type ResolvedPart } from './evaluate';
+import { evaluateContinuous } from './interpolate';
 import { IDENTITY, type Mat2D } from './math';
 import { findTrack, setPartPose } from './tracks';
 import type { ContinuousChannel, Project, Transform } from './types';
@@ -62,6 +63,27 @@ export function frameAccess(project: Project, frame: number): TransformAccess {
 
 const CHANNELS: readonly (keyof Transform & ContinuousChannel)[] = ['x', 'y', 'rotation', 'scaleX', 'scaleY'];
 
+/** A part's own (not inherited) value of a continuous channel on a frame, ignoring stepping and pins. */
+export function channelValueAt(project: Project, id: string, channel: ContinuousChannel, frame: number): number | undefined {
+  const part = locatePart(project, id)?.part;
+  if (!part) return undefined;
+  const rest = channel === 'opacity' ? part.opacity : part.rest[channel];
+  const track = findTrack(project.scene.tracks, id, channel);
+  return track ? evaluateContinuous(track.poses, frame, rest) : rest;
+}
+
+/** Records one channel's value on a frame, with the starting-pose rule (A2a). */
+export function recordValue(project: Project, id: string, channel: ContinuousChannel, frame: number, value: number): Project {
+  const part = locatePart(project, id)?.part;
+  if (!part) return project;
+  const track = findTrack(project.scene.tracks, id, channel);
+  let next = project;
+  if ((!track || track.poses.length === 0) && frame > 0) {
+    next = setPartPose(next, id, channel, 0, channel === 'opacity' ? part.opacity : part.rest[channel]);
+  }
+  return setPartPose(next, id, channel, frame, value);
+}
+
 /**
  * Records poses on `frame` for every channel whose value changed
  * (docs/DESIGN.md A2). The first pose on a channel after frame 0 also records
@@ -82,11 +104,7 @@ export function recordPoses(
     for (const channel of CHANNELS) {
       const value = change[channel];
       if (value === undefined || Math.abs(value - now[channel]) < 1e-9) continue;
-      const track = findTrack(next.scene.tracks, id, channel);
-      if ((!track || track.poses.length === 0) && frame > 0) {
-        next = setPartPose(next, id, channel, 0, loc.part.rest[channel]);
-      }
-      next = setPartPose(next, id, channel, frame, value);
+      next = recordValue(next, id, channel, frame, value);
     }
   }
   return next;

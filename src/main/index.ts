@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
 import { buildMenu } from './menu';
 
@@ -110,6 +111,7 @@ ipcMain.on('document:state', (event, state: { title?: unknown; path?: unknown; d
 
 void app.whenReady().then(() => {
   registerLibraryHandlers();
+  registerExportHandlers();
   buildMenu();
   createWindow();
   app.on('activate', () => {

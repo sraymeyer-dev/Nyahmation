@@ -6,6 +6,9 @@ directories:
 files:
   - out/**/*
   - package.json
+# FFmpeg is a program the app runs, so it must stay outside the asar archive.
+asarUnpack:
+  - node_modules/ffmpeg-static/**
 fileAssociations:
   - ext: nyah
     name: Nyahmation Project

@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v0.9. Requirements baseline for the MVP. Phases 0–2 are built; see §16.
+> **Status:** v1.0. Requirements baseline for the MVP. Phases 0–3 are built; see §16.
 > **Last updated:** 2026-09-25
 
 ---
@@ -175,12 +175,13 @@ The trade-off: between two poses a hand travels in an arc, not a straight line, 
 ### 6.3 Pins
 A pin nails a part to a spot on the stage for a stretch of frames. Think of a foot planted on the floor during a step: the body moves over it, and the leg has to bend to keep the foot where it is.
 
-- **P1** Select a part and press **Pin** (or `P`). It is pinned at its current position from this frame on.
-- **P2** Press **Unpin** on a later frame to release it. A walk becomes: pin the left foot, move the body, unpin the left foot, swing it forward, pin it again.
+- **P1** In Animate mode, choose the **Pin tool** (`P`) and click a part. The spot you clicked (such as the sole of a foot) is held at that place on the stage from this frame on.
+- **P2** Click the pinned part again on a later frame to release it. A walk becomes: pin the left foot, move the body, unpin the left foot, swing it forward, pin it again.
+- **P2a** A pin works like a drag that never lets go: every frame, the part's IK chain turns so the pinned spot stays where it was pinned. A part with no chain (a one-piece leg) turns at its own joint to point at the pin.
 - **P3** **While posing**, dragging anything keeps pinned parts in place by bending the joints between the pin and the chain root (for a foot: knee and hip).
 - **P4** **During playback and export**, pins are enforced **on every in-between frame**, not only on posed frames. After the normal interpolation, Nyahmation re-solves the pinned chain so the pinned part stays exactly where it was pinned. This is what stops feet sliding.
 - **P5** If a pin can't be reached (the body moved too far away), the limb straightens as far as it can, and the pin marker turns red on the canvas and the timeline.
-- **P6** On the timeline, a pin shows as a bar under the part's row from pin to unpin. Dragging the bar's ends retimes the pin.
+- **P6** On the timeline, a pin shows as a bar under the part's row from pin to unpin. Pinning and unpinning are marks on the part's row, so they retime like any other pose.
 
 This refines §6.2: IK is a posing tool **except** for pinned chains, which are corrected on every frame while the pin is active. It is still deterministic.
 
@@ -279,8 +280,8 @@ Without this split, dragging a part would be ambiguous: does it mean "this arm i
 - **A2a** **The first pose on a part also remembers where it started.** A part with only one pose holds that pose for the whole scene. So the first time you change a part on a frame after frame 0, Nyahmation also records the part's previous state on frame 0. Otherwise, raising the arm on frame 24 would make it raised from frame 0.
 - **A3** **Editing an in-between** creates a new pose on that frame (a "breakdown"). The motion on either side adjusts around it.
 - **A4** **Always interpolate** between a part's poses (see §10).
-- **A5** **Hold.** Because Nyahmation always interpolates, staying still means having the same pose twice. A "Hold until frame N" command copies the pose forward for you.
-- **A6** **Retiming**: drag pose marks. Select a range and stretch or squash its timing. Dragging a mark on the character row moves every part's pose on that frame together.
+- **A5** **Hold.** Because Nyahmation always interpolates, staying still means having the same pose twice. Copy-dragging a pose mark (Option/Alt or Cmd/Ctrl) copies the pose to a later frame, which is the hold.
+- **A6** **Retiming**: drag pose marks along the timeline (§9.1c). (Should) Select a range and stretch or squash its timing.
 - **A7** **Playback** with audio: play and pause, loop a range, step one frame at a time. If the preview can't keep up, it skips displayed frames but keeps audio in sync.
 - **A8** **Onion skinning**: faint copies of the previous and next poses or frames.
 - **A9** **Easing** per pose: Smooth (default), Linear, Ease in, Ease out, Ease in-out, Hold.
@@ -298,7 +299,18 @@ When you change something on a frame, which parts get a pose recorded on that fr
 
 **Why part poses (chosen):** you can give different parts different timing, such as the head turning first and the arm following a few frames later ("overlapping action"). Adding a pose to one part never quietly locks every other part in place. To move a whole moment at once, the **character row** on the timeline shows a mark wherever any part has a pose. Dragging that mark moves all the parts' poses on that frame together.
 
-**Rule:** a pose is recorded for every part whose value changed because of your edit. When you drag a hand with IK, that means the hand, forearm and upper arm (and the legs, if pins made them bend).
+**Rule:** a pose is recorded for every part whose value changed because of your edit. When you drag a hand with IK, that means the forearm and upper arm that turned. Pinned limbs are corrected live on every frame (§6.3), so no extra poses are written for them.
+
+### 9.1c Retiming on the timeline
+Timing is changed by dragging pose marks, not by re-posing. If the arm is posed on frames 1 and 10, dragging the mark on 10 to 5 makes the move take half as long: the character appears to move twice as fast.
+
+- **RT1 The row decides what moves.** A mark on a part row moves that part's poses on that frame (every channel together). A mark on a layer row moves every part of that layer. A mark on the scene row moves everything in the scene.
+- **RT2 Plain drag** moves only the dragged marks. They can't jump past a neighbouring pose, so the order of poses never changes by accident.
+- **RT3 Shift-drag ripples**: the mark and everything after it on the same row move together, so the timing of the rest of the animation is kept. Drag frame 10 to 8 and the pose on 20 moves to 18, the pose on 30 to 28, and so on. It can't move earlier than the pose before it.
+- **RT4 Option/Alt- or Cmd/Ctrl-drag copies** the pose to the new frame instead (a hold). (Plain Alt alone can open the menu bar on Windows, so Ctrl works too.)
+- **RT5 Lip sync stays locked to the dialogue.** Scene and layer rows never move the mouth-sound track; a ripple that shifted the body would otherwise push every mouth shape out of sync with the voice, which doesn't move. Mouth sounds move only from the mouth's own row (and, in phase 4, the lip-sync lane).
+- **RT6** If poses are moved past the end of the scene, the scene gets longer to fit, and the status bar says so.
+- **RT7** Click a mark to select it (Shift/Cmd-click adds more); Delete removes the selected poses; the Properties panel sets the easing of the motion leaving them (A9). Everything can be undone.
 
 ### 9.1b Animating on ones, twos and threes
 Hand-drawn animation often changes the picture only every 2nd frame ("on twos"): 12 new positions per second in a 24 fps video. It looks less smooth, but more hand-made and punchy. Nyahmation can do the same with its in-betweens.
@@ -436,6 +448,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 - **macOS Gatekeeper**: without an Apple Developer ID ($99/yr), the Mac shows a warning the first time the app is opened. Right-click → Open gets past it.
 - **Intel Mac minimum macOS version**: Electron supports the same macOS versions as Chrome, currently about macOS 12 or newer. The reference Mac runs macOS 15 Sequoia, so this is fine. Sequoia is the last macOS version this model can install, but Chrome and Electron normally keep supporting a macOS version for several years after that.
 - **Universal Mac build** is roughly twice the size, since it contains code for both kinds of processor.
+- **FFmpeg in the Mac app**: the bundled FFmpeg matches the Mac that builds the app. A universal app built on an Intel Mac carries Intel FFmpeg, which Apple Silicon Macs run through Rosetta.
 - **FFmpeg licensing**: the H.264 encoder (x264) is GPL-licensed. That's fine for personal use; revisit if Nyahmation is ever distributed.
 
 ---
@@ -482,7 +495,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **0** ✅ | Foundations | Electron skeleton; engine (data model, Smooth interpolation, stepping, parent/child evaluation) with unit tests; save/load `.nyah`; demo puppet test harness. |
 | **1** ✅ | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
 | **2** ✅ | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
-| **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 export**. |
+| **3** ✅ | Move | Timeline, pose-anywhere (part poses), holds, retiming with ripple and copy, playback with a loop range, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 and PNG-sequence export**. Not yet: stretching a range of poses (A6), "View on ones" (ST6). |
 | **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. |
 | **5** | Polish | Camera; parallax, scrolling and atmosphere for backgrounds (BG4–BG8); glow, shadow and blend modes (FX1–FX6); draw-order swaps; ProRes/PNG export; easing curve editor. |
 | **6+** | Stretch | Automatic lip sync (Rhubarb), mirror poses, animation cycles, gradients and boolean operations. |
@@ -530,6 +543,10 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-33 | New shapes, imports and pen paths go into the selected group, otherwise into the active layer; nothing is drawn on a locked or hidden layer | Proposed |
 | D-34 | Pose tool modifiers: drag = IK, Shift = turn at own joint, Alt = move the part, Cmd/Ctrl = move the whole character (R7) | Proposed |
 | D-35 | Dragging a part turns its parents, not the part itself; a chain root or unchained part turns at its own joint (R7a) | Proposed |
+| D-37 | Retiming by dragging pose marks: the row sets the scope, Shift ripples, Option/Ctrl copies (§9.1c) | **Decided** |
+| D-38 | Scene and layer rows never move lip sync (RT5) | Proposed |
+| D-39 | A pin holds a clicked spot at a scene position, enforced live every frame; no extra poses are recorded for pinned limbs (P2a) | Proposed |
+| D-40 | Export draws each frame in the app and pipes raw pixels to a bundled FFmpeg (ffmpeg-static); PNG sequences need no FFmpeg | Proposed |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
@@ -562,6 +579,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.0 (2026-09-25):** Phase 3 built. Added §9.1c Retiming (row scope, Shift ripple, copy, lip-sync exception), clarified pins (P1, P2a, P6) and holds (A5), and D-37 to D-40.
 - **v0.9 (2026-09-25):** Phase 2 built: joints, chain roots, limits, bend direction, drag-to-pose IK, and the library. Clarified R7 (modifiers) and added R7a–R7c, L6, D-34 to D-36.
 - **v0.8 (2026-09-25):** Phase 1 built. Recorded D-32 (click selects the part under the mouse) and D-33 (where new shapes go).
 - **v0.7 (2026-09-25):** Added scene layers and backgrounds (§8a), glow and shadow effects (§8b), and Build/Animate modes (§9.0). D-25 to D-27 confirmed.

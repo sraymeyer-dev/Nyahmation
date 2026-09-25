@@ -1,7 +1,10 @@
 import { locatePart, restWorldMatrix, updateLayer, updatePart, type PartLocation } from '../../../engine/edit';
+import { channelValueAt, frameAccess, recordValue } from '../../../engine/access';
 import { applyToPoint } from '../../../engine/math';
+import { poseEaseAt } from '../../../engine/retime';
+import { deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
-import type { Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
+import type { Ease, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { store, useEditor } from '../editor/store';
 import { NumberField, PaintField, Row, Section } from './fields';
 
@@ -150,12 +153,33 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
     const first = get(locs[0]!.part);
     return locs.every((l) => get(l.part) === first) ? first : null;
   };
-  const setRest = (patch: Partial<Transform>, key: string) => commitParts(ids, (p) => ({ ...p, rest: { ...p.rest, ...patch } }), key);
-  const opacity = same((p) => p.opacity);
+  const frame = useEditor((s) => s.frame);
+  const project = useEditor((s) => s.project);
+  const animate = mode === 'animate';
+  // In Animate mode the fields show (and record) the pose on the current frame.
+  const shown = single ? (animate ? frameAccess(project, frame).local(single.id) : single.rest) ?? single.rest : null;
+  const setRest = (patch: Partial<Transform>, key: string) => {
+    if (animate && single) {
+      const s = store.getState();
+      store.commit(editAccess(s).write(s.project, new Map([[single.id, patch]])), {}, key);
+    } else commitParts(ids, (p) => ({ ...p, rest: { ...p.rest, ...patch } }), key);
+  };
+  const opacity = animate
+    ? (() => {
+        const values = locs.map((l) => channelValueAt(project, l.part.id, 'opacity', frame) ?? 1);
+        return values.every((v) => v === values[0]) ? values[0]! : null;
+      })()
+    : same((p) => p.opacity);
+  const setOpacity = (v: number) => {
+    if (!animate) return commitParts(ids, (p) => ({ ...p, opacity: v }), 'opacity');
+    let next = store.getState().project;
+    for (const id of ids) next = recordValue(next, id, 'opacity', frame, v);
+    store.commit(next, {}, 'opacity');
+  };
 
   return (
     <>
-      <Section title={single ? `${kindLabel(single)}` : `${locs.length} parts`}>
+      <Section title={`${single ? kindLabel(single) : `${locs.length} parts`}${animate ? ` · frame ${frame + 1}` : ''}`}>
         {single && (
           <Row label="Name">
             <input
@@ -172,15 +196,15 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
         {single && (
           <>
             <Row label="Position">
-              <NumberField label="X" value={single.rest.x} onCommit={(x) => setRest({ x }, 'x')} suffix="x" />
-              <NumberField label="Y" value={single.rest.y} onCommit={(y) => setRest({ y }, 'y')} suffix="y" />
+              <NumberField label="X" value={shown!.x} onCommit={(x) => setRest({ x }, 'x')} suffix="x" />
+              <NumberField label="Y" value={shown!.y} onCommit={(y) => setRest({ y }, 'y')} suffix="y" />
             </Row>
             <Row label="Rotation">
-              <NumberField label="Rotation" value={single.rest.rotation} onCommit={(rotation) => setRest({ rotation }, 'rot')} suffix="°" />
+              <NumberField label="Rotation" value={shown!.rotation} onCommit={(rotation) => setRest({ rotation }, 'rot')} suffix="°" />
             </Row>
             <Row label="Scale">
-              <NumberField label="Scale X" value={single.rest.scaleX * 100} digits={1} onCommit={(v) => setRest({ scaleX: v / 100 }, 'sx')} suffix="%" />
-              <NumberField label="Scale Y" value={single.rest.scaleY * 100} digits={1} onCommit={(v) => setRest({ scaleY: v / 100 }, 'sy')} suffix="%" />
+              <NumberField label="Scale X" value={shown!.scaleX * 100} digits={1} onCommit={(v) => setRest({ scaleX: v / 100 }, 'sx')} suffix="%" />
+              <NumberField label="Scale Y" value={shown!.scaleY * 100} digits={1} onCommit={(v) => setRest({ scaleY: v / 100 }, 'sy')} suffix="%" />
             </Row>
           </>
         )}
@@ -191,7 +215,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
             min={0}
             max={100}
             value={Math.round((opacity ?? 1) * 100)}
-            onChange={(e) => commitParts(ids, (p) => ({ ...p, opacity: Number(e.target.value) / 100 }), 'opacity')}
+            onChange={(e) => setOpacity(Number(e.target.value) / 100)}
           />
           <span className="value">{opacity === null ? 'mixed' : `${Math.round(opacity * 100)}%`}</span>
         </Row>
@@ -290,9 +314,39 @@ function kindLabel(p: Part): string {
   return { group: 'Group', shape: 'Shape', switch: 'Switch layer', image: 'Image' }[p.kind];
 }
 
+/** Selected pose marks on the timeline: their easing (docs/DESIGN.md A9). */
+function PoseMarks() {
+  const project = useEditor((s) => s.project);
+  const marks = useEditor((s) => s.timeline.marks);
+  if (!marks.length) return null;
+  const ease = poseEaseAt(project, markTargets(project, marks));
+  const value = typeof ease === 'string' ? ease : ease ? 'custom' : 'smooth';
+  const frames = [...new Set(marks.map((m) => m.frame + 1))].sort((a, b) => a - b);
+  return (
+    <Section title={marks.length === 1 ? `Pose · frame ${frames[0]}` : `${marks.length} poses`}>
+      <Row label="Motion out">
+        <select aria-label="Pose easing" value={value} onChange={(e) => setSelectedMarksEase(e.target.value as Ease)}>
+          <option value="smooth">Smooth (flows through)</option>
+          <option value="easeInOut">Ease in and out</option>
+          <option value="easeIn">Ease in (start slow)</option>
+          <option value="easeOut">Ease out (end slow)</option>
+          <option value="linear">Linear (steady)</option>
+          <option value="hold">Hold (jump at the next pose)</option>
+          {value === 'custom' && <option value="custom" disabled>Custom curve</option>}
+        </select>
+      </Row>
+      <p className="hint">How the motion travels from this pose to the next one. Drag the mark to retime it (Shift: move everything after it too; Option or Ctrl: copy it).</p>
+      <Row label="">
+        <button onClick={deleteSelectedMarks}>Delete pose{marks.length > 1 ? 's' : ''}</button>
+      </Row>
+    </Section>
+  );
+}
+
 export function Properties() {
   const project = useEditor((s) => s.project);
   const selection = useEditor((s) => s.selection);
+  const mode = useEditor((s) => s.mode);
   const locs = selection.map((id) => locatePart(project, id)).filter((l): l is PartLocation => !!l);
   const layerRoot = locs.length === 1 && !locs[0]!.parent ? locs[0] : null;
   return (
@@ -301,6 +355,7 @@ export function Properties() {
         <h2>Properties</h2>
       </div>
       <div className="properties-body">
+        {mode === 'animate' && <PoseMarks />}
         {locs.length === 0 && <SceneProperties project={project} />}
         {layerRoot && <LayerProperties loc={layerRoot} />}
         {locs.length > 0 && !layerRoot && <PartProperties locs={locs.filter((l) => l.parent)} />}

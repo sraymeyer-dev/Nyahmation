@@ -1,8 +1,10 @@
-import { locatePart, movePartsBy, restWorldMatrix, updatePart } from '../../../../engine/edit';
+import type { TransformAccess } from '../../../../engine/access';
+import { locatePart } from '../../../../engine/edit';
 import { applyToPoint, invert } from '../../../../engine/math';
-import { dragPose, ikChainIds, rotateAtJoint } from '../../../../engine/rig';
+import { dragPoseChanges, ikChainIds, moveChanges, rotateChanges } from '../../../../engine/rig';
 import type { Project, Vec2 } from '../../../../engine/types';
 import { resolvedScene, select } from '../actions';
+import { editAccess } from '../animate';
 import { hitTopPart } from '../hitTest';
 import { drawSkeleton } from '../overlay';
 import { store } from '../store';
@@ -15,12 +17,12 @@ import type { OverlayContext, Tool, ToolPointer } from './types';
 //   Shift-drag    turn the part at its own joint only
 //   Alt-drag      move the part itself, away from its joint
 //   Cmd/Ctrl-drag move the whole layer (e.g. the whole character)
-// In Build mode this sets the rest pose. Posing on the timeline arrives with
-// Animate mode editing (phase 3).
+// In Build mode this sets the rest pose; in Animate mode it records poses on
+// the current frame.
 
 type Mode = 'ik' | 'rotate' | 'move' | 'moveLayer';
 
-let drag: { mode: Mode; id: string; base: Project; grab: Vec2; start: Vec2; layerRootId: string } | null = null;
+let drag: { mode: Mode; id: string; base: Project; access: TransformAccess; grab: Vec2; start: Vec2; layerRootId: string } | null = null;
 let hoverChain: ReadonlySet<string> = new Set();
 let pointer: Vec2 | null = null;
 
@@ -51,12 +53,14 @@ export const poseTool: Tool = {
     }
     select([hit.id]);
     const loc = locatePart(s.project, hit.id)!;
+    const access = editAccess(s);
     store.beginGesture();
     drag = {
       mode: modeFor(p),
       id: hit.id,
       base: s.project,
-      grab: applyToPoint(invert(restWorldMatrix(loc)), p.scene),
+      access,
+      grab: applyToPoint(invert(access.world(hit.id)), p.scene),
       start: p.scene,
       layerRootId: loc.layer.root.id,
     };
@@ -74,20 +78,25 @@ export const poseTool: Tool = {
     }
     const d = drag;
     const delta = { x: p.scene.x - d.start.x, y: p.scene.y - d.start.y };
+    let changes;
     switch (d.mode) {
       case 'ik':
-        store.preview(dragPose(d.base, d.id, d.grab, p.scene));
+        changes = dragPoseChanges(d.base, d.access, d.id, d.grab, p.scene);
         break;
       case 'rotate':
-        store.preview(rotateAtJoint(d.base, d.id, d.start, p.scene));
+        changes = rotateChanges(d.base, d.access, d.id, d.start, p.scene);
         break;
       case 'move':
-        store.preview(movePartsBy(d.base, [d.id], delta));
+        changes = moveChanges(d.base, d.access, [d.id], delta);
         break;
-      case 'moveLayer':
-        store.preview(updatePart(d.base, d.layerRootId, (r) => ({ ...r, rest: { ...r.rest, x: r.rest.x + delta.x, y: r.rest.y + delta.y } })));
+      case 'moveLayer': {
+        // The layer root sits directly in the scene, so the delta applies as is.
+        const local = d.access.local(d.layerRootId)!;
+        changes = new Map([[d.layerRootId, { x: local.x + delta.x, y: local.y + delta.y }]]);
         break;
+      }
     }
+    store.preview(d.access.write(d.base, changes));
   },
 
   up() {
@@ -105,9 +114,9 @@ export const poseTool: Tool = {
     drawSkeleton(o, { highlight: hoverChain, faint: true });
     if (drag?.mode === 'ik' && pointer) {
       // A line from the grabbed spot to the mouse shows how far off the reach is.
-      const loc = locatePart(o.s.project, drag.id);
-      if (!loc) return;
-      const grabbed = o.toScreen(applyToPoint(restWorldMatrix(loc), drag.grab));
+      const part = o.resolved.parts.find((x) => x.id === drag!.id);
+      if (!part) return;
+      const grabbed = o.toScreen(applyToPoint(part.world, drag.grab));
       const target = o.toScreen(pointer);
       const { ctx } = o;
       ctx.save();

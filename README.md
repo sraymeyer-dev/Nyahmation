@@ -9,7 +9,8 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 0 (foundations):** done. Animation engine and `.nyah` project files.
 - **Phase 1 (drawing):** done. Build mode with drawing tools, point editing, layers, fill and stroke, undo, and SVG/PNG/JPEG import.
 - **Phase 2 (rigging):** done. Joints, chain roots, joint limits, drag-to-pose (inverse kinematics), and a library of reusable characters and shapes.
-- Next: phase 3 (animating on the timeline, pins, video export).
+- **Phase 3 (animating):** done. Posing on any frame, the timeline with retiming (ripple and copy), pins, onion skin, a loop range, and MP4 / PNG-sequence export.
+- Next: phase 4 (dialogue: audio, mouth sets and lip sync).
 
 ## Running it on a Mac (step by step)
 
@@ -87,6 +88,18 @@ The app has two modes (top bar). **Build** is for drawing and arranging. **Anima
 | Hand | H | Drag to pan. Space-drag or the middle mouse button pans with any tool. |
 
 Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
+
+**Animating (Animate mode):**
+- Go to a frame (click the timeline, or ← / →), then pose with the **Pose** tool (K) or the **Select** tool (V). Every change is recorded as a pose on that frame; Nyahmation fills in the frames between poses. The first time you change a part, its starting position is kept on frame 1 automatically.
+- **Timeline:** each ◆ is a pose. The **Scene** row covers everything, each **layer** row covers a character, and each part has its own row.
+  - **Drag a ◆** to retime it. Pulling the pose on frame 10 to frame 5 makes that move twice as fast.
+  - **Shift-drag** moves the ◆ and everything after it on that row, so the rest of the timing is kept.
+  - **Option-drag** (Mac) or **Ctrl-drag** copies the pose to another frame: a hold.
+  - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold.
+  - Mouth sounds only move from the mouth's own row, so lip sync stays matched to the dialogue.
+- **Pin tool** (P): click a foot to pin it to the floor from this frame; click it again on a later frame to release it. The leg bends to keep the foot planted while the body moves.
+- **Playback:** Space plays and pauses. Shift+← / → jumps between poses. **I** and **O** set a loop range. **Onion skin** shows nearby frames in red (before) and green (after).
+- **Export** (Cmd+E, or the button on the timeline): MP4 video or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range.
 
 **Rigging a character:**
 1. Put the character on a **character layer**. Build the parent/child tree in the Layers panel: drag the forearm onto the upper arm, the hand onto the forearm, and so on.

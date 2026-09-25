@@ -1,8 +1,9 @@
-import type { ToolId } from '../store';
+import type { Mode, ToolId } from '../store';
 import { handTool } from './hand';
 import { jointTool } from './joint';
 import { poseTool } from './pose';
 import { penTool } from './pen';
+import { pinTool } from './pin';
 import { pointsTool } from './points';
 import { selectTool } from './select';
 import { createShapeTool } from './shapes';
@@ -13,6 +14,7 @@ export const TOOLS: Record<ToolId, Tool> = {
   points: pointsTool,
   joint: jointTool,
   pose: poseTool,
+  pin: pinTool,
   pen: penTool,
   rect: createShapeTool('rect'),
   ellipse: createShapeTool('ellipse'),
@@ -22,16 +24,22 @@ export const TOOLS: Record<ToolId, Tool> = {
   hand: handTool,
 };
 
-export const TOOL_INFO: { id: ToolId; label: string; key: string }[] = [
-  { id: 'select', label: 'Select', key: 'V' },
-  { id: 'points', label: 'Points', key: 'A' },
-  { id: 'joint', label: 'Joints', key: 'J' },
-  { id: 'pose', label: 'Pose', key: 'K' },
-  { id: 'pen', label: 'Pen', key: 'P' },
-  { id: 'rect', label: 'Rectangle', key: 'M' },
-  { id: 'ellipse', label: 'Ellipse', key: 'L' },
-  { id: 'polygon', label: 'Polygon', key: 'Y' },
-  { id: 'star', label: 'Star', key: 'S' },
-  { id: 'line', label: 'Line', key: '\\' },
-  { id: 'hand', label: 'Hand', key: 'H' },
+/** Tools in toolbar order, with their key and the modes they work in. */
+export const TOOL_INFO: { id: ToolId; label: string; key: string; modes: readonly Mode[] }[] = [
+  { id: 'select', label: 'Select', key: 'V', modes: ['build', 'animate'] },
+  { id: 'points', label: 'Points', key: 'A', modes: ['build'] },
+  { id: 'joint', label: 'Joints', key: 'J', modes: ['build'] },
+  { id: 'pose', label: 'Pose', key: 'K', modes: ['build', 'animate'] },
+  { id: 'pin', label: 'Pin', key: 'P', modes: ['animate'] },
+  { id: 'pen', label: 'Pen', key: 'P', modes: ['build'] },
+  { id: 'rect', label: 'Rectangle', key: 'M', modes: ['build'] },
+  { id: 'ellipse', label: 'Ellipse', key: 'L', modes: ['build'] },
+  { id: 'polygon', label: 'Polygon', key: 'Y', modes: ['build'] },
+  { id: 'star', label: 'Star', key: 'S', modes: ['build'] },
+  { id: 'line', label: 'Line', key: '\\', modes: ['build'] },
+  { id: 'hand', label: 'Hand', key: 'H', modes: ['build', 'animate'] },
 ];
+
+export function toolsFor(mode: Mode) {
+  return TOOL_INFO.filter((t) => t.modes.includes(mode));
+}

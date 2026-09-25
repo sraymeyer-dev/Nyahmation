@@ -68,7 +68,8 @@ button:focus-visible {
 
 .app {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -123,6 +124,7 @@ button:focus-visible {
 .workspace {
   display: flex;
   min-height: 0;
+  min-width: 0;
 }
 
 .toolbar {
@@ -252,6 +254,7 @@ button:focus-visible {
 
 /* Sidebar */
 .sidebar {
+  flex: none;
   width: 300px;
   display: grid;
   grid-template-rows: minmax(180px, 1fr) minmax(220px, 1.2fr);
@@ -640,4 +643,248 @@ input[type='color'] {
 
 .hint.warn {
   color: var(--warn);
+}
+
+/* Dialogs */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10;
+}
+
+.modal {
+  width: min(440px, calc(100vw - 32px));
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.modal .row select {
+  width: 100%;
+}
+
+.modal .buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.progress {
+  position: relative;
+  height: 22px;
+  margin-top: 10px;
+  border-radius: 4px;
+  background: #1f2023;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.progress .bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.progress span {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 20px;
+}
+
+/* Timeline */
+.timeline {
+  user-select: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  min-height: 0;
+}
+
+.timeline-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.timeline-bar .label,
+.timeline-bar .value,
+.timeline-bar .hint {
+  color: var(--muted);
+}
+
+.timeline-bar .check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.timeline-body {
+  flex: 1;
+  overflow: auto;
+  outline: none;
+  min-height: 0;
+}
+
+.tl-grid {
+  position: relative;
+  min-height: 100%;
+}
+
+.tl-row {
+  display: flex;
+  height: 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.tl-name {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: none;
+  width: 190px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 6px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.tl-name .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-row.active .tl-name {
+  background: #2f3a52;
+}
+
+.tl-scene .tl-name,
+.tl-layer .tl-name {
+  font-weight: 600;
+}
+
+.tl-scene .tl-lane,
+.tl-layer .tl-lane {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.tl-ruler-row {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--panel-2);
+}
+
+.tl-corner {
+  color: var(--muted);
+  padding-left: 6px;
+  background: var(--panel-2);
+}
+
+.tl-lane {
+  position: relative;
+  flex: none;
+  cursor: text;
+}
+
+.tl-ruler {
+  cursor: ew-resize;
+  background: var(--panel-2);
+}
+
+.tl-ruler .tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding-left: 3px;
+  border-left: 1px solid #4a4c52;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-mark {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  transform: rotate(45deg);
+  background: #c9ccd3;
+  border: 1px solid #1e1f22;
+  cursor: grab;
+  z-index: 1;
+}
+
+.tl-scene .tl-mark,
+.tl-layer .tl-mark {
+  background: #e0a458;
+}
+
+.tl-mark.selected {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.4);
+}
+
+.tl-pin {
+  position: absolute;
+  bottom: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: #f5b642;
+}
+
+.tl-loop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(79, 140, 255, 0.08);
+  pointer-events: none;
+}
+
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #e5484d;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.timeline-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 5;
 }

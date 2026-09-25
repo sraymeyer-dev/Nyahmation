@@ -9,7 +9,7 @@ import type { LibraryEntry } from '../../../preload/api';
 // step is simply an earlier project object; unchanged parts are shared
 // between steps, which keeps history cheap (docs/DESIGN.md D-31).
 
-export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
+export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pin' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
 export type Mode = 'build' | 'animate';
 
 export interface View {
@@ -18,6 +18,14 @@ export interface View {
   /** Screen position (CSS px, relative to the canvas) of the scene origin. */
   panX: number;
   panY: number;
+}
+
+/** A pose mark on the timeline: a row (scene, layer or part) and a frame. */
+export interface MarkRef {
+  row: 'scene' | 'layer' | 'part';
+  /** Layer id or part id ('' for the scene row). */
+  id: string;
+  frame: number;
 }
 
 export interface PointRef {
@@ -53,6 +61,12 @@ export interface EditorState {
   /** Increments when decoded images become available, so the canvas redraws. */
   imagesVersion: number;
   sidebarTab: 'layers' | 'library';
+  /** Playback loops between these frames (inclusive) when set. */
+  loop: { in: number; out: number } | null;
+  onion: { enabled: boolean; before: number; after: number; step: number };
+  /** Timeline zoom (pixels per frame) and selected pose marks. */
+  timeline: { zoom: number; marks: readonly MarkRef[] };
+  exportOpen: boolean;
   library: { dir: string; items: readonly LibraryEntry[]; loaded: boolean };
 }
 
@@ -80,6 +94,10 @@ function initialState(): EditorState {
     status: '',
     imagesVersion: 0,
     sidebarTab: 'layers',
+    loop: null,
+    onion: { enabled: false, before: 2, after: 2, step: 2 },
+    timeline: { zoom: 14, marks: [] },
+    exportOpen: false,
     library: { dir: '', items: [], loaded: false },
   };
 }

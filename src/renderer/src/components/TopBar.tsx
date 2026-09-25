@@ -1,5 +1,5 @@
-import { importFile, save } from '../editor/actions';
-import { store, useEditor } from '../editor/store';
+import { importFile, save, setMode } from '../editor/actions';
+import { useEditor } from '../editor/store';
 
 export function TopBar() {
   const file = useEditor((s) => s.file);
@@ -7,7 +7,6 @@ export function TopBar() {
   const mode = useEditor((s) => s.mode);
   const status = useEditor((s) => s.status);
   const hasApi = !!window.nyah;
-  const setMode = (m: 'build' | 'animate') => store.set({ mode: m, playing: false });
   return (
     <header className="topbar">
       <span className="title">Nyahmation</span>

@@ -5,13 +5,15 @@ import type { MenuCommand } from '../../preload/api';
 import * as actions from './editor/actions';
 import * as library from './editor/library';
 import { store, useEditor, type ToolId } from './editor/store';
-import { TOOL_INFO, TOOLS } from './editor/tools';
+import { deleteSelectedMarks, jumpToPose, setFrame, setLoopPoint } from './editor/animate';
+import { toolsFor, TOOLS } from './editor/tools';
+import { ExportDialog } from './components/ExportDialog';
 import { Notice } from './components/Notice';
 import { Sidebar } from './components/Sidebar';
 import { ToolOptions } from './components/ToolOptions';
 import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
-import { Transport } from './components/Transport';
+import { Timeline } from './components/Timeline';
 import { Viewport } from './components/Viewport';
 
 const isTyping = (t: EventTarget | null) =>
@@ -53,9 +55,13 @@ const MENU: Record<MenuCommand, () => void> = {
   toggleSnap: actions.toggleSnap,
   saveToLibrary: () => store.set({ sidebarTab: 'library' }),
   autoChainRoots: library.autoChainRootsForActiveLayer,
+  export: () => store.set({ exportOpen: true }),
 };
 
-const TOOL_KEYS = new Map<string, ToolId>(TOOL_INFO.map((t) => [t.key.toLowerCase(), t.id]));
+const TOOL_KEYS = {
+  build: new Map<string, ToolId>(toolsFor('build').map((t) => [t.key.toLowerCase(), t.id])),
+  animate: new Map<string, ToolId>(toolsFor('animate').map((t) => [t.key.toLowerCase(), t.id])),
+};
 
 function onKeyDown(e: KeyboardEvent): void {
   if (isTyping(e.target)) {
@@ -63,14 +69,48 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.mode === 'animate') {
-    if (e.code === 'Space') {
-      e.preventDefault();
-      store.set((st) => ({ playing: !st.playing }));
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const d = e.key === 'ArrowRight' ? 1 : -1;
-      const n = s.project.scene.durationFrames;
-      store.set({ playing: false, frame: (s.frame + d + n) % n });
+  if (s.exportOpen) return;
+  if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    const tool = TOOL_KEYS.animate.get(e.key.toLowerCase());
+    if (tool && !e.shiftKey) {
+      actions.setTool(tool);
+      return;
+    }
+    switch (e.key) {
+      case ' ':
+        e.preventDefault();
+        store.set((st) => ({ playing: !st.playing }));
+        return;
+      case 'ArrowRight':
+      case 'ArrowLeft': {
+        e.preventDefault();
+        const d = e.key === 'ArrowRight' ? 1 : -1;
+        if (e.shiftKey) jumpToPose(d);
+        else setFrame(s.frame + d);
+        return;
+      }
+      case 'Home':
+        setFrame(0);
+        return;
+      case 'End':
+        setFrame(s.project.scene.durationFrames - 1);
+        return;
+      case 'i':
+      case 'I':
+        setLoopPoint('in');
+        return;
+      case 'o':
+      case 'O':
+        setLoopPoint('out');
+        return;
+      case 'Delete':
+      case 'Backspace':
+        e.preventDefault();
+        deleteSelectedMarks();
+        return;
+      case 'Escape':
+        store.set((st) => ({ selection: [], timeline: { ...st.timeline, marks: [] } }));
+        return;
     }
     return;
   }
@@ -79,7 +119,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   if (e.metaKey || e.ctrlKey || e.altKey) return; // the menu handles shortcuts with modifiers
-  const tool = TOOL_KEYS.get(e.key.toLowerCase());
+  const tool = TOOL_KEYS.build.get(e.key.toLowerCase());
   if (tool && !e.shiftKey) {
     actions.setTool(tool);
     return;
@@ -152,16 +192,17 @@ export function App() {
     <div className={`app mode-${mode}`}>
       <TopBar />
       <div className="workspace">
-        {mode === 'build' && <Toolbar />}
+        <Toolbar />
         <div className="center">
           <ToolOptions />
           <div className="stage">
             <Viewport />
             <Notice />
           </div>
-          {mode === 'animate' && <Transport />}
+          {mode === 'animate' && <Timeline />}
         </div>
         <Sidebar />
+        <ExportDialog />
       </div>
     </div>
   );

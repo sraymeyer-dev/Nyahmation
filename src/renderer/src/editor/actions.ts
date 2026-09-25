@@ -116,8 +116,18 @@ export function selectParent(): void {
 }
 
 export function setTool(tool: ToolId): void {
-  if (get().mode !== 'build') return;
   store.set({ tool });
+}
+
+/** Switches mode, picking a tool that works in the new mode. */
+export function setMode(mode: 'build' | 'animate'): void {
+  const s = get();
+  if (s.mode === mode) return;
+  const buildOnly = ['points', 'joint', 'pen', 'rect', 'ellipse', 'polygon', 'star', 'line'];
+  let tool = s.tool;
+  if (mode === 'animate' && buildOnly.includes(tool)) tool = 'pose';
+  if (mode === 'build' && tool === 'pin') tool = 'select';
+  store.set({ mode, tool, playing: false, points: [] });
 }
 
 // ---- Editing -------------------------------------------------------------------

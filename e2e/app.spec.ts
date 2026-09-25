@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -236,8 +236,8 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   await page.keyboard.press('Escape');
   await page.getByLabel('Animate on').selectOption('2');
   await page.getByRole('tab', { name: 'Animate' }).click();
-  await page.getByRole('slider', { name: 'Frame' }).fill('22');
-  await page.getByTestId('stage').click();
+  await page.keyboard.press('Home');
+  for (let i = 0; i < 22; i++) await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('frame')).toHaveText('23 / 72');
   await page.waitForTimeout(50);
   const pose = await signature();
@@ -299,4 +299,139 @@ test('saves a character to the library and adds a copy', async () => {
   await expect(page.getByTestId('layer-row').first()).toContainText('Pip the puppet');
   await page.getByRole('tab', { name: 'Library' }).click();
   await page.screenshot({ path: 'test-results/library.png' });
+});
+
+// ---- Phase 3: animating ------------------------------------------------------
+
+const trackFrames = (part: string, channel = 'rotation') =>
+  page.evaluate(
+    ([name, ch]) => {
+      const n = (window as any).__nyah;
+      const id = n.part(name).id;
+      const t = n.store.getState().project.scene.tracks.find((x: any) => x.partId === id && x.channel === ch);
+      return t ? t.poses.map((p: any) => p.frame) : [];
+    },
+    [part, channel],
+  );
+
+async function goToFrame(f: number) {
+  await page.keyboard.press('Home');
+  for (let i = 0; i < f; i++) await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('frame')).toContainText(`${f + 1} /`);
+}
+
+function row(name: string) {
+  return page.getByTestId('tl-part').filter({ has: page.locator('.name', { hasText: new RegExp(`^${name.replace(/[()]/g, '\\$&')}$`) }) });
+}
+
+async function dragMark(rowName: string, frame: number, frames: number, modifier?: 'Shift' | 'Control') {
+  const mark = row(rowName).locator(`.tl-mark[data-frame="${frame}"]`);
+  await mark.scrollIntoViewIfNeeded();
+  const box = (await mark.boundingBox())!;
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().timeline.zoom);
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  if (modifier) await page.keyboard.down(modifier);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + (frames * zoom) / 2, y, { steps: 3 });
+  await page.mouse.move(x + frames * zoom, y, { steps: 3 });
+  await page.mouse.up();
+  if (modifier) await page.keyboard.up(modifier);
+}
+
+test('posing on a frame in Animate mode records poses and shows marks', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await page.keyboard.press('k');
+  await goToFrame(33);
+  // Drag the hand as drawn on this frame.
+  const at = await debug<Pt>('framePartScreen', 'Hand', { x: 0, y: 18 });
+  await drag([at.x, at.y], [at.x - 80, at.y + 60]);
+  expect(await trackFrames('Forearm (front)')).toContain(33);
+  await expect(row('Forearm (front)').locator('.tl-mark[data-frame="33"]')).toHaveCount(1);
+  // Frames before 33 are unchanged: frame 30 keeps its pose.
+  expect(await trackFrames('Forearm (front)')).toContain(30);
+  await page.screenshot({ path: 'test-results/timeline.png' });
+});
+
+test('dragging a pose mark retimes it; Shift-drag ripples everything after it', async () => {
+  expect(await trackFrames('Upper arm (front)')).toEqual([0, 14, 22, 30, 33, 38, 46, 62]);
+  await dragMark('Upper arm (front)', 14, -4);
+  expect(await trackFrames('Upper arm (front)')).toEqual([0, 10, 22, 30, 33, 38, 46, 62]);
+  // Ripple: pull 22 back to 20 and everything after moves 2 frames earlier.
+  await dragMark('Upper arm (front)', 22, -2, 'Shift');
+  expect(await trackFrames('Upper arm (front)')).toEqual([0, 10, 20, 28, 31, 36, 44, 60]);
+  // Other parts are not affected by a part row.
+  expect(await trackFrames('Forearm (front)')).toEqual([0, 14, 22, 30, 33, 38, 46, 62]);
+});
+
+test('Ctrl-drag copies a pose (a hold), and Delete removes selected poses', async () => {
+  await dragMark('Upper arm (front)', 10, 4, 'Control');
+  expect(await trackFrames('Upper arm (front)')).toEqual([0, 10, 14, 20, 28, 31, 36, 44, 60]);
+  await row('Upper arm (front)').locator('.tl-mark[data-frame="14"]').scrollIntoViewIfNeeded();
+  await row('Upper arm (front)').locator('.tl-mark[data-frame="14"]').click();
+  await page.keyboard.press('Delete');
+  expect(await trackFrames('Upper arm (front)')).toEqual([0, 10, 20, 28, 31, 36, 44, 60]);
+  await menu('undo');
+  await expect.poll(() => trackFrames('Upper arm (front)')).toEqual([0, 10, 14, 20, 28, 31, 36, 44, 60]);
+});
+
+test('the layer row moves every part, but leaves lip sync alone', async () => {
+  const mouthBefore = await trackFrames('Mouth', 'drawing');
+  const layerRow = page.getByTestId('tl-layer').filter({ hasText: 'Pip' });
+  const mark = layerRow.locator('.tl-mark[data-frame="62"]');
+  await mark.scrollIntoViewIfNeeded();
+  const box = (await mark.boundingBox())!;
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().timeline.zoom);
+  await page.keyboard.down('Shift');
+  await page.mouse.move(box.x + 5, box.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 5 + 3 * zoom, box.y + 5, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  expect(await trackFrames('Forearm (front)')).toContain(65);
+  expect(await trackFrames('Mouth', 'drawing')).toEqual(mouthBefore);
+});
+
+test('the Pin tool pins a part, shown as a bar on the timeline', async () => {
+  await goToFrame(5);
+  await page.keyboard.press('p');
+  await menu('zoomFit');
+  const foot = await debug<Pt>('framePartScreen', 'Leg (left)', { x: 0, y: 190 });
+  await click([foot.x, foot.y]);
+  await expect(page.getByText(/Pinned “Leg \(left\)”/)).toBeVisible();
+  await expect(row('Leg (left)').locator('.tl-pin')).toHaveCount(1);
+  expect(await trackFrames('Leg (left)', 'pin')).toEqual([5]);
+});
+
+test('exports a PNG sequence and an MP4 of the loop range', async () => {
+  await goToFrame(0);
+  await page.keyboard.press('i');
+  await goToFrame(11);
+  await page.keyboard.press('o');
+  const pngDir = join(dir, 'frames');
+  const mp4 = join(dir, 'clip.mp4');
+  await app.evaluate(({ dialog }, [folder, file]) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
+  }, [pngDir, mp4]);
+
+  await menu('export');
+  const dialogBox = page.getByRole('dialog', { name: 'Export video' });
+  await dialogBox.getByLabel('Export format').selectOption('png');
+  await dialogBox.getByLabel('Export size').selectOption('720');
+  await dialogBox.getByLabel('Export range').selectOption('loop');
+  await dialogBox.getByRole('button', { name: 'Export…' }).click();
+  await expect(dialogBox.getByTestId('export-done')).toBeVisible({ timeout: 30_000 });
+  expect(readdirSync(pngDir).filter((f) => f.endsWith('.png'))).toHaveLength(12);
+
+  await dialogBox.getByLabel('Export format').selectOption('mp4');
+  await dialogBox.getByRole('button', { name: 'Export again…' }).click();
+  await expect(dialogBox.getByText(`Saved to ${mp4}`)).toBeVisible({ timeout: 60_000 });
+  expect(statSync(mp4).size).toBeGreaterThan(1000);
+  await dialogBox.getByRole('button', { name: 'Close' }).click();
 });

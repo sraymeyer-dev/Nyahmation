@@ -29,6 +29,7 @@ export function buildMenu(): void {
         item('Save As…', 'saveAs', 'Shift+CmdOrCtrl+S'),
         { type: 'separator' },
         item('Import SVG or Image…', 'import', 'CmdOrCtrl+I'),
+        item('Export Video…', 'export', 'CmdOrCtrl+E'),
         ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'quit' as const }]),
       ],
     },
