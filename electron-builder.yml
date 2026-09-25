@@ -1,0 +1,24 @@
+appId: com.nyahmation.app
+productName: Nyahmation
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+fileAssociations:
+  - ext: nyah
+    name: Nyahmation Project
+    role: Editor
+mac:
+  category: public.app-category.graphics-design
+  target:
+    - target: dmg
+      arch: [universal]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

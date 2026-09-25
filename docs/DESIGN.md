@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v0.5. Requirements baseline for the MVP; all open questions resolved.
+> **Status:** v0.6. Requirements baseline for the MVP. Phase 0 (foundations) is built; see §16.
 > **Last updated:** 2026-09-25
 
 ---
@@ -76,6 +76,10 @@ This is **purpose-built, not generic**. Every tool assumes you are animating cha
 > **Note on terminology.** Under the hood, a pose is stored as a keyframe, and the engine does standard keyframe interpolation. What is different is the workflow. The animator never creates, arms or manages keys; they just pose. The timeline still shows small **pose marks**, because retiming needs something to grab.
 
 ### 3.1 Sketch of the data shape
+
+> The code in `src/engine/types.ts` is now the source of truth for the data model; this sketch shows the idea.
+> - A part's `x`/`y` is **where its joint sits in the parent**, and rotation and scale happen around the joint.
+> - Frames are whole numbers starting at 0 inside the app. The timeline displays them starting at 1.
 
 ```ts
 type Part = {
@@ -156,6 +160,7 @@ type Pose = {
 - **R7 Drag modes.** Plain drag poses with IK. Alt/Option-drag moves the part itself, offsetting it from its joint. The rotate handle (or `R`) rotates the part at its own joint only.
 - **R8 Pins** (Must). Pin a part so it stays fixed in place, for example a foot planted on the ground. Dragging the body then bends the legs instead of dragging the feet along. Pins hold across frames, not just while dragging. See §6.3.
 - **R9 Draw-order swaps** (Should). A part can move in front of or behind a sibling from one pose to the next, such as an arm swinging behind the body.
+- **R10 Draw order is separate from the parent/child tree.** Each part has a stacking number within its character. The tree decides what moves with what; the stacking number decides what's in front. This is how a far arm can be a child of the torso (so it moves with it) and still be drawn behind it. The same approach is used by professional cutout tools such as Spine.
 
 ### 6.2 Proposed: IK is a posing tool, not a live constraint
 When you drag, the IK solver works out the joint angles and **writes them into the pose as ordinary rotations**. The in-betweens then blend those angles, so limbs swing in natural arcs, the way real joints move.
@@ -232,6 +237,7 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 ### 9.1 Must have
 - **A1** **Timeline**: frame ruler, playhead, one row per part (collapsible into a single character row), pose marks, audio waveform and lip-sync lanes.
 - **A2** **Posing anywhere creates a pose.** Moving, rotating or switching anything on any frame records a pose for that part at that frame. There is no auto-key toggle and no key button.
+- **A2a** **The first pose on a part also remembers where it started.** A part with only one pose holds that pose for the whole scene. So the first time you change a part on a frame after frame 0, Nyahmation also records the part's previous state on frame 0. Otherwise, raising the arm on frame 24 would make it raised from frame 0.
 - **A3** **Editing an in-between** creates a new pose on that frame (a "breakdown"). The motion on either side adjusts around it.
 - **A4** **Always interpolate** between a part's poses (see §10).
 - **A5** **Hold.** Because Nyahmation always interpolates, staying still means having the same pose twice. A "Hold until frame N" command copies the pose forward for you.
@@ -262,7 +268,7 @@ Hand-drawn animation often changes the picture only every 2nd frame ("on twos"):
 - **ST2** **Per-character override**, so one character can be on twos while another is on ones.
 - **ST3** **What steps:** a character's motion (position, rotation, scale, opacity, and pinned limbs).
 - **ST4** **What doesn't step:** mouths and other switch layers stay on ones, so lip sync timing stays exact. The camera stays on ones by default, because a stepped camera move judders the whole picture. The audio never steps.
-- **ST5** **Steps restart at every pose**, so every pose you set is shown exactly on the frame you set it. For example, on twos with poses on frames 1 and 8, the part shows new positions on frames 1, 3, 5, 7 and then exactly the pose on 8. Without this rule, an odd-numbered pose could be skipped.
+- **ST5** **Steps restart at every pose on any part of the character**, so every pose you set is shown exactly on the frame you set it, and the whole character changes picture on the same frames, as a hand-drawn drawing would. For example, on twos with poses on frames 1 and 8, the part shows new positions on frames 1, 3, 5, 7 and then exactly the pose on 8. Without this rule, an odd-numbered pose could be skipped.
 - **ST6** (Should) A **View on ones** toggle for checking the motion while you work. It affects only the preview, never the export.
 - **ST7** (Could) Change the stepping over time, such as ones during a fast action and twos elsewhere.
 
@@ -415,15 +421,15 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Proposed source layout:
+Source layout (follows electron-vite's conventions):
 ```
 src/
-  engine/   model, interpolation, ik, evaluate   (no UI imports)
-  render/   Canvas2D renderer
-  editor/   tools (pen, select, pose, lip-sync), commands, store
-  ui/       React panels
-  io/       SVG/PNG import, project file, library
-  main/     Electron main process: files, FFmpeg
+  engine/          model, interpolation, stepping, evaluate (later: IK)   no UI imports, unit-tested
+  io/              .nyah project files (later: SVG/PNG import, library)
+  main/            Electron main process: windows, files (later: FFmpeg)
+  preload/         the small, safe API the UI uses to reach the main process
+  renderer/src/    the UI: React panels, Canvas2D renderer (later: editor tools)
+e2e/               Playwright tests that launch the real app
 ```
 
 ---
@@ -434,7 +440,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 
 | Phase | Theme | Scope |
 |---|---|---|
-| **0** | Foundations | Electron skeleton; engine (data model, Smooth interpolation, parent/child evaluation) with unit tests; save/load `.nyah`. |
+| **0** ✅ | Foundations | Electron skeleton; engine (data model, Smooth interpolation, stepping, parent/child evaluation) with unit tests; save/load `.nyah`; demo puppet test harness. |
 | **1** | Draw | Canvas, pen tool, primitives, point editing, fill and stroke, outliner, undo; SVG and PNG import. |
 | **2** | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
 | **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 export**. |
@@ -474,6 +480,9 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-22 | Drawing sets can contain PNG images as well as vector drawings, with a warning for enlarged PNGs | **Decided** |
 | D-23 | Support older Intel Macs (universal Mac build) as well as Apple Silicon and Windows | **Decided** |
 | D-24 | 2020 Intel MacBook Air (macOS 15) is the reference machine for performance | **Decided** |
+| D-25 | Draw order is a stacking number per character, separate from the parent/child tree (R10) | Proposed |
+| D-26 | Stepping restarts at any pose of any part of the character (ST5) | Proposed |
+| D-27 | A part's first pose after frame 0 also records its previous state on frame 0 (A2a) | Proposed |
 
 ---
 
@@ -505,6 +514,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v0.6 (2026-09-25):** Phase 0 built. Recorded decisions from implementation: joint-based positions, draw order separate from the tree (R10), character-wide step restarts (ST5), and the first-pose rule (A2a). Updated the source layout.
 - **v0.5 (2026-09-25):** Reference machine set (2020 Intel MacBook Air, macOS 15). Added a preview quality setting (N9). Mouths and camera on ones confirmed. No open questions left.
 - **v0.4 (2026-09-25):** Part poses decided. SVG-only vector import (PDF/AI/EPS dropped); PNG import now a Must. Added on ones/twos/threes (§9.1b), lip-sync auto-advance (LS3a), PNG drawings in sets with an enlargement warning (S5–S6), and Intel Mac support.
 - **v0.3 (2026-09-25):** Electron confirmed. Pins moved into the MVP and specified (§6.3). One scene per project. Pose scope explained with an example (§9.1a).
