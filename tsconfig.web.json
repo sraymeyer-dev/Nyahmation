@@ -6,6 +6,5 @@
     "jsx": "react-jsx",
     "types": []
   },
-  "include": ["src/renderer/src/**/*", "src/preload/api.d.ts", "src/engine/**/*", "src/io/**/*"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src/renderer/src/**/*", "src/preload/api.d.ts", "src/engine/**/*", "src/io/**/*"]
 }

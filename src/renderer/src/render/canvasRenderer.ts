@@ -1,41 +1,25 @@
 import { multiply, type Mat2D } from '../../../engine/math';
-import { pathCommands } from '../../../engine/geometry';
 import type { ResolvedScene } from '../../../engine/evaluate';
 import type { Drawing, Project, ShapeStyle, VectorPath } from '../../../engine/types';
+import { compoundPath2D } from './paths';
 
-// Draws a resolved scene with Canvas 2D. The same function will serve the
-// editor preview and video export (docs/DESIGN.md N3).
+// Draws a resolved scene with Canvas 2D. The same function serves the editor
+// preview and (later) video export, so they always match (docs/DESIGN.md N3).
 
-// Paths are immutable data, so their Path2D can be built once and reused.
-const pathCache = new WeakMap<VectorPath, Path2D>();
-
-function toPath2D(path: VectorPath): Path2D {
-  let p = pathCache.get(path);
-  if (p) return p;
-  p = new Path2D();
-  for (const c of pathCommands(path)) {
-    if (c.op === 'M') p.moveTo(c.x, c.y);
-    else if (c.op === 'L') p.lineTo(c.x, c.y);
-    else if (c.op === 'C') p.bezierCurveTo(c.c1x, c.c1y, c.c2x, c.c2y, c.x, c.y);
-    else p.closePath();
-  }
-  pathCache.set(path, p);
-  return p;
-}
+export type ImageLookup = (assetId: string) => CanvasImageSource | null;
 
 function drawPaths(ctx: CanvasRenderingContext2D, paths: readonly VectorPath[], style: ShapeStyle): void {
-  const compound = new Path2D();
-  for (const path of paths) compound.addPath(toPath2D(path));
+  const path = compoundPath2D(paths);
   if (style.fill) {
     ctx.fillStyle = style.fill;
-    ctx.fill(compound, style.fillRule);
+    ctx.fill(path, style.fillRule);
   }
   if (style.stroke && style.strokeWidth > 0) {
     ctx.strokeStyle = style.stroke;
     ctx.lineWidth = style.strokeWidth;
     ctx.lineCap = style.lineCap;
     ctx.lineJoin = style.lineJoin;
-    ctx.stroke(compound);
+    ctx.stroke(path);
   }
 }
 
@@ -50,14 +34,18 @@ export function renderScene(
   project: Project,
   scene: ResolvedScene,
   view: Mat2D,
+  images: ImageLookup,
+  options: { clip?: boolean } = {},
 ): void {
   ctx.save();
   ctx.setTransform(...view);
   ctx.fillStyle = scene.background;
   ctx.fillRect(0, 0, scene.width, scene.height);
-  ctx.beginPath();
-  ctx.rect(0, 0, scene.width, scene.height);
-  ctx.clip();
+  if (options.clip !== false) {
+    ctx.beginPath();
+    ctx.rect(0, 0, scene.width, scene.height);
+    ctx.clip();
+  }
 
   for (const part of scene.parts) {
     if (!part.visible || part.opacity <= 0) continue;
@@ -65,12 +53,18 @@ export function renderScene(
     ctx.setTransform(...multiply(view, part.world));
     if (part.kind === 'shape' && part.paths && part.style) {
       drawPaths(ctx, part.paths, part.style);
+    } else if (part.kind === 'image' && part.image) {
+      const img = images(part.image.assetId);
+      if (img) ctx.drawImage(img, 0, 0, part.image.width, part.image.height);
     } else if (part.kind === 'switch') {
       const drawing = findDrawing(project, part.drawingSetId, part.drawing);
-      // Image drawings arrive with lip sync (phase 4).
-      if (drawing?.content.kind === 'vector') {
+      if (drawing) {
         ctx.translate(drawing.offset.x, drawing.offset.y);
-        drawPaths(ctx, drawing.content.paths, drawing.content.style);
+        if (drawing.content.kind === 'vector') drawPaths(ctx, drawing.content.paths, drawing.content.style);
+        else {
+          const img = images(drawing.content.assetId);
+          if (img) ctx.drawImage(img, 0, 0, drawing.content.width, drawing.content.height);
+        }
       }
     }
   }

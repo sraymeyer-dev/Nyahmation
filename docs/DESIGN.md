@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v0.7. Requirements baseline for the MVP. Phase 0 is built and phase 1 (drawing) is in progress; see §16.
+> **Status:** v0.8. Requirements baseline for the MVP. Phases 0 and 1 are built; see §16.
 > **Last updated:** 2026-09-25
 
 ---
@@ -476,7 +476,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | Phase | Theme | Scope |
 |---|---|---|
 | **0** ✅ | Foundations | Electron skeleton; engine (data model, Smooth interpolation, stepping, parent/child evaluation) with unit tests; save/load `.nyah`; demo puppet test harness. |
-| **1** | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
+| **1** ✅ | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
 | **2** | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
 | **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 export**. |
 | **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. |
@@ -522,6 +522,8 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-29 | Glow and shadow effects on groups apply to the group as a whole (FX2) | Proposed |
 | D-30 | Separate Build and Animate modes (§9.0) | Proposed |
 | D-31 | Undo keeps snapshots of the (immutable) project, which share unchanged data, instead of Immer patches | Proposed |
+| D-32 | Clicking on the canvas selects the part under the mouse (such as a hand), not its whole group or character; Shift+Enter or the Layers panel selects the parent | Proposed |
+| D-33 | New shapes, imports and pen paths go into the selected group, otherwise into the active layer; nothing is drawn on a locked or hidden layer | Proposed |
 
 ---
 
@@ -553,6 +555,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v0.8 (2026-09-25):** Phase 1 built. Recorded D-32 (click selects the part under the mouse) and D-33 (where new shapes go).
 - **v0.7 (2026-09-25):** Added scene layers and backgrounds (§8a), glow and shadow effects (§8b), and Build/Animate modes (§9.0). D-25 to D-27 confirmed.
 - **v0.6 (2026-09-25):** Phase 0 built. Recorded decisions from implementation: joint-based positions, draw order separate from the tree (R10), character-wide step restarts (ST5), and the first-pose rule (A2a). Updated the source layout.
 - **v0.5 (2026-09-25):** Reference machine set (2020 Intel MacBook Air, macOS 15). Added a preview quality setting (N9). Mouths and camera on ones confirmed. No open questions left.

@@ -10,6 +10,8 @@ import {
   insertShapeFromScene,
   locatePart,
   moveLayer,
+  movePartsBy,
+  referencedAssetIds,
   removeLayer,
   removeParts,
   reparentPart,
@@ -243,5 +245,26 @@ describe('insertPartAtScene', () => {
     const corner = worldOf(p, partId!, { x: 0, y: 0 });
     expect(corner.x).toBeCloseTo(300);
     expect(corner.y).toBeCloseTo(200);
+  });
+});
+
+describe('movePartsBy', () => {
+  it('moves by a screen distance even inside a rotated, scaled parent', () => {
+    const { project, arm } = scene();
+    const p = insertPart(project, arm.id, box('hand', 10, 0));
+    const hand = locatePart(p, arm.id)!.part.children[0]!;
+    const before = worldOf(p, hand.id);
+    const moved = movePartsBy(p, [hand.id], { x: 30, y: -10 });
+    const after = worldOf(moved, hand.id);
+    expect(after.x - before.x).toBeCloseTo(30);
+    expect(after.y - before.y).toBeCloseTo(-10);
+  });
+});
+
+describe('referencedAssetIds', () => {
+  it('lists assets used by image parts', () => {
+    const { project, pip } = scene();
+    const img = createPart({ name: 'Pic', kind: 'image', image: { assetId: 'photo', width: 1, height: 1 } });
+    expect([...referencedAssetIds(insertPart(project, pip.root.id, img))]).toEqual(['photo']);
   });
 });

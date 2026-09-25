@@ -1,7 +1,7 @@
 import { defaultStyle, ellipsePath, polygonPath, rectPath } from '../../engine/geometry';
 import { createPart, createProject } from '../../engine/project';
 import { setPartPose } from '../../engine/tracks';
-import type { Channel, ChannelValue, DrawingSet, Ease, Part, Project } from '../../engine/types';
+import type { Channel, ChannelValue, DrawingSet, Ease, Layer, Part, Project, VectorPath } from '../../engine/types';
 
 // A small built-in puppet that waves and says "Hi!", so the engine can be
 // seen working before the editing tools exist (phase 0 test harness).
@@ -46,6 +46,23 @@ const MOUTHS: DrawingSet = {
     { key: 'D', name: 'Wide open', offset: { x: 0, y: 0 }, content: { kind: 'vector', style: LIP, paths: [ellipsePath(0, 6, 24, 22)] } },
   ],
 };
+
+/** A simple background layer behind Pip: sun, hills and ground. */
+function scenery(): Layer {
+  const shape = (name: string, paths: VectorPath[], fill: string, drawOrder: number) =>
+    createPart({ name, kind: 'shape', paths, drawOrder, style: defaultStyle({ fill, stroke: null, strokeWidth: 0 }) });
+  const root = createPart({
+    name: 'Scenery',
+    kind: 'group',
+    children: [
+      shape('Sun', [ellipsePath(1560, 220, 90, 90)], '#ffd66b', 0),
+      shape('Far hills', [ellipsePath(420, 900, 700, 260), ellipsePath(1500, 930, 650, 230)], '#b8d8a8', 1),
+      shape('Near hill', [ellipsePath(1150, 1040, 900, 220)], '#8fc27f', 2),
+      shape('Ground', [rectPath(-40, 900, 2000, 220)], '#7cae6c', 3),
+    ],
+  });
+  return { id: 'scenery', name: 'Scenery', kind: 'background', root };
+}
 
 export function createDemoProject(): Project {
   const hand = createPart({ name: 'Hand', kind: 'shape', rest: at(0, 95), drawOrder: 6, paths: [ellipsePath(0, 18, 20, 22)], style: SKIN });
@@ -93,7 +110,7 @@ export function createDemoProject(): Project {
     fps: 24,
     durationFrames: 72,
     background: '#fdf6e3',
-    layers: [{ id: 'pip', name: 'Pip', kind: 'character', root }],
+    layers: [scenery(), { id: 'pip', name: 'Pip', kind: 'character', root }],
   });
   project = { ...project, drawingSets: [MOUTHS] };
 

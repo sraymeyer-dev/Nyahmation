@@ -450,3 +450,25 @@ export function insertPartAtScene(project: Project, containerId: string, part: P
   const placed = { ...raise(part), rest: decompose(local, part.joint.pivot) };
   return { project: insertPart(project, containerId, placed), partId: placed.id };
 }
+
+/** Moves parts by a distance measured on screen (scene units), whatever their parents' rotation or scale. */
+export function movePartsBy(project: Project, ids: Iterable<string>, delta: Vec2): Project {
+  let next = project;
+  for (const id of topLevelSelection(project, ids)) {
+    const loc = locatePart(next, id);
+    if (!loc?.parent) continue;
+    const inv = invert(restParentMatrix(loc));
+    const dx = inv[0] * delta.x + inv[2] * delta.y;
+    const dy = inv[1] * delta.x + inv[3] * delta.y;
+    next = updatePart(next, id, (p) => ({ ...p, rest: { ...p.rest, x: p.rest.x + dx, y: p.rest.y + dy } }));
+  }
+  return next;
+}
+
+/** All asset ids the project still uses (image parts and image drawings). */
+export function referencedAssetIds(project: Project): Set<string> {
+  const ids = new Set<string>();
+  for (const layer of project.scene.layers) for (const p of walkParts(layer.root)) if (p.image) ids.add(p.image.assetId);
+  for (const set of project.drawingSets) for (const d of set.drawings) if (d.content.kind === 'image') ids.add(d.content.assetId);
+  return ids;
+}

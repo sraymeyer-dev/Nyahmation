@@ -1,12 +1,21 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { buildMenu } from './menu';
 
 // The main process only touches the file system. Everything about the
 // project's contents (packing, validation) happens in the renderer, so it
 // can be unit-tested without Electron.
 
 const PROJECT_FILTERS = [{ name: 'Nyahmation Project', extensions: ['nyah'] }];
+const IMPORT_FILTERS = [
+  { name: 'SVG or Image', extensions: ['svg', 'png', 'jpg', 'jpeg'] },
+  { name: 'SVG', extensions: ['svg'] },
+  { name: 'Images', extensions: ['png', 'jpg', 'jpeg'] },
+];
+
+/** Unsaved-changes state reported by each window's renderer. */
+const dirtyWindows = new WeakSet<BrowserWindow>();
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -22,6 +31,19 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  win.on('close', (event) => {
+    if (!dirtyWindows.has(win)) return;
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      buttons: ['Discard Changes', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'You have unsaved changes.',
+      detail: 'If you close now, your changes since the last save will be lost.',
+    });
+    if (choice === 1) event.preventDefault();
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -62,7 +84,31 @@ ipcMain.handle('project:save', async (event, bytes: unknown, existingPath: unkno
   return { path, name: basename(path) };
 });
 
+ipcMain.handle('file:import', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const options = { properties: ['openFile' as const], filters: IMPORT_FILTERS };
+  const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+  const path = result.filePaths[0];
+  if (result.canceled || !path) return null;
+  return { name: basename(path), bytes: new Uint8Array(await readFile(path)) };
+});
+
+ipcMain.on('document:state', (event, state: { title?: unknown; path?: unknown; dirty?: unknown }) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  const dirty = state.dirty === true;
+  if (dirty) dirtyWindows.add(win);
+  else dirtyWindows.delete(win);
+  const title = typeof state.title === 'string' ? state.title : 'Untitled';
+  win.setTitle(`${title}${dirty && process.platform !== 'darwin' ? ' •' : ''} — Nyahmation`);
+  if (process.platform === 'darwin') {
+    win.setDocumentEdited(dirty);
+    win.setRepresentedFilename(typeof state.path === 'string' ? state.path : '');
+  }
+});
+
 void app.whenReady().then(() => {
+  buildMenu();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
