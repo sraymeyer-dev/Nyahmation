@@ -1,5 +1,5 @@
 import { applyToPoint, DEG_TO_RAD, localMatrix, multiply, type Mat2D } from './math';
-import type { Transform, Vec2 } from './types';
+import type { Part, Transform, Vec2 } from './types';
 
 // Inverse kinematics (docs/DESIGN.md §6.2): given a chain of jointed parts and
 // a point that should reach a target, work out new joint rotations.
@@ -143,4 +143,21 @@ function solveTwoBone(chain: Chain, links: readonly IkLink[], target: Vec2): boo
   const p2 = chain.effectorPoint(worlds);
   chain.turn(worlds, 1, wrapDegrees(angleOf(sub(target, e2)) - angleOf(sub(p2, e2))));
   return true;
+}
+
+/**
+ * The joints that turn when `part` is dragged (docs/DESIGN.md R7a), nearest
+ * first: its ancestors up to and including the first chain root. `ancestors`
+ * runs from the layer root down to the parent; the layer root never turns.
+ * Empty when the part is itself a chain root or nothing above it can turn.
+ */
+export function chainFromAncestors(part: Part, ancestors: readonly Part[]): Part[] {
+  if (ancestors.length === 0 || part.joint.chainRoot) return [];
+  const chain: Part[] = [];
+  for (let i = ancestors.length - 1; i >= 1; i--) {
+    const a = ancestors[i]!;
+    chain.push(a);
+    if (a.joint.chainRoot) break;
+  }
+  return chain;
 }

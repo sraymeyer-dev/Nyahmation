@@ -1,7 +1,8 @@
-import { locatePart, restParentMatrix, restWorldMatrix, updateLayer, updatePart, walkParts } from './edit';
-import { solveIk, wrapDegrees, type IkLink } from './ik';
+import { restAccess, type TransformAccess } from './access';
+import { locatePart, restWorldMatrix, topLevelSelection, updateLayer, updatePart, walkParts } from './edit';
+import { chainFromAncestors, solveIk, wrapDegrees, type IkLink } from './ik';
 import { applyToPoint, DEG_TO_RAD, invert, localMatrix } from './math';
-import type { Part, Project, Vec2 } from './types';
+import type { Part, Project, Transform, Vec2 } from './types';
 
 // Rigging in Build mode (docs/DESIGN.md §6): joints, chain roots and
 // drag-to-pose. These edit the rest pose; Animate mode (phase 3) will reuse
@@ -50,67 +51,84 @@ export function autoChainRoots(project: Project, layerId: string): Project {
  */
 export function ikChainIds(project: Project, id: string): string[] {
   const loc = locatePart(project, id);
-  if (!loc?.parent || loc.part.joint.chainRoot) return [];
-  const ids: string[] = [];
-  for (let i = loc.ancestors.length - 1; i >= 1; i--) {
-    const a = loc.ancestors[i]!;
-    ids.push(a.id);
-    if (a.joint.chainRoot) break;
-  }
-  return ids;
+  if (!loc?.parent) return [];
+  return chainFromAncestors(loc.part, loc.ancestors).map((p) => p.id);
 }
 
-function link(p: Part): IkLink {
-  const l: IkLink = { transform: p.rest, pivot: p.joint.pivot };
+function link(p: Part, transform: Transform): IkLink {
+  const l: IkLink = { transform, pivot: p.joint.pivot };
   if (p.joint.minAngle !== undefined) l.minAngle = p.joint.minAngle;
   if (p.joint.maxAngle !== undefined) l.maxAngle = p.joint.maxAngle;
   if (p.joint.bendDirection !== undefined) l.bendDirection = p.joint.bendDirection;
   return l;
 }
 
-function setRotations(project: Project, ids: string[], rotations: number[]): Project {
-  let next = project;
-  ids.forEach((id, i) => {
-    next = updatePart(next, id, (p) => ({ ...p, rest: { ...p.rest, rotation: rotations[i]! } }));
-  });
-  return next;
-}
+type Changes = Map<string, Partial<Transform>>;
 
 /**
  * Drag-to-pose: the point `grab` (in the dragged part's drawing space) is
  * pulled toward `target` (scene) by turning the part's IK chain. If the part
- * has no chain, it turns at its own joint instead.
+ * has no chain, it turns at its own joint instead. Returns new rotations.
  */
-export function dragPose(project: Project, id: string, grab: Vec2, target: Vec2): Project {
+export function dragPoseChanges(project: Project, access: TransformAccess, id: string, grab: Vec2, target: Vec2): Changes {
   const chain = ikChainIds(project, id);
-  if (chain.length === 0) return aimPart(project, id, grab, target);
+  if (chain.length === 0) return aimChanges(project, access, id, grab, target);
   const loc = locatePart(project, id)!;
-  const top = locatePart(project, chain[chain.length - 1]!)!;
-  const links = [...chain].reverse().map((cid) => link(locatePart(project, cid)!.part));
+  const ordered = [...chain].reverse();
+  const links = ordered.map((cid) => link(locatePart(project, cid)!.part, access.local(cid)!));
   // The grabbed point, expressed in the drawing space of the joint nearest to it.
-  const effector = applyToPoint(localMatrix(loc.part.rest, loc.part.joint.pivot), grab);
-  const rotations = solveIk(restParentMatrix(top), links, effector, target);
-  return setRotations(project, [...chain].reverse(), rotations);
+  const effector = applyToPoint(localMatrix(access.local(id)!, loc.part.joint.pivot), grab);
+  const rotations = solveIk(access.parentWorld(ordered[0]!), links, effector, target);
+  return new Map(ordered.map((cid, i) => [cid, { rotation: rotations[i]! }]));
 }
 
 /** Turns a part at its own joint so the grabbed point points at `target` (respecting limits). */
-export function aimPart(project: Project, id: string, grab: Vec2, target: Vec2): Project {
+export function aimChanges(project: Project, access: TransformAccess, id: string, grab: Vec2, target: Vec2): Changes {
   const loc = locatePart(project, id);
-  if (!loc?.parent) return project;
-  const [rotation] = solveIk(restParentMatrix(loc), [link(loc.part)], grab, target);
-  return setRotations(project, [id], [rotation!]);
+  if (!loc?.parent) return new Map();
+  const [rotation] = solveIk(access.parentWorld(id), [link(loc.part, access.local(id)!)], grab, target);
+  return new Map([[id, { rotation: rotation! }]]);
 }
 
 /** Rotates a part at its own joint by the angle the mouse swept around the joint. */
-export function rotateAtJoint(project: Project, id: string, from: Vec2, to: Vec2): Project {
+export function rotateChanges(project: Project, access: TransformAccess, id: string, from: Vec2, to: Vec2): Changes {
   const loc = locatePart(project, id);
-  if (!loc?.parent) return project;
-  const joint = applyToPoint(restWorldMatrix(loc), loc.part.joint.pivot);
+  const local = access.local(id);
+  if (!loc?.parent || !local) return new Map();
+  const joint = applyToPoint(access.world(id), loc.part.joint.pivot);
   const angle = (v: Vec2) => Math.atan2(v.y - joint.y, v.x - joint.x) / DEG_TO_RAD;
-  const parent = restParentMatrix(loc);
+  const parent = access.parentWorld(id);
   const sign = parent[0] * parent[3] - parent[1] * parent[2] < 0 ? -1 : 1;
-  const rotation = loc.part.rest.rotation + wrapDegrees(angle(to) - angle(from)) * sign;
-  return setRotations(project, [id], [rotation]);
+  return new Map([[id, { rotation: local.rotation + wrapDegrees(angle(to) - angle(from)) * sign }]]);
+}
+
+/** Moves parts by a distance measured on screen, whatever their parents' rotation or scale. */
+export function moveChanges(project: Project, access: TransformAccess, ids: Iterable<string>, delta: Vec2): Changes {
+  const changes: Changes = new Map();
+  for (const id of topLevelSelection(project, ids)) {
+    const local = access.local(id);
+    if (!local || !locatePart(project, id)?.parent) continue;
+    const inv = invert(access.parentWorld(id));
+    changes.set(id, { x: local.x + inv[0] * delta.x + inv[2] * delta.y, y: local.y + inv[1] * delta.x + inv[3] * delta.y });
+  }
+  return changes;
+}
+
+// Build-mode versions, editing the rest pose.
+
+export function dragPose(project: Project, id: string, grab: Vec2, target: Vec2): Project {
+  const access = restAccess(project);
+  return access.write(project, dragPoseChanges(project, access, id, grab, target));
+}
+
+export function aimPart(project: Project, id: string, grab: Vec2, target: Vec2): Project {
+  const access = restAccess(project);
+  return access.write(project, aimChanges(project, access, id, grab, target));
+}
+
+export function rotateAtJoint(project: Project, id: string, from: Vec2, to: Vec2): Project {
+  const access = restAccess(project);
+  return access.write(project, rotateChanges(project, access, id, from, to));
 }
 
 /** Every part that has a joint worth showing (everything except layer roots). */

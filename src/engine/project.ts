@@ -142,6 +142,11 @@ export function validateProject(project: Project): void {
       if (isContinuousChannel(track.channel) && !Number.isFinite(pose.value)) {
         fail(`pose on ${key} at frame ${pose.frame} is not a number`);
       }
+      if (track.channel === 'pin' && pose.value !== null) {
+        const v = pose.value as { point?: { x?: unknown; y?: unknown }; at?: { x?: unknown; y?: unknown } };
+        const ok = [v?.point?.x, v?.point?.y, v?.at?.x, v?.at?.y].every((n) => Number.isFinite(n));
+        if (!ok) fail(`pin on ${key} at frame ${pose.frame} is damaged`);
+      }
     }
   });
 }

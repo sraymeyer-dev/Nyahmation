@@ -1,6 +1,7 @@
 import { walkParts } from './edit';
-import { evaluateContinuous, evaluateDiscrete } from './interpolate';
-import { IDENTITY, localMatrix, multiply, type Mat2D } from './math';
+import { chainFromAncestors, solveIk, type IkLink } from './ik';
+import { evaluateContinuous, evaluateDiscrete, evaluateDiscreteFrom } from './interpolate';
+import { applyToPoint, IDENTITY, localMatrix, multiply, type Mat2D } from './math';
 import { collectAnchors, steppedFrame } from './stepping';
 import { isContinuousChannel } from './tracks';
 import type {
@@ -9,11 +10,13 @@ import type {
   Layer,
   Part,
   PartKind,
+  PinValue,
   Pose,
   Project,
   ShapeStyle,
   Track,
   Transform,
+  Vec2,
   VectorPath,
 } from './types';
 
@@ -40,6 +43,8 @@ export interface ResolvedPart {
   /** The drawing key a switch layer shows on this frame. */
   drawing?: string;
   image?: ImageRef;
+  /** Set while the part is pinned; `reached` is false if the limb can't reach the pin. */
+  pin?: { at: Vec2; reached: boolean };
 }
 
 export interface ResolvedScene {
@@ -90,7 +95,7 @@ function evaluateLayer(
   tracks: TrackIndex,
 ): ResolvedPart[] {
   // Motion is sampled at the stepped frame; discrete channels (mouths,
-  // visibility, draw order) always use the real frame, so they stay on ones.
+  // visibility, draw order, pins) always use the real frame, so they stay on ones.
   const stepping = layer.stepping ?? sceneStepping;
   let motionFrame = frame;
   if (stepping !== 1) {
@@ -103,28 +108,75 @@ function evaluateLayer(
     motionFrame = steppedFrame(frame, stepping, collectAnchors(poseLists));
   }
 
+  const cont = (part: Part, channel: Channel, rest: number) => {
+    const track = tracks.get(part.id)?.get(channel);
+    return track ? evaluateContinuous(track.poses as Pose<number>[], motionFrame, rest) : rest;
+  };
+  const disc = <T>(part: Part, channel: Channel, rest: T): T => {
+    const track = tracks.get(part.id)?.get(channel);
+    return track ? evaluateDiscrete(track.poses as Pose<T>[], frame, rest) : rest;
+  };
+
+  // 1. Every part's animated local transform.
+  const locals = new Map<string, Transform>();
+  const ancestorsOf = new Map<string, Part[]>();
+  const pinned: { part: Part; pin: PinValue }[] = [];
+  const gather = (part: Part, ancestors: Part[]) => {
+    locals.set(part.id, {
+      x: cont(part, 'x', part.rest.x),
+      y: cont(part, 'y', part.rest.y),
+      rotation: cont(part, 'rotation', part.rest.rotation),
+      scaleX: cont(part, 'scaleX', part.rest.scaleX),
+      scaleY: cont(part, 'scaleY', part.rest.scaleY),
+    });
+    ancestorsOf.set(part.id, ancestors);
+    const pinTrack = tracks.get(part.id)?.get('pin');
+    const pin = pinTrack ? evaluateDiscreteFrom(pinTrack.poses as Pose<PinValue | null>[], frame, null) : null;
+    if (pin && ancestors.length > 0) pinned.push({ part, pin });
+    for (const child of part.children) gather(child, [...ancestors, part]);
+  };
+  gather(layer.root, []);
+
+  // 2. Pins: re-solve each pinned part's chain so its pinned point stays put
+  // (docs/DESIGN.md P4). Two passes let pins that share joints settle.
+  const worldOf = (part: Part): Mat2D => {
+    let m = IDENTITY;
+    for (const p of [...ancestorsOf.get(part.id)!, part]) m = multiply(m, localMatrix(locals.get(p.id)!, p.joint.pivot));
+    return m;
+  };
+  const pinReached = new Map<string, boolean>();
+  for (let pass = 0; pass < (pinned.length > 1 ? 2 : pinned.length); pass++) {
+    for (const { part, pin } of pinned) {
+      const ancestors = ancestorsOf.get(part.id)!;
+      const chain = chainFromAncestors(part, ancestors);
+      const links = (chain.length ? [...chain].reverse() : [part]).map((p): IkLink => {
+        const l: IkLink = { transform: locals.get(p.id)!, pivot: p.joint.pivot };
+        if (p.joint.minAngle !== undefined) l.minAngle = p.joint.minAngle;
+        if (p.joint.maxAngle !== undefined) l.maxAngle = p.joint.maxAngle;
+        if (p.joint.bendDirection !== undefined) l.bendDirection = p.joint.bendDirection;
+        return l;
+      });
+      const top = chain.length ? chain[chain.length - 1]! : part;
+      const topAncestors = ancestorsOf.get(top.id)!;
+      const base = worldOf(topAncestors[topAncestors.length - 1]!);
+      const effector = chain.length ? applyToPoint(localMatrix(locals.get(part.id)!, part.joint.pivot), pin.point) : pin.point;
+      const rotations = solveIk(base, links, effector, pin.at);
+      (chain.length ? [...chain].reverse() : [part]).forEach((p, i) => {
+        locals.set(p.id, { ...locals.get(p.id)!, rotation: rotations[i]! });
+      });
+      const reached = applyToPoint(worldOf(part), pin.point);
+      pinReached.set(part.id, Math.hypot(reached.x - pin.at.x, reached.y - pin.at.y) < 0.5);
+    }
+  }
+  const pinOf = new Map(pinned.map((p) => [p.part.id, p.pin]));
+
+  // 3. World matrices, opacity, visibility; resolve each part.
   const out: ResolvedPart[] = [];
   const visit = (part: Part, parentWorld: Mat2D, parentOpacity: number, parentVisible: boolean, parentLocked: boolean) => {
-    const partTracks = tracks.get(part.id);
-    const cont = (channel: Channel, rest: number) => {
-      const track = partTracks?.get(channel);
-      return track ? evaluateContinuous(track.poses as Pose<number>[], motionFrame, rest) : rest;
-    };
-    const disc = <T>(channel: Channel, rest: T): T => {
-      const track = partTracks?.get(channel);
-      return track ? evaluateDiscrete(track.poses as Pose<T>[], frame, rest) : rest;
-    };
-
-    const local: Transform = {
-      x: cont('x', part.rest.x),
-      y: cont('y', part.rest.y),
-      rotation: cont('rotation', part.rest.rotation),
-      scaleX: cont('scaleX', part.rest.scaleX),
-      scaleY: cont('scaleY', part.rest.scaleY),
-    };
+    const local = locals.get(part.id)!;
     const world = multiply(parentWorld, localMatrix(local, part.joint.pivot));
-    const opacity = parentOpacity * Math.min(Math.max(cont('opacity', part.opacity), 0), 1);
-    const visible = parentVisible && disc('visible', part.visible);
+    const opacity = parentOpacity * Math.min(Math.max(cont(part, 'opacity', part.opacity), 0), 1);
+    const visible = parentVisible && disc(part, 'visible', part.visible);
     const locked = parentLocked || part.locked === true;
 
     const resolved: ResolvedPart = {
@@ -137,14 +189,16 @@ function evaluateLayer(
       opacity,
       visible,
       locked,
-      drawOrder: disc('drawOrder', part.drawOrder),
+      drawOrder: disc(part, 'drawOrder', part.drawOrder),
     };
+    const pin = pinOf.get(part.id);
+    if (pin) resolved.pin = { at: pin.at, reached: pinReached.get(part.id) ?? false };
     if (part.kind === 'shape') {
       resolved.paths = part.paths ?? [];
       if (part.style) resolved.style = part.style;
     } else if (part.kind === 'switch') {
       if (part.drawingSetId) resolved.drawingSetId = part.drawingSetId;
-      const drawing = disc<string | undefined>('drawing', part.restDrawing);
+      const drawing = disc<string | undefined>(part, 'drawing', part.restDrawing);
       if (drawing !== undefined) resolved.drawing = drawing;
     } else if (part.kind === 'image' && part.image) {
       resolved.image = part.image;

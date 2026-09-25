@@ -33,6 +33,15 @@ export function evaluateDiscrete<T>(poses: readonly Pose<T>[], frame: number, re
 }
 
 /**
+ * Like evaluateDiscrete, but before the first pose the rest value applies.
+ * Used for pins: a pin placed on frame 10 does nothing before frame 10.
+ */
+export function evaluateDiscreteFrom<T>(poses: readonly Pose<T>[], frame: number, rest: T): T {
+  const i = poseIndexAtOrBefore(poses, frame);
+  return i < 0 ? rest : poses[i]!.value;
+}
+
+/**
  * Value of a continuous channel at `frame` (may be fractional).
  * Before the first pose and after the last, the nearest pose's value holds.
  * Between two poses the first pose's ease decides how the value travels.

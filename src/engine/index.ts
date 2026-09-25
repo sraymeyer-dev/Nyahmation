@@ -11,3 +11,6 @@ export * from './pathEdit';
 export * from './edit';
 export * from './ik';
 export * from './rig';
+export * from './access';
+export * from './retime';
+export * from './pins';

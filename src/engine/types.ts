@@ -124,7 +124,17 @@ export interface EaseCurve {
 export type Ease = EasePreset | EaseCurve;
 
 export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity';
-export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder';
+export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin';
+
+/**
+ * A pin (docs/DESIGN.md §6.3): from its frame on, `point` (in the part's
+ * drawing) is held at `at` (scene coordinates) by turning the part's IK chain.
+ * A null value ends the pin.
+ */
+export interface PinValue {
+  point: Vec2;
+  at: Vec2;
+}
 export type Channel = ContinuousChannel | DiscreteChannel;
 
 export type ChannelValue<C extends Channel> = C extends ContinuousChannel
@@ -133,7 +143,9 @@ export type ChannelValue<C extends Channel> = C extends ContinuousChannel
     ? string
     : C extends 'visible'
       ? boolean
-      : number;
+      : C extends 'pin'
+        ? PinValue | null
+        : number;
 
 /**
  * A value the animator set on a frame. Frames are integers starting at 0.
