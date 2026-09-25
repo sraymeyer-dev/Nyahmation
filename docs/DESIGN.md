@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** Draft v0.4. Part poses confirmed; SVG is the only vector import; animating on twos; lip-sync auto-advance; PNG drawings; Intel Mac support.
+> **Status:** v0.5. Requirements baseline for the MVP; all open questions resolved.
 > **Last updated:** 2026-09-25
 
 ---
@@ -339,12 +339,15 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 ## 13. Non-functional requirements
 
 - **N1** Runs on **macOS (both Apple Silicon and older Intel Macs)** and **Windows 10/11** from one codebase. The Mac app is a universal build (it contains both Apple Silicon and Intel code), and FFmpeg is bundled for both.
-- **N2** Real-time preview (24–60 fps) for a 1080p scene with about 2 characters of about 50 parts each, **measured on the oldest target machine (the Intel Mac)**. On slower machines, export only takes longer; it never loses quality.
+- **N2** Real-time preview (24–60 fps) for a 1080p scene with about 2 characters of about 50 parts each, **measured on the reference machine (see N8)**. On slower machines, export only takes longer; it never loses quality.
 - **N3** The preview looks exactly like the export: one renderer does both.
 - **N4** Every edit can be undone. Autosave means no lost work.
 - **N5** Deterministic: the same project always renders the same frames.
 - **N6** The engine (model, interpolation, IK, evaluation) is pure code with no UI dependencies, and it is unit-tested.
 - **N7** Keyboard-first: shortcuts for tools, frame stepping and lip-sync entry.
+- **N8** **Reference machine:** 2020 MacBook Air (Intel, 1.2 GHz quad-core i7, integrated Intel Iris Plus graphics, macOS 15 Sequoia). This is the slowest machine Nyahmation targets. Performance goals are measured on it, and every phase is checked on it.
+- **N9** **Preview quality setting** (Full / Half / Quarter resolution). If playback can't keep up on the reference machine, the preview can be drawn at lower resolution to stay smooth. Export always renders at full quality.
+- **N10** Minimum OS: whatever the chosen Electron version supports (currently about macOS 12 and Windows 10). macOS 15 on the reference machine is well within that.
 
 ---
 
@@ -386,7 +389,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 ### 14.4 Known costs
 - An Electron app is large (about 150–250 MB) and uses a fair amount of memory. That's fine for a personal tool.
 - **macOS Gatekeeper**: without an Apple Developer ID ($99/yr), the Mac shows a warning the first time the app is opened. Right-click → Open gets past it.
-- **Intel Mac minimum macOS version**: Electron supports the same macOS versions as Chrome. Recent versions need about **macOS 12 (Monterey) or newer**; the exact minimum is confirmed when we pick the Electron version. If the Intel Mac can't run that, we'd have to use an older Electron version, which no longer gets security fixes.
+- **Intel Mac minimum macOS version**: Electron supports the same macOS versions as Chrome, currently about macOS 12 or newer. The reference Mac runs macOS 15 Sequoia, so this is fine. Sequoia is the last macOS version this model can install, but Chrome and Electron normally keep supporting a macOS version for several years after that.
 - **Universal Mac build** is roughly twice the size, since it contains code for both kinds of processor.
 - **FFmpeg licensing**: the H.264 encoder (x264) is GPL-licensed. That's fine for personal use; revisit if Nyahmation is ever distributed.
 
@@ -466,17 +469,17 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-17 | Poses are recorded per part (only the parts that changed), not for the whole character | **Decided** |
 | D-18 | SVG is the only vector import format; PNG/JPG for images | **Decided** |
 | D-19 | Animating on ones/twos/threes, per scene with per-character override | **Decided** |
-| D-20 | Mouths and the camera stay on ones even when a character is on twos; steps restart at every pose | Proposed |
+| D-20 | Mouths and the camera stay on ones even when a character is on twos; steps restart at every pose | **Decided** |
 | D-21 | Lip-sync entry auto-advances the playhead (1 frame by default) | **Decided** |
 | D-22 | Drawing sets can contain PNG images as well as vector drawings, with a warning for enlarged PNGs | **Decided** |
 | D-23 | Support older Intel Macs (universal Mac build) as well as Apple Silicon and Windows | **Decided** |
+| D-24 | 2020 Intel MacBook Air (macOS 15) is the reference machine for performance | **Decided** |
 
 ---
 
 ## 18. Open questions
 
-1. **Intel Mac details:** which model year is it, and what macOS version does it run (Apple menu → About This Mac)? This sets the minimum macOS version (§14.4).
-2. **Twos and mouths:** confirm that mouths stay on ones while the body is on twos (ST4), or should mouths follow the character's stepping?
+None right now. New questions will be added here as implementation raises them.
 
 ---
 
@@ -502,6 +505,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 
 ## Revision history
 
+- **v0.5 (2026-09-25):** Reference machine set (2020 Intel MacBook Air, macOS 15). Added a preview quality setting (N9). Mouths and camera on ones confirmed. No open questions left.
 - **v0.4 (2026-09-25):** Part poses decided. SVG-only vector import (PDF/AI/EPS dropped); PNG import now a Must. Added on ones/twos/threes (§9.1b), lip-sync auto-advance (LS3a), PNG drawings in sets with an enlargement warning (S5–S6), and Intel Mac support.
 - **v0.3 (2026-09-25):** Electron confirmed. Pins moved into the MVP and specified (§6.3). One scene per project. Pose scope explained with an example (§9.1a).
 - **v0.2 (2026-09-25):** Retargeted to a desktop, video-only character animation tool. Added rigging with FK/IK, libraries, switch layers and lip sync, the pose-based "no keyframes" workflow, Smooth interpolation, video export, the Electron + TypeScript recommendation, and a decisions log.
