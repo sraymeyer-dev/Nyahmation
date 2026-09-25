@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** Draft v0.2. This version adds the user's direction on rigging, lip sync, the no-keyframe workflow, video output and platform.
+> **Status:** Draft v0.3. Electron is confirmed, pins are in the MVP, each project is one scene, and pose scope is explained.
 > **Last updated:** 2026-09-25
 
 ---
@@ -26,6 +26,7 @@ This is **purpose-built, not generic**. Every tool assumes you are animating cha
 - Frame-by-frame raster drawing.
 - Bending or deforming parts (mesh deformation). Parts are rigid for now.
 - Video editing: cutting shots together, titles, music mixing. A video editor such as DaVinci Resolve does that.
+- Several shots in one project. Each project is one scene, and becomes one video.
 - 3D, physics, particles.
 
 ---
@@ -41,7 +42,7 @@ This is **purpose-built, not generic**. Every tool assumes you are animating cha
 6. Save the character to the library.
 
 **B. Animate**
-1. Create a scene (resolution, frame rate). Place characters and a background. Import the dialogue audio.
+1. Create a project, which is one scene (resolution, frame rate). Place characters and a background. Import the dialogue audio.
 2. Go to a frame and drag parts into a pose. Dragging a hand bends the elbow and swings the shoulder.
 3. Go to another frame and pose again. Nyahmation in-betweens automatically.
 4. Scrub and play. Retime by dragging pose marks, and adjust easing where the motion feels wrong.
@@ -60,7 +61,7 @@ This is **purpose-built, not generic**. Every tool assumes you are animating cha
 
 | Concept | What it is |
 |---|---|
-| **Project** | One file on disk holding scenes, the characters used in them, and embedded audio and images. |
+| **Project** | One file on disk holding **exactly one scene**: its characters, audio and images. One project becomes one exported video. |
 | **Library** | A folder on disk of reusable, named items: shapes, drawing sets (such as mouth sets) and whole characters. |
 | **Character** | A tree of parts connected at joints. A puppet. |
 | **Part** | A node in the tree. It is a **group**, a **shape** or a **switch layer**. Each part has a transform and a joint. |
@@ -68,7 +69,7 @@ This is **purpose-built, not generic**. Every tool assumes you are animating cha
 | **Joint** | Where a part attaches to its parent: a pivot point, optional rotation limits, and an optional "chain root" flag for IK. |
 | **Switch layer** | A part that shows exactly one drawing at a time, chosen from a named drawing set. A mouth is a switch layer. |
 | **Drawing set** | A named collection of drawings, such as a mouth set (one drawing per sound), an eye set or a hand set. |
-| **Scene** | A stage with resolution, frame rate, duration, background, characters and audio. One scene becomes one exported video. |
+| **Scene** | The stage inside a project: resolution, frame rate, duration, background, characters and audio. |
 | **Pose** | The state of a part at a frame where the animator set it. |
 | **In-between** | Any frame the animator didn't pose. Nyahmation computes it. |
 
@@ -98,7 +99,7 @@ type Part = {
 type Track = {
   partId: string;
   channel: "x" | "y" | "rotation" | "scaleX" | "scaleY" | "opacity"   // continuous
-         | "drawing" | "visible" | "drawOrder";                        // discrete
+         | "drawing" | "visible" | "drawOrder" | "pin";                // discrete
   poses: Pose[];                 // sorted by frame
 };
 
@@ -155,15 +156,27 @@ Affinity (`.afdesign`) and CorelDRAW (`.cdr`) files use closed formats. The prac
 - **R5 Joint limits.** Minimum and maximum angle per joint. IK respects them.
 - **R6 Bend direction.** A two-part limb remembers which way it bends (knees forward, elbows back).
 - **R7 Drag modes.** Plain drag poses with IK. Alt/Option-drag moves the part itself, offsetting it from its joint. The rotate handle (or `R`) rotates the part at its own joint only.
-- **R8 Pins** (Should). Pin a part so it stays in place, for example a foot planted on the ground. Dragging the body then bends the legs instead of dragging the feet along. This matters a lot for walks.
+- **R8 Pins** (Must). Pin a part so it stays fixed in place, for example a foot planted on the ground. Dragging the body then bends the legs instead of dragging the feet along. Pins hold across frames, not just while dragging. See §6.3.
 - **R9 Draw-order swaps** (Should). A part can move in front of or behind a sibling from one pose to the next, such as an arm swinging behind the body.
 
 ### 6.2 Proposed: IK is a posing tool, not a live constraint
 When you drag, the IK solver works out the joint angles and **writes them into the pose as ordinary rotations**. The in-betweens then blend those angles, so limbs swing in natural arcs, the way real joints move.
 
-The trade-off: between two poses a hand travels in an arc, not a straight line, and a planted foot can slide slightly. You fix that by adding a pose in between, or later by using pins (R8) that hold over time.
+The trade-off: between two poses a hand travels in an arc, not a straight line, and a planted foot can slide slightly. You fix that by adding a pose in between, or by pinning the foot (§6.3).
 
 **Solver:** for two-part limbs (arms and legs), an exact geometric solution, which is stable and respects bend direction. For longer chains (tails, tentacles), an iterative solver (FABRIK or CCD). Both are deterministic: the same drag always gives the same pose.
+
+### 6.3 Pins
+A pin nails a part to a spot on the stage for a stretch of frames. Think of a foot planted on the floor during a step: the body moves over it, and the leg has to bend to keep the foot where it is.
+
+- **P1** Select a part and press **Pin** (or `P`). It is pinned at its current position from this frame on.
+- **P2** Press **Unpin** on a later frame to release it. A walk becomes: pin the left foot, move the body, unpin the left foot, swing it forward, pin it again.
+- **P3** **While posing**, dragging anything keeps pinned parts in place by bending the joints between the pin and the chain root (for a foot: knee and hip).
+- **P4** **During playback and export**, pins are enforced **on every in-between frame**, not only on posed frames. After the normal interpolation, Nyahmation re-solves the pinned chain so the pinned part stays exactly where it was pinned. This is what stops feet sliding.
+- **P5** If a pin can't be reached (the body moved too far away), the limb straightens as far as it can, and the pin marker turns red on the canvas and the timeline.
+- **P6** On the timeline, a pin shows as a bar under the part's row from pin to unpin. Dragging the bar's ends retimes the pin.
+
+This refines §6.2: IK is a posing tool **except** for pinned chains, which are corrected on every frame while the pin is active. It is still deterministic.
 
 ---
 
@@ -226,6 +239,21 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 - **A8** **Onion skinning**: faint copies of the previous and next poses or frames.
 - **A9** **Easing** per pose: Smooth (default), Linear, Ease in, Ease out, Ease in-out, Hold.
 
+### 9.1a Proposed: poses belong to parts, not to the whole character
+When you change something on a frame, which parts get a pose recorded on that frame? There are two options.
+
+**Example.** On frame 1 you set up the character: arm down, head facing forward. On frame 24 you raise the arm, and nothing else. Later you go to frame 12 and turn the head to the left.
+
+| | **Part poses** (proposed) | **Whole-character poses** |
+|---|---|---|
+| What frame 24 records | Only the arm (plus any joints IK moved to get it there, such as the shoulder). | Every part: arm raised, and also head forward, legs, everything. |
+| What the head does | Turns left from frames 1 to 12, then stays turned. | Turns left from frames 1 to 12, then **turns back to forward by 24**, because frame 24 "remembers" the head facing forward. |
+| Feels like | Each part keeps its own diary and writes an entry only when you touch it. | Taking a photo of the whole puppet every time you touch any part. |
+
+**Why part poses:** you can give different parts different timing, such as the head turning first and the arm following a few frames later ("overlapping action"). Adding a pose to one part never quietly locks every other part in place. To move a whole moment at once, the **character row** on the timeline shows a mark wherever any part has a pose. Dragging that mark moves all the parts' poses on that frame together.
+
+**Rule:** a pose is recorded for every part whose value changed because of your edit. When you drag a hand with IK, that means the hand, forearm and upper arm (and the legs, if pins made them bend).
+
 ### 9.2 Should have
 - **A10** Custom easing curve editor.
 - **A11** **Camera**: pan, zoom and rotate the view, animated like any part.
@@ -266,7 +294,7 @@ evaluate(track, f):
 Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) work. Because IK writes joint angles (§6.2), limbs swing in arcs.
 
 ### 10.4 Scene evaluation
-`evaluate(scene, frame) → resolvedScene`: evaluate every track, then combine transforms from the root down (parent × child, around each joint), then sort by draw order. The renderer draws only the resolved scene. **Preview, scrubbing, onion skinning and export all call this same function.**
+`evaluate(scene, frame) → resolvedScene`: evaluate every track, then combine transforms from the root down (parent × child, around each joint), then **apply active pins** (re-solve each pinned chain so the pinned part stays put, §6.3), then sort by draw order. The renderer draws only the resolved scene. **Preview, scrubbing, onion skinning and export all call this same function.**
 
 ---
 
@@ -288,7 +316,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 
 ## 12. Files and storage
 
-- **F1** A project is **one `.nyah` file**: a zip bundle holding `project.json` plus the embedded audio and images. It is easy to move and back up.
+- **F1** A project is **one scene in one `.nyah` file**: a zip bundle holding `project.json` plus the embedded audio and images. It is easy to move and back up. Characters move between projects through the library.
 - **F2** The file format has a version number, and old files are migrated when opened.
 - **F3** **Autosave** to a recovery file every minute or so, with an offer to restore after a crash.
 - **F4** The library is a plain folder (§7).
@@ -393,12 +421,12 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **0** | Foundations | Electron skeleton; engine (data model, Smooth interpolation, parent/child evaluation) with unit tests; save/load `.nyah`. |
 | **1** | Draw | Canvas, pen tool, primitives, point editing, fill and stroke, outliner, undo; SVG import. |
 | **2** | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
-| **3** | Move | Timeline, pose-anywhere, holds, retiming, playback, onion skin; **silent MP4 export**. |
+| **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**; **silent MP4 export**. |
 | **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets; lip-sync lane; **MP4 with audio**. |
-| **5** | Polish | Pins, camera, backgrounds, draw-order swaps, ProRes/PNG export, easing curve editor, PDF/AI import. |
+| **5** | Polish | Camera, backgrounds, draw-order swaps, ProRes/PNG export, easing curve editor, PDF/AI import. |
 | **6+** | Stretch | Automatic lip sync (Rhubarb), mirror poses, animation cycles, gradients and boolean operations. |
 
-**MVP = Phases 0–4.** Success test: *make a 10-second clip of a character who waves and speaks one line of dialogue, lip-synced, exported as MP4 with audio.*
+**MVP = Phases 0–4.** Success test: *make a 10-second clip of a character who takes a few steps without the feet sliding, waves, and speaks one line of dialogue, lip-synced, exported as MP4 with audio.*
 
 ---
 
@@ -412,27 +440,28 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-4 | Drawing tools in the app (pen, editable primitives) plus import | **Decided** |
 | D-5 | No keyframe/frame distinction for the user; always interpolate between poses | **Decided** |
 | D-6 | Mouths are switch layers, driven by a named library and per-frame sound assignment | **Decided** |
-| D-7 | Electron + TypeScript | Proposed |
-| D-8 | IK is a posing tool that writes joint rotations, not a live constraint | Proposed |
+| D-7 | Electron + TypeScript | **Decided** |
+| D-8 | IK is a posing tool that writes joint rotations; only pinned chains are corrected on every frame | Proposed |
 | D-9 | Default interpolation is Smooth (auto-clamped Hermite) | Proposed |
 | D-10 | Poses sit on integer frames | Proposed |
 | D-11 | The lip-sync lane stores sounds, not drawings | Proposed |
 | D-12 | Library items are copied into projects | Proposed |
 | D-13 | Primitives become plain paths when created | Proposed |
 | D-14 | Default mouth set is 9 shapes (A–H, X) | Proposed |
+| D-15 | Pins are in the MVP and hold on every frame they're active | **Decided** |
+| D-16 | Each project is exactly one scene | **Decided** |
+| D-17 | Poses are recorded per part (only the parts that changed), not for the whole character | Proposed |
 
 ---
 
 ## 18. Open questions
 
 1. **Import formats:** besides SVG, which formats does your existing art actually use (AI, EPS, PDF, Affinity, other)?
-2. **Pins in the MVP?** Walks and anything with planted feet are much harder without them.
-3. **Pose scope:** when you pose the arm on frame 10, should only the parts that moved get a pose (proposed), or the whole character? The first gives more control over timing; the second is closer to traditional "key drawings".
-4. **Scenes per project:** one scene per project, or several shots in one project, each exported separately and cut together in a video editor (proposed)?
-5. **Animating "on twos":** an option to show movement at 12 changes per second for a hand-drawn feel, even at 24 fps?
-6. **Lip-sync entry:** should pressing a sound key also jump the playhead forward a frame or two, or stay put?
-7. **Raster drawings in sets:** allow PNG mouths and hands, or vector only?
-8. **Mac hardware:** Apple Silicon only, or also older Intel Macs?
+2. **Pose scope:** confirm part poses (§9.1a), or prefer whole-character poses?
+3. **Animating "on twos":** an option to show movement at 12 changes per second for a hand-drawn feel, even at 24 fps?
+4. **Lip-sync entry:** should pressing a sound key also jump the playhead forward a frame or two, or stay put?
+5. **Raster drawings in sets:** allow PNG mouths and hands, or vector only?
+6. **Mac hardware:** Apple Silicon only, or also older Intel Macs?
 
 ---
 
@@ -457,5 +486,6 @@ Each phase ends with something usable. Video export arrives early so the full pi
 
 ## Revision history
 
+- **v0.3 (2026-09-25):** Electron confirmed. Pins moved into the MVP and specified (§6.3). One scene per project. Pose scope explained with an example (§9.1a).
 - **v0.2 (2026-09-25):** Retargeted to a desktop, video-only character animation tool. Added rigging with FK/IK, libraries, switch layers and lip sync, the pose-based "no keyframes" workflow, Smooth interpolation, video export, the Electron + TypeScript recommendation, and a decisions log.
 - **v0.1 (2026-09-24):** First sketch.
