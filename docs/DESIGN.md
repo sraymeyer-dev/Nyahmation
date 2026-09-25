@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** Draft v0.3. Electron is confirmed, pins are in the MVP, each project is one scene, and pose scope is explained.
+> **Status:** Draft v0.4. Part poses confirmed; SVG is the only vector import; animating on twos; lip-sync auto-advance; PNG drawings; Intel Mac support.
 > **Last updated:** 2026-09-25
 
 ---
@@ -138,11 +138,9 @@ type Pose = {
 | # | Format | Priority | Notes |
 |---|---|---|---|
 | **I1** | SVG | Must | Paths, basic shapes, groups, transforms, fills and strokes. **The group structure is kept**, so art drawn in layers elsewhere arrives as a parts tree ready to rig. |
-| **I2** | PNG / JPG | Should | For backgrounds and for tracing reference. |
-| **I3** | PDF and Adobe Illustrator `.ai` | Should | Modern `.ai` files are PDF-compatible, so both come through one PDF reader. |
-| **I4** | EPS and others | Could | Converted to SVG with an external tool (such as the Inkscape command line) if it is installed. |
+| **I2** | PNG (with transparency) / JPG | Must | For drawings in drawing sets (mouths, hands, eyes; see S5), backgrounds and tracing reference. |
 
-Affinity (`.afdesign`) and CorelDRAW (`.cdr`) files use closed formats. The practical route for those is to export SVG from the source app.
+**SVG is the only vector format.** Art from other apps (Illustrator, Affinity, Inkscape and so on) comes in by exporting SVG from that app. PDF, AI and EPS import are out of scope.
 
 ---
 
@@ -197,6 +195,8 @@ This refines §6.2: IK is a posing tool **except** for pinned chains, which are 
 - **S2** Each drawing in a set keeps its own alignment to the layer's anchor, so swapping drawings doesn't make the part jump.
 - **S3** Which drawing is showing is a **discrete** channel: it holds until the next change and is never blended. The layer's own position, rotation and scale still interpolate normally.
 - **S4** Uses: mouths, eyes (open, half, closed), hands (fist, open, point), brows, and alternate head angles.
+- **S5** A drawing in a set can be **vector** (drawn in Nyahmation or imported SVG) or a **PNG image** (with transparency). The two kinds can be mixed in one set.
+- **S6** PNGs have a fixed number of pixels, so they look soft if they're shown bigger than their own size. For example, a mouth that is 200 pixels wide in the PNG but 400 pixels wide on screen in a 4K export will look blurry. Before exporting, Nyahmation **warns you about any PNG that will be enlarged beyond its own size**, and says which one. Vector drawings stay sharp at any size.
 
 ### 8.2 Mouth sets
 A mouth set is a drawing set whose entries are named by sound. The proposed default is 9 shapes, following the classic cartoon set that the open-source Rhubarb Lip Sync tool also uses:
@@ -219,6 +219,7 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 - **LS1** The timeline shows the audio **waveform**, and under it a lane for each switch layer (Mouth, Eyes and so on).
 - **LS2** **Audio scrubbing**: stepping or dragging the playhead plays the sound under it, so you can hear each frame.
 - **LS3** **Fast entry**: press a sound's key (A–H, X) or click its thumbnail. The mouth is set at the current frame and **holds until the next change**, so you mark where each sound starts, not every frame.
+- **LS3a** **Auto-advance**: after each sound key, the playhead **moves forward one frame automatically** and plays that frame's audio, so you can keep your hands on the keys and listen as you go. Pressing the same key again just extends the shape. The step size can be changed (1 frame by default; 2 if you lip sync on twos). `Backspace` steps back one frame and undoes the entry there.
 - **LS4** The lane shows labelled blocks with thumbnails. Drag block edges to retime them.
 - **LS5** Select a phrase and nudge it earlier or later. Lip sync often reads better 1–2 frames ahead of the audio.
 - **LS6** Proposed: **the lane stores sounds, not drawings.** The mouth set maps each sound to a drawing, so you can change a character's mouth art, or switch to a side-view mouth set, without redoing the lip sync.
@@ -239,7 +240,7 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 - **A8** **Onion skinning**: faint copies of the previous and next poses or frames.
 - **A9** **Easing** per pose: Smooth (default), Linear, Ease in, Ease out, Ease in-out, Hold.
 
-### 9.1a Proposed: poses belong to parts, not to the whole character
+### 9.1a Decided: poses belong to parts, not to the whole character
 When you change something on a frame, which parts get a pose recorded on that frame? There are two options.
 
 **Example.** On frame 1 you set up the character: arm down, head facing forward. On frame 24 you raise the arm, and nothing else. Later you go to frame 12 and turn the head to the left.
@@ -250,9 +251,20 @@ When you change something on a frame, which parts get a pose recorded on that fr
 | What the head does | Turns left from frames 1 to 12, then stays turned. | Turns left from frames 1 to 12, then **turns back to forward by 24**, because frame 24 "remembers" the head facing forward. |
 | Feels like | Each part keeps its own diary and writes an entry only when you touch it. | Taking a photo of the whole puppet every time you touch any part. |
 
-**Why part poses:** you can give different parts different timing, such as the head turning first and the arm following a few frames later ("overlapping action"). Adding a pose to one part never quietly locks every other part in place. To move a whole moment at once, the **character row** on the timeline shows a mark wherever any part has a pose. Dragging that mark moves all the parts' poses on that frame together.
+**Why part poses (chosen):** you can give different parts different timing, such as the head turning first and the arm following a few frames later ("overlapping action"). Adding a pose to one part never quietly locks every other part in place. To move a whole moment at once, the **character row** on the timeline shows a mark wherever any part has a pose. Dragging that mark moves all the parts' poses on that frame together.
 
 **Rule:** a pose is recorded for every part whose value changed because of your edit. When you drag a hand with IK, that means the hand, forearm and upper arm (and the legs, if pins made them bend).
+
+### 9.1b Animating on ones, twos and threes
+Hand-drawn animation often changes the picture only every 2nd frame ("on twos"): 12 new positions per second in a 24 fps video. It looks less smooth, but more hand-made and punchy. Nyahmation can do the same with its in-betweens.
+
+- **ST1** Scene setting **Animate on: 1s / 2s / 3s** (default 1s).
+- **ST2** **Per-character override**, so one character can be on twos while another is on ones.
+- **ST3** **What steps:** a character's motion (position, rotation, scale, opacity, and pinned limbs).
+- **ST4** **What doesn't step:** mouths and other switch layers stay on ones, so lip sync timing stays exact. The camera stays on ones by default, because a stepped camera move judders the whole picture. The audio never steps.
+- **ST5** **Steps restart at every pose**, so every pose you set is shown exactly on the frame you set it. For example, on twos with poses on frames 1 and 8, the part shows new positions on frames 1, 3, 5, 7 and then exactly the pose on 8. Without this rule, an odd-numbered pose could be skipped.
+- **ST6** (Should) A **View on ones** toggle for checking the motion while you work. It affects only the preview, never the export.
+- **ST7** (Could) Change the stepping over time, such as ones during a fast action and twos elsewhere.
 
 ### 9.2 Should have
 - **A10** Custom easing curve editor.
@@ -294,7 +306,7 @@ evaluate(track, f):
 Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) work. Because IK writes joint angles (§6.2), limbs swing in arcs.
 
 ### 10.4 Scene evaluation
-`evaluate(scene, frame) → resolvedScene`: evaluate every track, then combine transforms from the root down (parent × child, around each joint), then **apply active pins** (re-solve each pinned chain so the pinned part stays put, §6.3), then sort by draw order. The renderer draws only the resolved scene. **Preview, scrubbing, onion skinning and export all call this same function.**
+`evaluate(scene, frame) → resolvedScene`: evaluate every track (for a stepped character, at the start of the current step, §9.1b), then combine transforms from the root down (parent × child, around each joint), then **apply active pins** (re-solve each pinned chain so the pinned part stays put, §6.3), then sort by draw order. The renderer draws only the resolved scene. **Preview, scrubbing, onion skinning and export all call this same function.**
 
 ---
 
@@ -326,8 +338,8 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 
 ## 13. Non-functional requirements
 
-- **N1** Runs on **macOS and Windows** from one codebase.
-- **N2** Real-time preview (24–60 fps) for a 1080p scene with about 2 characters of about 50 parts each.
+- **N1** Runs on **macOS (both Apple Silicon and older Intel Macs)** and **Windows 10/11** from one codebase. The Mac app is a universal build (it contains both Apple Silicon and Intel code), and FFmpeg is bundled for both.
+- **N2** Real-time preview (24–60 fps) for a 1080p scene with about 2 characters of about 50 parts each, **measured on the oldest target machine (the Intel Mac)**. On slower machines, export only takes longer; it never loses quality.
 - **N3** The preview looks exactly like the export: one renderer does both.
 - **N4** Every edit can be undone. Autosave means no lost work.
 - **N5** Deterministic: the same project always renders the same frames.
@@ -346,7 +358,6 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 | Identical output on both machines | Electron **ships its own Chromium engine**, so drawing and anti-aliasing are the same on Mac and PC. |
 | Vector drawing and Bézier rendering | Canvas 2D has native, fast, anti-aliased Bézier paths, and one code path serves preview and export. |
 | SVG import | The embedded browser engine already parses SVG. We convert its tree into Nyahmation parts. |
-| PDF/AI import | pdf.js reads the vector drawing commands in PDF-compatible files. |
 | Complex editor UI (timeline, outliner, library) | Web UI tooling (React) is the most productive option for panel-heavy apps. |
 | Audio scrubbing and waveform | The Web Audio API handles decoding, playback and precise timing. |
 | Video export | A bundled **FFmpeg** takes the rendered frames and the audio and writes MP4/MOV/PNG. |
@@ -375,6 +386,8 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 ### 14.4 Known costs
 - An Electron app is large (about 150–250 MB) and uses a fair amount of memory. That's fine for a personal tool.
 - **macOS Gatekeeper**: without an Apple Developer ID ($99/yr), the Mac shows a warning the first time the app is opened. Right-click → Open gets past it.
+- **Intel Mac minimum macOS version**: Electron supports the same macOS versions as Chrome. Recent versions need about **macOS 12 (Monterey) or newer**; the exact minimum is confirmed when we pick the Electron version. If the Intel Mac can't run that, we'd have to use an older Electron version, which no longer gets security fixes.
+- **Universal Mac build** is roughly twice the size, since it contains code for both kinds of processor.
 - **FFmpeg licensing**: the H.264 encoder (x264) is GPL-licensed. That's fine for personal use; revisit if Nyahmation is ever distributed.
 
 ---
@@ -406,7 +419,7 @@ src/
   render/   Canvas2D renderer
   editor/   tools (pen, select, pose, lip-sync), commands, store
   ui/       React panels
-  io/       SVG/PDF import, project file, library
+  io/       SVG/PNG import, project file, library
   main/     Electron main process: files, FFmpeg
 ```
 
@@ -419,11 +432,11 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | Phase | Theme | Scope |
 |---|---|---|
 | **0** | Foundations | Electron skeleton; engine (data model, Smooth interpolation, parent/child evaluation) with unit tests; save/load `.nyah`. |
-| **1** | Draw | Canvas, pen tool, primitives, point editing, fill and stroke, outliner, undo; SVG import. |
+| **1** | Draw | Canvas, pen tool, primitives, point editing, fill and stroke, outliner, undo; SVG and PNG import. |
 | **2** | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
-| **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**; **silent MP4 export**. |
-| **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets; lip-sync lane; **MP4 with audio**. |
-| **5** | Polish | Camera, backgrounds, draw-order swaps, ProRes/PNG export, easing curve editor, PDF/AI import. |
+| **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 export**. |
+| **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. |
+| **5** | Polish | Camera, backgrounds, draw-order swaps, ProRes/PNG export, easing curve editor. |
 | **6+** | Stretch | Automatic lip sync (Rhubarb), mirror poses, animation cycles, gradients and boolean operations. |
 
 **MVP = Phases 0–4.** Success test: *make a 10-second clip of a character who takes a few steps without the feet sliding, waves, and speaks one line of dialogue, lip-synced, exported as MP4 with audio.*
@@ -450,18 +463,20 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-14 | Default mouth set is 9 shapes (A–H, X) | Proposed |
 | D-15 | Pins are in the MVP and hold on every frame they're active | **Decided** |
 | D-16 | Each project is exactly one scene | **Decided** |
-| D-17 | Poses are recorded per part (only the parts that changed), not for the whole character | Proposed |
+| D-17 | Poses are recorded per part (only the parts that changed), not for the whole character | **Decided** |
+| D-18 | SVG is the only vector import format; PNG/JPG for images | **Decided** |
+| D-19 | Animating on ones/twos/threes, per scene with per-character override | **Decided** |
+| D-20 | Mouths and the camera stay on ones even when a character is on twos; steps restart at every pose | Proposed |
+| D-21 | Lip-sync entry auto-advances the playhead (1 frame by default) | **Decided** |
+| D-22 | Drawing sets can contain PNG images as well as vector drawings, with a warning for enlarged PNGs | **Decided** |
+| D-23 | Support older Intel Macs (universal Mac build) as well as Apple Silicon and Windows | **Decided** |
 
 ---
 
 ## 18. Open questions
 
-1. **Import formats:** besides SVG, which formats does your existing art actually use (AI, EPS, PDF, Affinity, other)?
-2. **Pose scope:** confirm part poses (§9.1a), or prefer whole-character poses?
-3. **Animating "on twos":** an option to show movement at 12 changes per second for a hand-drawn feel, even at 24 fps?
-4. **Lip-sync entry:** should pressing a sound key also jump the playhead forward a frame or two, or stay put?
-5. **Raster drawings in sets:** allow PNG mouths and hands, or vector only?
-6. **Mac hardware:** Apple Silicon only, or also older Intel Macs?
+1. **Intel Mac details:** which model year is it, and what macOS version does it run (Apple menu → About This Mac)? This sets the minimum macOS version (§14.4).
+2. **Twos and mouths:** confirm that mouths stay on ones while the body is on twos (ST4), or should mouths follow the character's stepping?
 
 ---
 
@@ -479,6 +494,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 - **Pin:** a part held in place while the rest of the rig moves.
 - **Switch layer:** a part that shows one drawing at a time from a set.
 - **Phoneme / mouth shape:** a speech sound, and the mouth drawing that shows it.
+- **On twos:** changing the picture every 2nd frame (12 positions per second at 24 fps) for a hand-drawn feel.
 - **Onion skinning:** faint copies of nearby frames, used to judge motion.
 - **Muxing:** combining separate video and audio streams into one file.
 
@@ -486,6 +502,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 
 ## Revision history
 
+- **v0.4 (2026-09-25):** Part poses decided. SVG-only vector import (PDF/AI/EPS dropped); PNG import now a Must. Added on ones/twos/threes (§9.1b), lip-sync auto-advance (LS3a), PNG drawings in sets with an enlargement warning (S5–S6), and Intel Mac support.
 - **v0.3 (2026-09-25):** Electron confirmed. Pins moved into the MVP and specified (§6.3). One scene per project. Pose scope explained with an example (§9.1a).
 - **v0.2 (2026-09-25):** Retargeted to a desktop, video-only character animation tool. Added rigging with FK/IK, libraries, switch layers and lip sync, the pose-based "no keyframes" workflow, Smooth interpolation, video export, the Electron + TypeScript recommendation, and a decisions log.
 - **v0.1 (2026-09-24):** First sketch.
