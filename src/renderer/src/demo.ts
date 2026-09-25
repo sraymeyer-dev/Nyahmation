@@ -68,11 +68,14 @@ export function createDemoProject(): Project {
   const hand = createPart({ name: 'Hand', kind: 'shape', rest: at(0, 95), drawOrder: 6, paths: [ellipsePath(0, 18, 20, 22)], style: SKIN });
   const forearm = limb('Forearm (front)', 0, 100, 95, 30, SHIRT, [hand], 6);
   const upperArm = limb('Upper arm (front)', 62, -228, 100, 34, SHIRT, [forearm], 6);
+  // Shoulders and the neck are chain roots: dragging a hand bends the arm but never tilts the torso.
+  upperArm.joint = { ...upperArm.joint, chainRoot: true };
 
   const backForearm = limb('Forearm (back)', 0, 100, 95, 30, SHIRT, [
     createPart({ name: 'Hand (back)', kind: 'shape', rest: at(0, 95), paths: [ellipsePath(0, 18, 20, 22)], style: SKIN }),
   ]);
   const backArm = limb('Upper arm (back)', -62, -228, 100, 34, SHIRT, [backForearm]);
+  backArm.joint = { ...backArm.joint, chainRoot: true };
 
   const mouth = createPart({ name: 'Mouth', kind: 'switch', rest: at(0, -48), drawOrder: 5, drawingSetId: MOUTHS.id, restDrawing: 'X' });
   const eyes = createPart({
@@ -91,6 +94,7 @@ export function createDemoProject(): Project {
     paths: [ellipsePath(0, -95, 92, 95)],
     style: SKIN,
     children: [eyes, mouth],
+    joint: { pivot: { x: 0, y: 0 }, chainRoot: true },
   });
   const torso = createPart({
     name: 'Torso',

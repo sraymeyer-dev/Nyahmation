@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -10,7 +10,7 @@ let page: Page;
 const dir = mkdtempSync(join(tmpdir(), 'nyah-'));
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production' } });
+  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library') } });
   page = await app.firstWindow();
   await page.setViewportSize({ width: 1400, height: 860 });
   await page.waitForSelector('[data-testid="stage"]');
@@ -245,4 +245,58 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   expect(await signature()).toBe(pose);
   await nextFrame();
   expect(await signature()).not.toBe(pose);
+});
+
+type Pt = { x: number; y: number };
+const debug = <T,>(fn: string, ...args: unknown[]) =>
+  page.evaluate(([f, a]) => (window as any).__nyah[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
+
+test('the Pose tool bends the arm to follow a dragged hand', async () => {
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('k');
+  const torsoBefore = await debug<{ rest: object }>('part', 'Torso');
+  const hand = (await debug<Pt>('partScreen', 'Hand', { x: 0, y: 18 }))!;
+  const target = { x: hand.x + 60, y: hand.y - 90 };
+  await drag([hand.x, hand.y], [target.x, target.y]);
+  const reached = (await debug<Pt>('partScreen', 'Hand', { x: 0, y: 18 }))!;
+  expect(Math.hypot(reached.x - target.x, reached.y - target.y)).toBeLessThan(1.5);
+  // The torso is above the shoulder's chain root, so it didn't move.
+  expect((await debug<{ rest: object }>('part', 'Torso')).rest).toEqual(torsoBefore.rest);
+  expect((await debug<{ rest: { rotation: number } }>('part', 'Forearm (front)')).rest.rotation).not.toBe(0);
+  await page.screenshot({ path: 'test-results/pose.png' });
+});
+
+test('the Joints tool moves a joint without moving the artwork', async () => {
+  await page.keyboard.press('j');
+  const neck = (await debug<Pt>('jointScreen', 'Head'))!;
+  const headCentre = (await debug<Pt>('partScreen', 'Head', { x: 0, y: -95 }))!;
+  await drag([neck.x, neck.y], [neck.x, neck.y - 30]);
+  const movedNeck = (await debug<Pt>('jointScreen', 'Head'))!;
+  expect(movedNeck.y).toBeLessThan(neck.y - 20);
+  const centreAfter = (await debug<Pt>('partScreen', 'Head', { x: 0, y: -95 }))!;
+  expect(centreAfter.x).toBeCloseTo(headCentre.x, 1);
+  expect(centreAfter.y).toBeCloseTo(headCentre.y, 1);
+  await expect(page.getByLabel('Chain root')).toBeChecked();
+});
+
+test('saves a character to the library and adds a copy', async () => {
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
+  await page.getByRole('tab', { name: 'Library' }).click();
+  await page.getByRole('button', { name: 'Save to library…' }).click();
+  await page.getByLabel('Library item name').fill('Pip the puppet');
+  await page.getByLabel('Tags').fill('kid, demo');
+  await page.locator('.save-form').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByTestId('library-item')).toHaveCount(1);
+  await expect(page.getByTestId('library-item')).toContainText('Pip the puppet');
+  await expect(page.getByTestId('library-item')).toContainText('Character · kid, demo');
+  expect(existsSync(join(dir, 'library', 'Pip the puppet.nyahitem'))).toBe(true);
+
+  await page.getByTestId('library-item').getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await expect(page.getByTestId('layer-row')).toHaveCount(3);
+  await expect(page.getByTestId('layer-row').first()).toContainText('Pip the puppet');
+  await page.getByRole('tab', { name: 'Library' }).click();
+  await page.screenshot({ path: 'test-results/library.png' });
 });

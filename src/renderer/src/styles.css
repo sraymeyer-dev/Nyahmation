@@ -252,9 +252,9 @@ button:focus-visible {
 
 /* Sidebar */
 .sidebar {
-  width: 290px;
+  width: 300px;
   display: grid;
-  grid-template-rows: minmax(160px, 1fr) minmax(200px, 1.2fr);
+  grid-template-rows: minmax(180px, 1fr) minmax(220px, 1.2fr);
   background: var(--panel);
   border-left: 1px solid var(--border);
   min-height: 0;
@@ -287,8 +287,154 @@ button:focus-visible {
   min-height: 0;
 }
 
-.outliner {
+.sidebar-top {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-bottom: 1px solid var(--border);
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.outliner,
+.library {
+  flex: 1;
+  min-height: 0;
+}
+
+.library {
+  display: flex;
+  flex-direction: column;
+}
+
+.library-actions {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.library-actions .search {
+  flex: 1;
+}
+
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 6px;
+}
+
+.save-row .hint {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 8px 8px;
+}
+
+.save-form .hint {
+  margin: 0;
+}
+
+.save-form .buttons {
+  display: flex;
+  gap: 6px;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.library-list {
+  flex: 1;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+
+.library-list .folder {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.library-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.library-item .thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#3a3c42 0% 25%, #33353a 0% 50%) 50% / 12px 12px;
+  color: var(--muted);
+}
+
+.library-item .thumb img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.library-item .meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.library-item .meta span {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-item.damaged {
+  opacity: 0.6;
+}
+
+button.icon {
+  padding: 1px 6px;
 }
 
 .outline-list,
@@ -432,6 +578,23 @@ button:focus-visible {
 
 .row-control > input:not([type='checkbox']):not([type='color']):not([type='range']) {
   flex: 1;
+}
+
+.row-control select,
+.row-control button {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.properties-body {
+  overflow-x: hidden;
+}
+
+.save-button {
+  white-space: nowrap;
+  flex: none;
 }
 
 .number-field {

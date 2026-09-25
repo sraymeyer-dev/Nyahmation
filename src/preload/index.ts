@@ -11,6 +11,13 @@ const api: NyahApi = {
     return () => ipcRenderer.removeListener('menu:command', handler);
   },
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
+  library: {
+    list: () => ipcRenderer.invoke('library:list'),
+    read: (relPath) => ipcRenderer.invoke('library:read', relPath),
+    save: (name, bytes) => ipcRenderer.invoke('library:save', name, bytes),
+    remove: (relPath) => ipcRenderer.invoke('library:remove', relPath),
+    reveal: () => ipcRenderer.invoke('library:reveal'),
+  },
 };
 
 contextBridge.exposeInMainWorld('nyah', api);

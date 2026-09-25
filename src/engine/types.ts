@@ -23,11 +23,20 @@ export interface Transform {
 export interface Joint {
   /** The joint point in the part's own drawing coordinates. */
   pivot: Vec2;
-  /** Rotation limits in degrees, used by IK (phase 2). */
+  /** Rotation limits in degrees (on the part's own rotation), respected by IK. */
   minAngle?: number;
   maxAngle?: number;
-  /** IK stops at this joint (phase 2). */
+  /**
+   * IK stops at this joint: dragging a part below it never rotates anything
+   * above it, and dragging this part itself only rotates it at its joint.
+   */
   chainRoot?: boolean;
+  /**
+   * Which way a two-part limb bends when it starts out perfectly straight
+   * (1 = clockwise on screen, -1 = counter-clockwise). Otherwise IK keeps
+   * the bend it already has.
+   */
+  bendDirection?: 1 | -1;
 }
 
 /** A path point. Handles are offsets from the anchor; absent means a sharp corner. */

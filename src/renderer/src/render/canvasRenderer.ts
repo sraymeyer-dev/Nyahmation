@@ -35,12 +35,14 @@ export function renderScene(
   scene: ResolvedScene,
   view: Mat2D,
   images: ImageLookup,
-  options: { clip?: boolean } = {},
+  options: { clip?: boolean; background?: boolean } = {},
 ): void {
   ctx.save();
   ctx.setTransform(...view);
-  ctx.fillStyle = scene.background;
-  ctx.fillRect(0, 0, scene.width, scene.height);
+  if (options.background !== false) {
+    ctx.fillStyle = scene.background;
+    ctx.fillRect(0, 0, scene.width, scene.height);
+  }
   if (options.clip !== false) {
     ctx.beginPath();
     ctx.rect(0, 0, scene.width, scene.height);

@@ -3,12 +3,13 @@ import { locatePart } from '../../../engine/edit';
 import { defaultStyle } from '../../../engine/geometry';
 import { createProject } from '../../../engine/project';
 import type { Project, ShapeStyle } from '../../../engine/types';
+import type { LibraryEntry } from '../../../preload/api';
 
 // Editor state and undo history. The project is immutable, so every undo
 // step is simply an earlier project object; unchanged parts are shared
 // between steps, which keeps history cheap (docs/DESIGN.md D-31).
 
-export type ToolId = 'select' | 'points' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
+export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
 export type Mode = 'build' | 'animate';
 
 export interface View {
@@ -51,6 +52,8 @@ export interface EditorState {
   status: string;
   /** Increments when decoded images become available, so the canvas redraws. */
   imagesVersion: number;
+  sidebarTab: 'layers' | 'library';
+  library: { dir: string; items: readonly LibraryEntry[]; loaded: boolean };
 }
 
 const HISTORY_LIMIT = 200;
@@ -76,6 +79,8 @@ function initialState(): EditorState {
     notice: null,
     status: '',
     imagesVersion: 0,
+    sidebarTab: 'layers',
+    library: { dir: '', items: [], loaded: false },
   };
 }
 

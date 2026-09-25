@@ -8,9 +8,60 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 
 - **Phase 0 (foundations):** done. Animation engine and `.nyah` project files.
 - **Phase 1 (drawing):** done. Build mode with drawing tools, point editing, layers, fill and stroke, undo, and SVG/PNG/JPEG import.
-- Next: phase 2 (rigging: joints and drag-to-pose).
+- **Phase 2 (rigging):** done. Joints, chain roots, joint limits, drag-to-pose (inverse kinematics), and a library of reusable characters and shapes.
+- Next: phase 3 (animating on the timeline, pins, video export).
 
-## Running it
+## Running it on a Mac (step by step)
+
+These steps work on both Intel Macs (like a 2020 MacBook Air) and Apple Silicon Macs. You only do steps 1–3 once.
+
+**1. Install Node.js.** Go to [nodejs.org](https://nodejs.org), download the **LTS** version (22 or newer) as the **macOS Installer (.pkg)**, and run it. Then open **Terminal** (Applications → Utilities → Terminal) and check it worked:
+
+```sh
+node -v    # should print v22.something or higher
+```
+
+**2. Get the code.** The easiest way, with no Git needed: on GitHub, open the repository, pick the branch **`claude/busy-rubin-8k13jp`** from the branch menu, then **Code → Download ZIP**. Double-click the ZIP in Downloads to unpack it.
+
+(If you use Git: `git clone -b claude/busy-rubin-8k13jp https://github.com/sraymeyer-dev/Nyahmation.git`. The first time you run `git`, macOS may offer to install the Command Line Tools; say yes.)
+
+**3. Install the app's parts.** In Terminal, go into the folder. Type `cd ` (with a space), drag the unpacked folder from Finder onto the Terminal window, and press Return. Then:
+
+```sh
+npm install
+```
+
+This takes a few minutes the first time: it downloads Electron (about 100 MB) and the other parts.
+
+**4. Start Nyahmation.**
+
+```sh
+npm run dev
+```
+
+The app window opens. Leave Terminal open while you use it; closing Terminal (or pressing Ctrl+C in it) quits the app. Next time, just open Terminal, `cd` into the folder again, and run `npm run dev`.
+
+Try **File → Open Demo Puppet**, then press **K** (Pose tool) and drag Pip's hand.
+
+The first time you save to the library, macOS may ask whether Nyahmation can use your **Documents** folder. Allow it: the library lives in `Documents/Nyahmation Library`.
+
+### Optional: make a real Mac app
+
+Instead of starting from Terminal each time, you can build a normal app:
+
+```sh
+npm run dist:mac
+```
+
+This makes `release/Nyahmation-0.0.1-universal.dmg` (it takes several minutes). Open it and drag Nyahmation to Applications.
+
+The app isn't signed with a paid Apple Developer ID, so macOS Sequoia blocks it the first time. To allow it once: try to open it, click **Done**, then go to **System Settings → Privacy & Security**, scroll down to the message about Nyahmation, click **Open Anyway**, and confirm with your password. After that it opens normally.
+
+### Getting updates
+
+Download the ZIP again (or `git pull` if you used Git), then run `npm install` and `npm run dev` as before. Your projects and library are separate files, so they're not affected.
+
+## Running it on Windows or for development
 
 You need [Node.js](https://nodejs.org) 22 LTS or newer.
 
@@ -29,11 +80,22 @@ The app has two modes (top bar). **Build** is for drawing and arranging. **Anima
 |---|---|---|
 | Select | V | Click a part to select it; drag to move. Drag the square handles to scale (Shift keeps proportions, Alt scales from the centre) and the round handle to rotate (Shift snaps to 15°). Drag on empty canvas to select with a box. Double-click a shape to edit its points. |
 | Points | A | Drag points, handles or curves. Double-click a curve to add a point; double-click a point to make it smooth or sharp. Alt-drag a handle to break a smooth point. Delete removes points. |
+| Joints | J | Shows the skeleton. Drag a joint (the dot where a part attaches) to move it; the drawing stays put. Double-click a joint to make it a **chain root** (square): posing stops there. |
+| Pose | K | Drag a part and its parents bend to follow (the elbow bends and the shoulder swings when you drag the hand). Shift-drag turns a part at its own joint; Alt-drag moves it away from its joint; Cmd/Ctrl-drag moves the whole character. Hover to see which joints will turn. In Build mode this sets the character's resting pose. |
 | Pen | P | Click for corners, drag for curves. Click the first point to close the shape; Enter or double-click finishes an open line. Backspace removes the last point. |
 | Rectangle, Ellipse, Polygon, Star, Line | M, L, Y, S, \ | Drag out a shape. Shift keeps it square (or the line at 45°); Alt draws from the centre. |
 | Hand | H | Drag to pan. Space-drag or the middle mouse button pans with any tool. |
 
 Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
+
+**Rigging a character:**
+1. Put the character on a **character layer**. Build the parent/child tree in the Layers panel: drag the forearm onto the upper arm, the hand onto the forearm, and so on.
+2. With the **Joints** tool, drag each part's joint to where it attaches: shoulder, elbow, wrist, hips, neck.
+3. Select the layer and click **Mark branch joints as chain roots** (or double-click joints yourself). This stops a dragged hand from tilting the whole body.
+4. Optionally, select a part and turn on **Limits** in its Joint settings (for example, so an elbow can't bend backwards).
+5. Try it with the **Pose** tool.
+
+**Library tab:** select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them.
 
 **Layers panel:** layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
 
@@ -53,4 +115,4 @@ npm run dist:mac  # macOS universal .dmg (Intel + Apple Silicon), in release/
 npm run dist:win  # Windows installer, in release/
 ```
 
-The app isn't signed with an Apple Developer ID, so the first time you open it on a Mac, right-click it and choose **Open**.
+See "Make a real Mac app" above for opening an unsigned app on macOS Sequoia.

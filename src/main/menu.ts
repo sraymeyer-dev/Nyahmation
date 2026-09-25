@@ -61,6 +61,9 @@ export function buildMenu(): void {
         { type: 'separator' },
         item('New Character Layer', 'newCharacterLayer'),
         item('New Background Layer', 'newBackgroundLayer'),
+        { type: 'separator' },
+        item('Mark Branch Joints as Chain Roots', 'autoChainRoots'),
+        item('Save Selection to Library…', 'saveToLibrary', 'Shift+CmdOrCtrl+L'),
       ],
     },
     {

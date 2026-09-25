@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "A character animation studio for making vector-animated videos.",
+  "author": "Nyahmation",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

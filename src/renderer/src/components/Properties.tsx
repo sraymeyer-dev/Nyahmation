@@ -1,4 +1,6 @@
 import { locatePart, restWorldMatrix, updateLayer, updatePart, type PartLocation } from '../../../engine/edit';
+import { applyToPoint } from '../../../engine/math';
+import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { store, useEditor } from '../editor/store';
 import { NumberField, PaintField, Row, Section } from './fields';
@@ -130,11 +132,17 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
           <option value={3}>Threes</option>
         </select>
       </Row>
+      <Row label="Rig">
+        <button onClick={() => store.commit(autoChainRoots(project, layer.id), { status: 'Chain roots set where limbs branch off (shoulders, hips, neck).' })}>
+          Mark branch joints as chain roots
+        </button>
+      </Row>
     </Section>
   );
 }
 
 function PartProperties({ locs }: { locs: PartLocation[] }) {
+  const mode = useEditor((s) => s.mode);
   const ids = locs.map((l) => l.part.id);
   const single = locs.length === 1 ? locs[0]!.part : null;
   const shapes = locs.map((l) => l.part).filter((p) => p.kind === 'shape' && p.style);
@@ -189,6 +197,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
         </Row>
         {single?.kind === 'image' && single.image && <ImageHint loc={locs[0]!} />}
       </Section>
+      {single && mode === 'build' && <JointSection loc={locs[0]!} />}
       {shapes.length > 0 && (
         <Section title={shapes.length === 1 ? 'Fill & stroke' : `Fill & stroke (${shapes.length} shapes)`}>
           <StyleEditor
@@ -219,6 +228,61 @@ function ImageHint({ loc }: { loc: PartLocation }) {
       {image.width} × {image.height} pixels, shown at {percent}% of its own size in the scene.
       {percent > 100 && ' It is enlarged, so it may look soft in the video.'}
     </p>
+  );
+}
+
+/** Joint settings for one part (docs/DESIGN.md R2, R4, R5, R6). */
+function JointSection({ loc }: { loc: PartLocation }) {
+  const part = loc.part;
+  const joint = part.joint;
+  const scene = applyToPoint(restWorldMatrix(loc), joint.pivot);
+  const setJoint = (patch: Partial<Part['joint']>, key: string) => {
+    const next = { ...joint, ...patch };
+    for (const k of Object.keys(next) as (keyof typeof next)[]) if (next[k] === undefined) delete next[k];
+    commitParts([part.id], (p) => ({ ...p, joint: next }), key);
+  };
+  const limited = joint.minAngle !== undefined || joint.maxAngle !== undefined;
+  const rotation = part.rest.rotation;
+  return (
+    <Section title="Joint">
+      <Row label="Position">
+        <NumberField label="Joint X" value={scene.x} onCommit={(x) => store.commit(setPivotAtScene(store.getState().project, part.id, { x, y: scene.y }), {}, 'jx')} suffix="x" />
+        <NumberField label="Joint Y" value={scene.y} onCommit={(y) => store.commit(setPivotAtScene(store.getState().project, part.id, { x: scene.x, y }), {}, 'jy')} suffix="y" />
+      </Row>
+      <Row label="Chain root">
+        <input type="checkbox" aria-label="Chain root" checked={joint.chainRoot === true} onChange={(e) => setJoint({ chainRoot: e.target.checked || undefined }, 'chainRoot')} />
+        <span className="value">IK stops at this joint</span>
+      </Row>
+      <Row label="Limits">
+        <input
+          type="checkbox"
+          aria-label="Limit rotation"
+          checked={limited}
+          onChange={(e) =>
+            setJoint(e.target.checked ? { minAngle: Math.round(rotation - 90), maxAngle: Math.round(rotation + 90) } : { minAngle: undefined, maxAngle: undefined }, 'limits')
+          }
+        />
+        {limited ? (
+          <>
+            <NumberField label="Minimum angle" value={joint.minAngle ?? null} digits={0} onCommit={(minAngle) => setJoint({ minAngle }, 'min')} suffix="°" />
+            <NumberField label="Maximum angle" value={joint.maxAngle ?? null} digits={0} onCommit={(maxAngle) => setJoint({ maxAngle }, 'max')} suffix="°" />
+          </>
+        ) : (
+          <span className="value">Turns freely</span>
+        )}
+      </Row>
+      {limited && <p className="hint">Now at {Math.round(rotation)}°. IK keeps this part's rotation between the two angles.</p>}
+      <Row label="Bends">
+        <select
+          aria-label="Bend direction"
+          value={joint.bendDirection ?? 1}
+          onChange={(e) => setJoint({ bendDirection: Number(e.target.value) as 1 | -1 }, 'bend')}
+        >
+          <option value={1}>Clockwise when straight</option>
+          <option value={-1}>Counter-clockwise when straight</option>
+        </select>
+      </Row>
+    </Section>
   );
 }
 

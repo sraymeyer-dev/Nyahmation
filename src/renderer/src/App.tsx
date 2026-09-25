@@ -3,11 +3,11 @@ import { addLayer } from '../../engine/edit';
 import { createProject } from '../../engine/project';
 import type { MenuCommand } from '../../preload/api';
 import * as actions from './editor/actions';
+import * as library from './editor/library';
 import { store, useEditor, type ToolId } from './editor/store';
 import { TOOL_INFO, TOOLS } from './editor/tools';
 import { Notice } from './components/Notice';
-import { Outliner } from './components/Outliner';
-import { Properties } from './components/Properties';
+import { Sidebar } from './components/Sidebar';
 import { ToolOptions } from './components/ToolOptions';
 import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
@@ -51,6 +51,8 @@ const MENU: Record<MenuCommand, () => void> = {
   zoom100: actions.zoomActualSize,
   toggleGrid: actions.toggleGrid,
   toggleSnap: actions.toggleSnap,
+  saveToLibrary: () => store.set({ sidebarTab: 'library' }),
+  autoChainRoots: library.autoChainRootsForActiveLayer,
 };
 
 const TOOL_KEYS = new Map<string, ToolId>(TOOL_INFO.map((t) => [t.key.toLowerCase(), t.id]));
@@ -159,10 +161,7 @@ export function App() {
           </div>
           {mode === 'animate' && <Transport />}
         </div>
-        <aside className="sidebar">
-          <Outliner />
-          <Properties />
-        </aside>
+        <Sidebar />
       </div>
     </div>
   );

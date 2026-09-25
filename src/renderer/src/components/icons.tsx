@@ -5,6 +5,8 @@ import type { ToolId } from '../editor/store';
 const P: Record<ToolId, string> = {
   select: 'M6 3 L6 19 L10 15 L13 21 L15.5 20 L12.5 14 L18 14 Z',
   points: 'M4 18 C 8 4, 16 4, 20 18 M2.5 16.5 h3 v3 h-3 Z M18.5 16.5 h3 v3 h-3 Z M10.5 5 h3 v3 h-3 Z',
+  joint: 'M5 19 L11 11 L19 5 M11 11 m-2.5 0 a2.5 2.5 0 1 0 5 0 a2.5 2.5 0 1 0 -5 0 M5 19 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0',
+  pose: 'M12 5 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M12 7 V14 M12 14 L8 21 M12 14 L16 21 M12 9 L7 12 M12 9 L17 5',
   pen: 'M12 3 L17 12 L14 20 L10 20 L7 12 Z M12 3 L12 13 M10 20 L14 20',
   rect: 'M4 6 H20 V18 H4 Z',
   ellipse: 'M12 5 C 17 5, 21 8, 21 12 C 21 16, 17 19, 12 19 C 7 19, 3 16, 3 12 C 3 8, 7 5, 12 5 Z',

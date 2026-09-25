@@ -108,3 +108,90 @@ function pivotOf(s: EditorState, id: string): Vec2 | null {
   }
   return null;
 }
+
+// ---- Skeleton (joints and bones) -------------------------------------------------
+
+export interface JointInfo {
+  pivot: Vec2;
+  /** The parent part, or null when the parent is the layer itself. */
+  parentId: string | null;
+  chainRoot: boolean;
+}
+
+const jointCache = new WeakMap<object, Map<string, JointInfo>>();
+
+/** Joint facts for every part (except layer roots), keyed by part id. */
+export function jointIndex(project: EditorState['project']): Map<string, JointInfo> {
+  let index = jointCache.get(project);
+  if (index) return index;
+  index = new Map();
+  for (const layer of project.scene.layers) {
+    const visit = (p: typeof layer.root, parentId: string | null) => {
+      for (const c of p.children) {
+        index!.set(c.id, { pivot: c.joint.pivot, parentId, chainRoot: c.joint.chainRoot === true });
+        visit(c, c.id);
+      }
+    };
+    visit(layer.root, null);
+  }
+  jointCache.set(project, index);
+  return index;
+}
+
+/**
+ * Scene position of each visible, unlocked part's joint. Skeletons belong to
+ * characters, so background parts only show a joint while selected.
+ */
+export function jointPositions(o: Pick<OverlayContext, 's' | 'resolved'>): Map<string, Vec2> {
+  const index = jointIndex(o.s.project);
+  const characterLayers = new Set(o.s.project.scene.layers.filter((l) => l.kind === 'character').map((l) => l.id));
+  const selected = new Set(o.s.selection);
+  const out = new Map<string, Vec2>();
+  for (const part of o.resolved.parts) {
+    const info = index.get(part.id);
+    if (!info || !part.visible || part.locked) continue;
+    if (!characterLayers.has(part.layerId) && !selected.has(part.id)) continue;
+    out.set(part.id, applyToPoint(part.world, info.pivot));
+  }
+  return out;
+}
+
+/**
+ * Draws bones (parent joint → child joint) and joints. Chain roots are
+ * squares. `highlight` marks joints that will turn (the IK chain).
+ */
+export function drawSkeleton(o: OverlayContext, options: { highlight?: ReadonlySet<string>; faint?: boolean } = {}): void {
+  const { ctx, s } = o;
+  const index = jointIndex(s.project);
+  const joints = jointPositions(o);
+  const selected = new Set(s.selection);
+  ctx.save();
+  ctx.globalAlpha = options.faint ? 0.55 : 1;
+  ctx.lineWidth = 2;
+  for (const [id, pos] of joints) {
+    const parentId = index.get(id)!.parentId;
+    const parentPos = parentId ? joints.get(parentId) : undefined;
+    if (!parentPos) continue;
+    const a = o.toScreen(parentPos);
+    const b = o.toScreen(pos);
+    ctx.strokeStyle = options.highlight?.has(parentId!) ? ACCENT : 'rgba(224, 69, 123, 0.75)';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  for (const [id, pos] of joints) {
+    const p = o.toScreen(pos);
+    const info = index.get(id)!;
+    const hot = selected.has(id) || options.highlight?.has(id);
+    ctx.beginPath();
+    if (info.chainRoot) ctx.rect(p.x - 5, p.y - 5, 10, 10);
+    else ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = hot ? ACCENT : '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = hot ? '#ffffff' : '#e0457b';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  ctx.restore();
+}

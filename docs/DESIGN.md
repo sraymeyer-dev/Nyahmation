@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v0.8. Requirements baseline for the MVP. Phases 0 and 1 are built; see §16.
+> **Status:** v0.9. Requirements baseline for the MVP. Phases 0–2 are built; see §16.
 > **Last updated:** 2026-09-25
 
 ---
@@ -157,7 +157,10 @@ type Pose = {
 - **R4 Chain roots.** A joint can be marked as a chain root, and IK stops there. For example, shoulders and hips are chain roots, so dragging a hand never tilts the torso. The character's root part is never moved by IK.
 - **R5 Joint limits.** Minimum and maximum angle per joint. IK respects them.
 - **R6 Bend direction.** A two-part limb remembers which way it bends (knees forward, elbows back).
-- **R7 Drag modes.** Plain drag poses with IK. Alt/Option-drag moves the part itself, offsetting it from its joint. The rotate handle (or `R`) rotates the part at its own joint only.
+- **R7 Drag modes** (Pose tool, `K`). Plain drag poses with IK. Shift-drag turns the part at its own joint only. Alt/Option-drag moves the part itself, offsetting it from its joint. Cmd/Ctrl-drag moves the whole layer (the whole character).
+- **R7a Which joints turn.** Dragging a part turns its parents, nearest first, up to and including the first chain root; the part itself keeps its angle. Dragging a chain root, or a part with no parent that can turn, turns that part at its own joint. A layer's root never turns.
+- **R7b Rigging helper.** "Mark branch joints as chain roots" flags every limb that branches off a body part (upper arms and head off the torso, legs off the hips), a good starting point for most characters.
+- **R7c In Build mode, posing sets the rest pose.** Posing on the timeline comes with Animate-mode editing in phase 3, using the same solver.
 - **R8 Pins** (Must). Pin a part so it stays fixed in place, for example a foot planted on the ground. Dragging the body then bends the legs instead of dragging the feet along. Pins hold across frames, not just while dragging. See §6.3.
 - **R9 Draw-order swaps** (Should). A part can move in front of or behind a sibling from one pose to the next, such as an arm swinging behind the body.
 - **R10 Draw order is separate from the parent/child tree.** Each part has a stacking number within its character. The tree decides what moves with what; the stacking number decides what's in front. This is how a far arm can be a child of the torso (so it moves with it) and still be drawn behind it. The same approach is used by professional cutout tools such as Spine.
@@ -190,6 +193,7 @@ This refines §6.2: IK is a posing tool **except** for pinned chains, which are 
 - **L3** Every item has a name, tags and a thumbnail. The library panel is searchable. Drag an item onto the canvas, or onto a switch layer.
 - **L4** Subfolders for organizing, such as `Mouths/Round style` or `Hands/Cartoon`.
 - **L5** Proposed: when you use a library item, the **project gets its own copy**. The project never breaks if the library changes later. An "update from library" command could come later.
+- **L6** (Built in phase 2) Save the selected layer or parts from the Library tab with a name and tags; a thumbnail is drawn automatically. Items appear with their subfolder; the list can be searched; **Add** puts a copy in the scene; × moves the file to the Trash. Subfolders are made in Finder or Explorer (**Folder** opens the library).
 
 ---
 
@@ -477,7 +481,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 |---|---|---|
 | **0** ✅ | Foundations | Electron skeleton; engine (data model, Smooth interpolation, stepping, parent/child evaluation) with unit tests; save/load `.nyah`; demo puppet test harness. |
 | **1** ✅ | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
-| **2** | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
+| **2** ✅ | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
 | **3** | Move | Timeline, pose-anywhere (part poses), holds, retiming, playback, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 export**. |
 | **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. |
 | **5** | Polish | Camera; parallax, scrolling and atmosphere for backgrounds (BG4–BG8); glow, shadow and blend modes (FX1–FX6); draw-order swaps; ProRes/PNG export; easing curve editor. |
@@ -524,6 +528,9 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-31 | Undo keeps snapshots of the (immutable) project, which share unchanged data, instead of Immer patches | Proposed |
 | D-32 | Clicking on the canvas selects the part under the mouse (such as a hand), not its whole group or character; Shift+Enter or the Layers panel selects the parent | Proposed |
 | D-33 | New shapes, imports and pen paths go into the selected group, otherwise into the active layer; nothing is drawn on a locked or hidden layer | Proposed |
+| D-34 | Pose tool modifiers: drag = IK, Shift = turn at own joint, Alt = move the part, Cmd/Ctrl = move the whole character (R7) | Proposed |
+| D-35 | Dragging a part turns its parents, not the part itself; a chain root or unchained part turns at its own joint (R7a) | Proposed |
+| D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
 
@@ -555,6 +562,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v0.9 (2026-09-25):** Phase 2 built: joints, chain roots, limits, bend direction, drag-to-pose IK, and the library. Clarified R7 (modifiers) and added R7a–R7c, L6, D-34 to D-36.
 - **v0.8 (2026-09-25):** Phase 1 built. Recorded D-32 (click selects the part under the mouse) and D-33 (where new shapes go).
 - **v0.7 (2026-09-25):** Added scene layers and backgrounds (§8a), glow and shadow effects (§8b), and Build/Animate modes (§9.0). D-25 to D-27 confirmed.
 - **v0.6 (2026-09-25):** Phase 0 built. Recorded decisions from implementation: joint-based positions, draw order separate from the tree (R10), character-wide step restarts (ST5), and the first-pose rule (A2a). Updated the source layout.

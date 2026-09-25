@@ -163,7 +163,7 @@ export function Outliner() {
   return (
     <div className="outliner">
       <div className="panel-header">
-        <h2>Layers</h2>
+        <span className="spacer" />
         <button onClick={() => newLayer('character')} title="New character layer">+ Character</button>
         <button onClick={() => newLayer('background')} title="New background layer">+ Background</button>
       </div>

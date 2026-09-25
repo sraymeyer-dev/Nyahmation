@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { registerLibraryHandlers } from './library';
 import { buildMenu } from './menu';
 
 // The main process only touches the file system. Everything about the
@@ -108,6 +109,7 @@ ipcMain.on('document:state', (event, state: { title?: unknown; path?: unknown; d
 });
 
 void app.whenReady().then(() => {
+  registerLibraryHandlers();
   buildMenu();
   createWindow();
   app.on('activate', () => {

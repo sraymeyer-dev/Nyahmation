@@ -16,6 +16,31 @@ export interface ImportedFile {
   bytes: Uint8Array;
 }
 
+export interface LibraryEntry {
+  /** Path inside the library folder, with forward slashes. */
+  relPath: string;
+  /** Subfolder ('' for the top level). */
+  folder: string;
+  name: string;
+  kind: 'character' | 'background' | 'parts';
+  tags: string[];
+  thumbnail: Uint8Array | null;
+  modified: number;
+  /** The file couldn't be read. */
+  damaged?: boolean;
+}
+
+export interface LibraryApi {
+  list(): Promise<{ dir: string; items: LibraryEntry[] }>;
+  read(relPath: string): Promise<Uint8Array>;
+  /** Saves a new item in the top of the library folder; returns its path (a number is added if the name is taken). */
+  save(name: string, bytes: Uint8Array): Promise<string>;
+  /** Moves an item to the Trash / Recycle Bin. */
+  remove(relPath: string): Promise<void>;
+  /** Opens the library folder in Finder / Explorer. */
+  reveal(): Promise<void>;
+}
+
 /** Commands sent from the native menu (see src/main/menu.ts). */
 export type MenuCommand =
   | 'new'
@@ -43,7 +68,9 @@ export type MenuCommand =
   | 'zoomFit'
   | 'zoom100'
   | 'toggleGrid'
-  | 'toggleSnap';
+  | 'toggleSnap'
+  | 'saveToLibrary'
+  | 'autoChainRoots';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -54,6 +81,7 @@ export interface NyahApi {
   importFile(): Promise<ImportedFile | null>;
   /** Subscribes to native menu commands. Returns an unsubscribe function. */
   onMenuCommand(listener: (command: MenuCommand) => void): () => void;
+  library: LibraryApi;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }
