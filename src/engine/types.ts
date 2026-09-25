@@ -166,17 +166,19 @@ export interface Track<C extends Channel = Channel> {
 
 // ---- Drawing sets ------------------------------------------------------------
 
-export type DrawingContent =
-  | { kind: 'vector'; paths: VectorPath[]; style: ShapeStyle }
-  | { kind: 'image'; assetId: string; width: number; height: number };
+/**
+ * One piece of a drawing, in the switch layer's drawing space. A drawing can
+ * mix several (a mouth: lips, teeth, tongue), painted in order.
+ */
+export type DrawingItem =
+  | { kind: 'shape'; paths: VectorPath[]; style: ShapeStyle }
+  | { kind: 'image'; assetId: string; x: number; y: number; width: number; height: number };
 
 export interface Drawing {
   /** The name a switch layer refers to, e.g. a mouth sound "A". */
   key: string;
   name: string;
-  content: DrawingContent;
-  /** Aligns the drawing to the switch layer's origin. */
-  offset: Vec2;
+  items: DrawingItem[];
 }
 
 export interface DrawingSet {
@@ -198,6 +200,20 @@ export interface Scene {
   /** Drawn in list order: later layers are on top. */
   layers: Layer[];
   tracks: Track[];
+  /** Dialogue and other sound, mixed together (docs/DESIGN.md §8.3). */
+  audio: AudioClip[];
+}
+
+/** A sound file placed on the timeline. */
+export interface AudioClip {
+  id: string;
+  assetId: string;
+  name: string;
+  /** The frame where the sound starts (can be negative to trim its beginning). */
+  startFrame: number;
+  /** 0 to 1. */
+  volume: number;
+  muted?: boolean;
 }
 
 export interface AssetRef {

@@ -19,7 +19,7 @@ function sample() {
         id: 'set1',
         name: 'Mouths',
         vocabulary: 'mouth',
-        drawings: [{ key: 'A', name: 'A', offset: { x: 0, y: 0 }, content: { kind: 'image', assetId: 'img2', width: 5, height: 5 } }],
+        drawings: [{ key: 'A', name: 'A', items: [{ kind: 'image', assetId: 'img2', x: 0, y: 0, width: 5, height: 5 }] }],
       },
       { id: 'unused', name: 'Unused', vocabulary: 'custom', drawings: [] },
     ],
@@ -71,7 +71,7 @@ describe('library items', () => {
     const mouth = copy.root.children.find((p) => p.name === 'Mouth')!;
     const set = twice.project.drawingSets.find((s) => s.id === mouth.drawingSetId)!;
     expect(set.id).not.toBe('set1');
-    const mouthImage = set.drawings[0]!.content;
+    const mouthImage = set.drawings[0]!.items[0]!;
     expect(mouthImage.kind === 'image' && twice.assets.get(mouthImage.assetId)).toEqual(new Uint8Array([2]));
     const photo = copy.root.children.find((p) => p.name === 'Photo')!;
     expect(twice.assets.get(photo.image!.assetId)).toEqual(new Uint8Array([1]));

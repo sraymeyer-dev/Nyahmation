@@ -9,6 +9,7 @@ import {
   type Bounds,
 } from './geometry';
 import { applyToPoint, decompose, IDENTITY, invert, localMatrix, multiply, type Mat2D } from './math';
+import { drawingItemsBounds, findDrawing } from './drawingItems';
 import { createId, createLayer, createPart } from './project';
 import type { Layer, LayerKind, Part, Project, ShapeStyle, Track, Vec2, VectorPath } from './types';
 
@@ -85,13 +86,8 @@ export function ownBounds(project: Project, part: Part, m: Mat2D): Bounds {
     ].map((p) => applyToPoint(m, p)));
   }
   if (part.kind === 'switch') {
-    const drawing = project.drawingSets
-      .find((s) => s.id === part.drawingSetId)
-      ?.drawings.find((d) => d.key === part.restDrawing);
-    if (drawing?.content.kind === 'vector') {
-      const shifted = multiply(m, [1, 0, 0, 1, drawing.offset.x, drawing.offset.y]);
-      return pathsBounds(drawing.content.paths.map((p) => transformPath(p, shifted)));
-    }
+    const drawing = findDrawing(project, part.drawingSetId, part.restDrawing);
+    if (drawing) return drawingItemsBounds(drawing.items, m);
   }
   return EMPTY_BOUNDS;
 }
@@ -465,10 +461,13 @@ export function movePartsBy(project: Project, ids: Iterable<string>, delta: Vec2
   return next;
 }
 
-/** All asset ids the project still uses (image parts and image drawings). */
+/** All asset ids the project still uses (image parts, image drawings and audio clips). */
 export function referencedAssetIds(project: Project): Set<string> {
   const ids = new Set<string>();
   for (const layer of project.scene.layers) for (const p of walkParts(layer.root)) if (p.image) ids.add(p.image.assetId);
-  for (const set of project.drawingSets) for (const d of set.drawings) if (d.content.kind === 'image') ids.add(d.content.assetId);
+  for (const set of project.drawingSets) {
+    for (const d of set.drawings) for (const item of d.items) if (item.kind === 'image') ids.add(item.assetId);
+  }
+  for (const clip of project.scene.audio ?? []) ids.add(clip.assetId);
   return ids;
 }

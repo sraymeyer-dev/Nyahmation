@@ -201,9 +201,10 @@ export function insertLibraryItem(
   const drawingSets = doc.drawingSets.map((s) => ({
     ...s,
     id: maps.sets.get(s.id)!,
-    drawings: s.drawings.map((d) =>
-      d.content.kind === 'image' ? { ...d, content: { ...d.content, assetId: maps.assets.get(d.content.assetId) ?? d.content.assetId } } : d,
-    ),
+    drawings: s.drawings.map((d) => ({
+      ...d,
+      items: d.items.map((item) => (item.kind === 'image' ? { ...item, assetId: maps.assets.get(item.assetId) ?? item.assetId } : item)),
+    })),
   }));
   let next: Project = {
     ...project,

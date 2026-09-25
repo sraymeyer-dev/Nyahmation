@@ -1,7 +1,7 @@
 import { defaultStyle, ellipsePath, polygonPath, rectPath } from '../../engine/geometry';
 import { createPart, createProject } from '../../engine/project';
 import { setPartPose } from '../../engine/tracks';
-import type { Channel, ChannelValue, DrawingSet, Ease, Layer, Part, Project, VectorPath } from '../../engine/types';
+import type { Channel, ChannelValue, DrawingSet, Ease, Layer, Part, Project, ShapeStyle, VectorPath } from '../../engine/types';
 
 // A small built-in puppet that waves and says "Hi!", so the engine can be
 // seen working before the editing tools exist (phase 0 test harness).
@@ -12,6 +12,7 @@ const TROUSERS = defaultStyle({ fill: '#3d3f52', stroke: '#1d1e29', strokeWidth:
 const DARK = defaultStyle({ fill: '#2b1d17', stroke: null, strokeWidth: 0 });
 const LIP = defaultStyle({ fill: '#7a2b2b', stroke: '#3b1515', strokeWidth: 3 });
 const LINE = defaultStyle({ fill: null, stroke: '#3b1515', strokeWidth: 4 });
+const TEETH = defaultStyle({ fill: '#ffffff', stroke: null, strokeWidth: 0 });
 
 const at = (x: number, y: number, rotation = 0) => ({ x, y, rotation, scaleX: 1, scaleY: 1 });
 
@@ -27,23 +28,30 @@ function limb(name: string, x: number, y: number, length: number, width: number,
   });
 }
 
+const drawing = (key: string, name: string, style: ShapeStyle, paths: VectorPath[]) => ({ key, name, items: [{ kind: 'shape' as const, style, paths }] });
+
 const MOUTHS: DrawingSet = {
   id: 'pip-mouths',
   name: 'Pip mouths',
   vocabulary: 'mouth',
   drawings: [
-    { key: 'X', name: 'Rest', offset: { x: 0, y: 0 }, content: { kind: 'vector', style: LINE, paths: [
+    drawing('X', 'Rest', LINE, [
       { closed: false, points: [
         { anchor: { x: -22, y: 0 }, handleOut: { x: 10, y: 8 } },
         { anchor: { x: 22, y: 0 }, handleIn: { x: -10, y: 8 } },
       ] },
-    ] } },
-    { key: 'A', name: 'Closed (M, B, P)', offset: { x: 0, y: 0 }, content: { kind: 'vector', style: LINE, paths: [
-      polygonPath([{ x: -20, y: 0 }, { x: 20, y: 0 }], false),
-    ] } },
-    { key: 'B', name: 'Teeth together', offset: { x: 0, y: 0 }, content: { kind: 'vector', style: LIP, paths: [ellipsePath(0, 0, 22, 7)] } },
-    { key: 'C', name: 'Open', offset: { x: 0, y: 0 }, content: { kind: 'vector', style: LIP, paths: [ellipsePath(0, 2, 20, 14)] } },
-    { key: 'D', name: 'Wide open', offset: { x: 0, y: 0 }, content: { kind: 'vector', style: LIP, paths: [ellipsePath(0, 6, 24, 22)] } },
+    ]),
+    drawing('A', 'Closed (M, B, P)', LINE, [polygonPath([{ x: -20, y: 0 }, { x: 20, y: 0 }], false)]),
+    drawing('B', 'Teeth together', LIP, [ellipsePath(0, 0, 22, 7)]),
+    drawing('C', 'Open', LIP, [ellipsePath(0, 2, 20, 14)]),
+    {
+      key: 'D',
+      name: 'Wide open',
+      items: [
+        { kind: 'shape' as const, style: LIP, paths: [ellipsePath(0, 6, 24, 22)] },
+        { kind: 'shape' as const, style: TEETH, paths: [rectPath(-14, -12, 28, 7)] },
+      ],
+    },
   ],
 };
 

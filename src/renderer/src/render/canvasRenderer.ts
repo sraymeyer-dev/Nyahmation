@@ -1,6 +1,7 @@
 import { multiply, type Mat2D } from '../../../engine/math';
 import type { ResolvedScene } from '../../../engine/evaluate';
-import type { Drawing, Project, ShapeStyle, VectorPath } from '../../../engine/types';
+import { findDrawing } from '../../../engine/drawingItems';
+import type { DrawingItem, Project, ShapeStyle, VectorPath } from '../../../engine/types';
 import { compoundPath2D } from './paths';
 
 // Draws a resolved scene with Canvas 2D. The same function serves the editor
@@ -23,9 +24,15 @@ function drawPaths(ctx: CanvasRenderingContext2D, paths: readonly VectorPath[], 
   }
 }
 
-function findDrawing(project: Project, setId: string | undefined, key: string | undefined): Drawing | undefined {
-  if (!setId || key === undefined) return undefined;
-  return project.drawingSets.find((s) => s.id === setId)?.drawings.find((d) => d.key === key);
+/** Paints a switch-layer drawing's items in order. */
+export function drawItems(ctx: CanvasRenderingContext2D, items: readonly DrawingItem[], images: ImageLookup): void {
+  for (const item of items) {
+    if (item.kind === 'shape') drawPaths(ctx, item.paths, item.style);
+    else {
+      const img = images(item.assetId);
+      if (img) ctx.drawImage(img, item.x, item.y, item.width, item.height);
+    }
+  }
 }
 
 /** `view` maps scene coordinates to canvas pixels. */
@@ -60,14 +67,7 @@ export function renderScene(
       if (img) ctx.drawImage(img, 0, 0, part.image.width, part.image.height);
     } else if (part.kind === 'switch') {
       const drawing = findDrawing(project, part.drawingSetId, part.drawing);
-      if (drawing) {
-        ctx.translate(drawing.offset.x, drawing.offset.y);
-        if (drawing.content.kind === 'vector') drawPaths(ctx, drawing.content.paths, drawing.content.style);
-        else {
-          const img = images(drawing.content.assetId);
-          if (img) ctx.drawImage(img, 0, 0, drawing.content.width, drawing.content.height);
-        }
-      }
+      if (drawing) drawItems(ctx, drawing.items, images);
     }
   }
   ctx.restore();

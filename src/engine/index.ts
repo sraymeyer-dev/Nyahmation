@@ -14,3 +14,5 @@ export * from './rig';
 export * from './access';
 export * from './retime';
 export * from './pins';
+export * from './drawingItems';
+export * from './drawings';

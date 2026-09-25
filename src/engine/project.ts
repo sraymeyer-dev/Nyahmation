@@ -1,8 +1,9 @@
+import { translatePath } from './geometry';
 import { isContinuousChannel } from './tracks';
 import type { Layer, LayerKind, Part, PartKind, Project, Scene, Stepping, Track } from './types';
 
 /** Bump when the saved format changes, and add a migration from the old version. */
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 3;
 
 export class ProjectFormatError extends Error {
   override name = 'ProjectFormatError';
@@ -42,6 +43,7 @@ export function createProject(scene: Partial<Scene> = {}): Project {
       stepping: 1,
       layers: [],
       tracks: [],
+      audio: [],
       ...scene,
     },
     drawingSets: [],
@@ -62,6 +64,25 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     scene.layers = characters.map((c: Record<string, unknown>) => ({ ...c, kind: 'character' }));
     delete scene.characters;
     return { ...raw, scene };
+  },
+  // v3: scenes have audio clips; drawings are lists of items (shapes and
+  // images) instead of one piece with an offset.
+  2: (raw) => {
+    const scene = { ...(raw.scene as Record<string, unknown>), audio: [] };
+    const sets = Array.isArray(raw.drawingSets) ? raw.drawingSets : [];
+    const drawingSets = sets.map((set: Record<string, any>) => ({
+      ...set,
+      drawings: (set.drawings ?? []).map((d: Record<string, any>) => {
+        const off = d.offset ?? { x: 0, y: 0 };
+        const c = d.content ?? {};
+        const items =
+          c.kind === 'image'
+            ? [{ kind: 'image', assetId: c.assetId, x: off.x, y: off.y, width: c.width, height: c.height }]
+            : [{ kind: 'shape', style: c.style, paths: (c.paths ?? []).map((p: any) => translatePath(p, off.x, off.y)) }];
+        return { key: d.key, name: d.name, items };
+      }),
+    }));
+    return { ...raw, scene, drawingSets };
   },
 };
 
@@ -112,6 +133,13 @@ export function validateProject(project: Project): void {
   if (!isStepping(scene.stepping)) fail('scene stepping must be 1, 2 or 3');
   if (!Array.isArray(scene.layers) || !Array.isArray(scene.tracks)) fail('scene layers/tracks missing');
   if (!Array.isArray(project.drawingSets) || !Array.isArray(project.assets)) fail('drawing sets/assets missing');
+  if (!Array.isArray(scene.audio)) fail('scene audio missing');
+  for (const clip of scene.audio) {
+    if (typeof clip?.assetId !== 'string' || !Number.isInteger(clip.startFrame) || !Number.isFinite(clip.volume)) fail('an audio clip is damaged');
+  }
+  for (const set of project.drawingSets) {
+    for (const d of set.drawings ?? []) if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);
+  }
 
   const partIds = new Set<string>();
   const checkPart = (part: Part) => {

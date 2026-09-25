@@ -1,7 +1,8 @@
 import type { ResolvedPart, ResolvedScene } from '../../../engine/evaluate';
 import { boundsOfPoints, EMPTY_BOUNDS, isEmptyBounds, pathsBounds, transformPath, type Bounds } from '../../../engine/geometry';
-import { applyToPoint, invert, multiply } from '../../../engine/math';
-import type { Project, Vec2 } from '../../../engine/types';
+import { drawingItemsBounds, findDrawing } from '../../../engine/drawingItems';
+import { applyToPoint, invert, type Mat2D } from '../../../engine/math';
+import type { Project, ShapeStyle, Vec2, VectorPath } from '../../../engine/types';
 import { compoundPath2D } from '../render/paths';
 
 // Finds what's under the mouse. Canvas 2D does the geometry, so fill rules,
@@ -18,33 +19,35 @@ function matrixScale(m: readonly number[]): number {
   return Math.sqrt(Math.abs(m[0]! * m[3]! - m[1]! * m[2]!)) || 1;
 }
 
-export function hitsPart(project: Project, part: ResolvedPart, scene: Vec2, tolerance: number): boolean {
-  const c = context();
-  if (part.kind === 'image' && part.image) {
-    const local = applyToPoint(invert(part.world), scene);
-    return local.x >= 0 && local.y >= 0 && local.x <= part.image.width && local.y <= part.image.height;
-  }
-  let paths = part.paths;
-  let style = part.style;
-  let offset = { x: 0, y: 0 };
-  if (part.kind === 'switch') {
-    const drawing = project.drawingSets.find((s) => s.id === part.drawingSetId)?.drawings.find((d) => d.key === part.drawing);
-    if (drawing?.content.kind !== 'vector') return false;
-    paths = drawing.content.paths;
-    style = drawing.content.style;
-    offset = drawing.offset;
-  }
-  if (!paths?.length || !style) return false;
+function hitsPaths(c: CanvasRenderingContext2D, paths: readonly VectorPath[], style: ShapeStyle, w: Mat2D, scene: Vec2, tolerance: number): boolean {
   const path = compoundPath2D(paths);
-  const w = part.world;
   c.setTransform(w[0], w[1], w[2], w[3], w[4], w[5]);
-  c.translate(offset.x, offset.y);
   const closed = paths.some((p) => p.closed);
   if (style.fill && closed && c.isPointInPath(path, scene.x, scene.y, style.fillRule)) return true;
   c.lineWidth = Math.max(style.stroke ? style.strokeWidth : 0, (tolerance * 2) / matrixScale(w));
   c.lineCap = 'round';
   c.lineJoin = 'round';
   return c.isPointInStroke(path, scene.x, scene.y);
+}
+
+function insideRect(w: Mat2D, scene: Vec2, x: number, y: number, width: number, height: number): boolean {
+  const local = applyToPoint(invert(w), scene);
+  return local.x >= x && local.y >= y && local.x <= x + width && local.y <= y + height;
+}
+
+export function hitsPart(project: Project, part: ResolvedPart, scene: Vec2, tolerance: number): boolean {
+  const c = context();
+  if (part.kind === 'image' && part.image) return insideRect(part.world, scene, 0, 0, part.image.width, part.image.height);
+  if (part.kind === 'switch') {
+    const drawing = findDrawing(project, part.drawingSetId, part.drawing);
+    return (drawing?.items ?? []).some((item) =>
+      item.kind === 'shape'
+        ? hitsPaths(c, item.paths, item.style, part.world, scene, tolerance)
+        : insideRect(part.world, scene, item.x, item.y, item.width, item.height),
+    );
+  }
+  if (!part.paths?.length || !part.style) return false;
+  return hitsPaths(c, part.paths, part.style, part.world, scene, tolerance);
 }
 
 /** The topmost visible, unlocked part with artwork under `scene`. */
@@ -65,10 +68,8 @@ export function resolvedBounds(project: Project, part: ResolvedPart): Bounds {
     return boundsOfPoints([{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: height }, { x: 0, y: height }].map((p) => applyToPoint(w, p)));
   }
   if (part.kind === 'switch') {
-    const drawing = project.drawingSets.find((s) => s.id === part.drawingSetId)?.drawings.find((d) => d.key === part.drawing);
-    if (drawing?.content.kind !== 'vector') return EMPTY_BOUNDS;
-    const m = multiply(w, [1, 0, 0, 1, drawing.offset.x, drawing.offset.y]);
-    return pathsBounds(drawing.content.paths.map((p) => transformPath(p, m)));
+    const drawing = findDrawing(project, part.drawingSetId, part.drawing);
+    return drawing ? drawingItemsBounds(drawing.items, w) : EMPTY_BOUNDS;
   }
   if (part.paths?.length) return pathsBounds(part.paths.map((p) => transformPath(p, w)));
   return EMPTY_BOUNDS;
