@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +13,7 @@ const dir = mkdtempSync(join(tmpdir(), 'nyah-'));
 test.beforeAll(async () => {
   app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library') } });
   page = await app.firstWindow();
+  page.on('pageerror', (err) => console.error('Page error:', err.message));
   await page.setViewportSize({ width: 1400, height: 860 });
   await page.waitForSelector('[data-testid="stage"]');
 });
@@ -408,6 +410,86 @@ test('the Pin tool pins a part, shown as a bar on the timeline', async () => {
   expect(await trackFrames('Leg (left)', 'pin')).toEqual([5]);
 });
 
+/** A 16-bit mono WAV: a 440 Hz tone. */
+function toneWav(seconds: number, rate = 48000): Buffer {
+  const n = Math.round(seconds * rate);
+  const b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0);
+  b.writeUInt32LE(36 + n * 2, 4);
+  b.write('WAVEfmt ', 8);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(rate, 24);
+  b.writeUInt32LE(rate * 2, 28);
+  b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34);
+  b.write('data', 36);
+  b.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 12000), 44 + i * 2);
+  return b;
+}
+
+async function drawingPoses(name: string): Promise<[number, string][]> {
+  return page.evaluate((n) => {
+    const s = (window as any).__nyah.store.getState();
+    const part = (window as any).__nyah.part(n);
+    const track = s.project.scene.tracks.find((t: any) => t.partId === part.id && t.channel === 'drawing');
+    return track ? track.poses.map((p: any) => [p.frame, p.value]) : [];
+  }, name);
+}
+
+test('imports a sound onto the Sound row, with a waveform, and moves it', async () => {
+  const wavPath = join(dir, 'line.wav');
+  writeFileSync(wavPath, toneWav(1.5));
+  await app.evaluate(({ dialog }, p) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [p] })) as typeof dialog.showOpenDialog;
+  }, wavPath);
+  await goToFrame(3);
+  await menu('import');
+  const clip = page.getByTestId('audio-clip');
+  await expect(clip).toHaveCount(1);
+  await expect(page.getByTestId('properties')).toContainText('Sound');
+  const audio = () => page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio);
+  expect((await audio())[0]).toMatchObject({ name: 'line', startFrame: 3 });
+  expect((await audio())[0].duration).toBeCloseTo(1.5, 2);
+  // Drag it two frames earlier.
+  const box = (await clip.boundingBox())!;
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().timeline.zoom);
+  await page.mouse.move(box.x + 20, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 20 - zoom, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + 20 - 2 * zoom, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.up();
+  expect((await audio())[0].startFrame).toBe(1);
+  await page.screenshot({ path: 'test-results/sound.png' });
+});
+
+test('lip sync: typing mouth letters on the Mouth row sets shapes and moves on', async () => {
+  await row('Mouth').locator('.tl-name').click();
+  await expect(page.getByTestId('drawing-palette')).toBeVisible();
+  await expect(page.getByTestId('drawing-list')).toBeVisible();
+  await goToFrame(50);
+  await page.keyboard.press('c');
+  await page.keyboard.press('d');
+  await page.keyboard.press('a');
+  await expect(page.getByTestId('frame')).toContainText('54 /');
+  let poses = await drawingPoses('Mouth');
+  expect(poses).toEqual(expect.arrayContaining([[50, 'C'], [51, 'D'], [52, 'A']]));
+  // Backspace steps back and clears that entry: D holds instead.
+  await page.keyboard.press('Backspace');
+  await expect(page.getByTestId('frame')).toContainText('53 /');
+  poses = await drawingPoses('Mouth');
+  expect(poses.some(([f]) => f === 52)).toBe(false);
+  expect(poses).toEqual(expect.arrayContaining([[50, 'C'], [51, 'D']]));
+  await expect(row('Mouth').locator('.tl-block.key-C')).not.toHaveCount(0);
+  // Numbers pick drawings in order too: 1 is the first (X, rest).
+  await page.keyboard.press('1');
+  expect(await drawingPoses('Mouth')).toEqual(expect.arrayContaining([[52, 'X']]));
+  await page.screenshot({ path: 'test-results/lipsync.png' });
+  await page.keyboard.press('Escape');
+});
+
 test('exports a PNG sequence and an MP4 of the loop range', async () => {
   await goToFrame(0);
   await page.keyboard.press('i');
@@ -433,5 +515,41 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   await dialogBox.getByRole('button', { name: 'Export again…' }).click();
   await expect(dialogBox.getByText(`Saved to ${mp4}`)).toBeVisible({ timeout: 60_000 });
   expect(statSync(mp4).size).toBeGreaterThan(1000);
+  // The video has the sound in it, and the PNG folder has it as a WAV.
+  expect(await streams(mp4)).toEqual(expect.arrayContaining(['Video: h264', 'Audio: aac']));
+  expect(existsSync(join(pngDir, 'soundtrack.wav'))).toBe(true);
   await dialogBox.getByRole('button', { name: 'Close' }).click();
+});
+
+/** The stream types FFmpeg sees in a file, like "Video: h264". */
+async function streams(file: string): Promise<string[]> {
+  const ffmpeg = (await import('ffmpeg-static')).default as unknown as string;
+  const r = spawnSync(ffmpeg, ['-hide_banner', '-i', file], { encoding: 'utf8' });
+  return [...r.stderr.matchAll(/Stream #\S+.*?: (Video|Audio): (\w+)/g)].map((m) => `${m[1]}: ${m[2]}`);
+}
+
+test('makes a mouth switch layer from shapes named after mouth shapes', async () => {
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('new');
+  await page.getByRole('button', { name: 'Rectangle' }).click();
+  for (const [i, name] of ['X', 'A', 'D'].entries()) {
+    await drag([200 + i * 120, 200], [280 + i * 120, 240]);
+    const field = page.getByLabel('Part name');
+    await field.fill(name);
+    await field.press('Enter');
+    await field.blur();
+  }
+  await menu('selectAll');
+  await menu('makeSwitchLayer');
+  await expect(page.getByText(/Made a mouth with 3 shapes/)).toBeVisible();
+  const s = await state();
+  expect(s.names).toContain('Mouth');
+  expect(s.names).not.toContain('A');
+  const set = await page.evaluate(() => (window as any).__nyah.store.getState().project.drawingSets[0]);
+  expect(set.vocabulary).toBe('mouth');
+  expect(set.drawings.map((d: any) => d.key).sort()).toEqual(['A', 'D', 'X']);
+  await expect(page.getByTestId('drawing-list')).toBeVisible();
 });

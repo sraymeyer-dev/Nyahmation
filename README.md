@@ -10,7 +10,8 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 1 (drawing):** done. Build mode with drawing tools, point editing, layers, fill and stroke, undo, and SVG/PNG/JPEG import.
 - **Phase 2 (rigging):** done. Joints, chain roots, joint limits, drag-to-pose (inverse kinematics), and a library of reusable characters and shapes.
 - **Phase 3 (animating):** done. Posing on any frame, the timeline with retiming (ripple and copy), pins, onion skin, a loop range, and MP4 / PNG-sequence export.
-- Next: phase 4 (dialogue: audio, mouth sets and lip sync).
+- **Phase 4 (dialogue):** done. Sound import with waveforms and scrubbing, switch layers and mouth sets (vector or PNG), lip sync by typing letters, and MP4 export with the sound. **This completes the MVP.**
+- Next: phase 5 (camera, parallax backgrounds, glow and shadow).
 
 ## Running it on a Mac (step by step)
 
@@ -75,7 +76,7 @@ npm run dev      # opens the app with live reload
 
 ## Using the editor
 
-The app has two modes (top bar). **Build** is for drawing and arranging. **Animate** previews the animation; posing on the timeline arrives in phase 3.
+The app has two modes (top bar). **Build** is for drawing and arranging. **Animate** is for posing on the timeline, sound and lip sync.
 
 | Tool | Key | What it does |
 |---|---|---|
@@ -99,7 +100,17 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - Mouth sounds only move from the mouth's own row, so lip sync stays matched to the dialogue.
 - **Pin tool** (P): click a foot to pin it to the floor from this frame; click it again on a later frame to release it. The leg bends to keep the foot planted while the body moves.
 - **Playback:** Space plays and pauses. Shift+← / → jumps between poses. **I** and **O** set a loop range. **Onion skin** shows nearby frames in red (before) and green (after).
-- **Export** (Cmd+E, or the button on the timeline): MP4 video or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range.
+- **Export** (Cmd+E, or the button on the timeline): MP4 video or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range. The sound goes into the MP4; a PNG export saves it next to the frames as `soundtrack.wav`. If a PNG drawing will be enlarged (and look soft), the Export window says which.
+
+**Dialogue and lip sync:**
+1. **Record or get the line** as a WAV, MP3, M4A, OGG or FLAC file. In Animate mode, go to the frame where it should start and **Import Art or Sound…** (Cmd+I). It appears on the **Sound** row with its waveform. Drag it to line it up; click it to set its volume or mute it. The scene gets longer if the sound needs it.
+2. **Make the mouth** (Build mode). Draw each mouth shape, or import them, and **name each one after its shape**: `A` (M, B, P), `B` (K, S, T, EE), `C` (EH, AE), `D` (AA), `E` (AO, ER), `F` (OO, W), `G` (F, V), `H` (L) and `X` (rest). Names like `rest`, `MBP`, `FV` or `mouth_D` work too. A mouth can be several shapes grouped together (lips, teeth, tongue).
+3. Select all the shapes and choose **Object → Make Switch Layer** (Shift+Cmd+M). They become one **Mouth** layer that shows one shape at a time. Put it inside the head in the Layers panel so it moves with the head, and use the Joints tool to place it. PNG mouths: select the Mouth, then **Add drawings from files…** in Properties; files named `A.png`, `D.png` and so on land on the right letter.
+4. **Lip sync** (Animate mode): click the **Mouth** row on the timeline, go to where the line starts, and **type the letter** for each sound as you hear it. **Sound while scrubbing** plays each frame as you step. After each letter the playhead moves on one frame (or two, from the menu above the timeline), so you only type where the mouth changes; a shape holds until the next one. **Backspace** steps back and clears. You can also click the thumbnails.
+5. Coloured blocks on the Mouth row show which shape is on. Drag a ◆ on that row to nudge a change; Shift-drag moves a whole phrase. Lip sync often reads better a frame or two before the sound.
+6. Other switch layers (eyes, hands) work the same way with any names; press 1–9 or click a thumbnail to switch drawings.
+
+While a switch layer is selected in Animate mode, the mouth letters take priority over tool shortcuts (so H sets the H mouth rather than picking the Hand tool). Press Escape to deselect it and get the tool keys back.
 
 **Rigging a character:**
 1. Put the character on a **character layer**. Build the parent/child tree in the Layers panel: drag the forearm onto the upper arm, the hand onto the forearm, and so on.

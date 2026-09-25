@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { pinIntervals } from '../../../engine/pins';
 import type { Project } from '../../../engine/types';
-import { select } from '../editor/actions';
+import { removeClip, select } from '../editor/actions';
 import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint } from '../editor/animate';
 import { store, useEditor, type MarkRef } from '../editor/store';
+import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings';
+import type { AudioClip, DrawingSet, Part } from '../../../engine/types';
+import { clipPeaks, playbackClock, playFrom, scrubAt, stopPlayback } from '../audio/audioEngine';
+import { activeSwitch, enterDrawing } from '../editor/lipsync';
+import { DrawingThumb } from './DrawingThumb';
 
 // The timeline (docs/DESIGN.md A1, A6): one row for the whole scene, one per
 // layer and one per part. Each diamond is a pose mark. Drag a mark to retime
@@ -22,6 +27,7 @@ interface Row {
   name: string;
   depth: number;
   layerKind?: 'character' | 'background';
+  switchPart?: boolean;
 }
 
 function buildRows(project: Project, collapsed: ReadonlySet<string>): Row[] {
@@ -31,7 +37,7 @@ function buildRows(project: Project, collapsed: ReadonlySet<string>): Row[] {
     if (collapsed.has(layer.id)) continue;
     const visit = (p: typeof layer.root, depth: number) => {
       for (const c of p.children) {
-        rows.push({ row: 'part', id: c.id, name: c.name, depth });
+        rows.push({ row: 'part', id: c.id, name: c.name, depth, switchPart: c.kind === 'switch' });
         visit(c, depth + 1);
       }
     };
@@ -55,6 +61,11 @@ export function Timeline() {
   const onion = useEditor((s) => s.onion);
   const { zoom, marks } = useEditor((s) => s.timeline);
   const selection = useEditor((s) => s.selection);
+  const audioScrub = useEditor((s) => s.audioScrub);
+  const selectedClip = useEditor((s) => s.selectedClip);
+  const lipSyncStep = useEditor((s) => s.lipSyncStep);
+  useEditor((s) => s.audioVersion); // redraw waveforms once sound is decoded
+  const active = useMemo(() => activeSwitch({ ...store.getState(), project, selection }), [project, selection]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(project.scene.layers.filter((l) => l.kind === 'background').map((l) => l.id)),
   );
@@ -64,20 +75,41 @@ export function Timeline() {
   const rows = useMemo(() => buildRows(project, collapsed), [project, collapsed]);
   const selectedParts = new Set(selection);
 
-  // Playback: the frame follows the clock, looping over the loop range or the scene.
+  // Playback: the sound plays and the frame follows the audio clock, looping
+  // over the loop range or the whole scene (docs/DESIGN.md A7).
   useEffect(() => {
     if (!playing) return;
     const range = loop ?? { in: 0, out: duration - 1 };
-    const length = range.out - range.in + 1;
-    const start = performance.now();
-    const startFrame = Math.min(Math.max(store.getState().frame, range.in), range.out);
-    let raf = requestAnimationFrame(function tick(now) {
-      const elapsed = Math.floor(((now - start) / 1000) * fps);
-      store.set({ frame: range.in + ((startFrame - range.in + elapsed) % length) });
+    const clock = playbackClock();
+    let startFrame = Math.min(Math.max(store.getState().frame, range.in), range.out);
+    let t0 = clock();
+    playFrom(store.getState().project, startFrame);
+    let raf = requestAnimationFrame(function tick() {
+      let f = startFrame + Math.floor((clock() - t0) * fps);
+      if (f > range.out) {
+        startFrame = f = range.in;
+        t0 = clock();
+        playFrom(store.getState().project, range.in);
+      }
+      if (f !== store.getState().frame) store.set({ frame: f });
       raf = requestAnimationFrame(tick);
     });
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      stopPlayback();
+    };
   }, [playing, fps, duration, loop]);
+
+  // Hear each frame while stepping or scrubbing (LS2).
+  useEffect(() => {
+    let last = store.getState().frame;
+    return store.subscribe(() => {
+      const s = store.getState();
+      if (s.frame === last) return;
+      last = s.frame;
+      if (!s.playing && s.audioScrub && s.project.scene.audio.length) scrubAt(s.project, s.frame);
+    });
+  }, []);
 
   // Keep the playhead in view while playing or stepping.
   useEffect(() => {
@@ -119,7 +151,7 @@ export function Timeline() {
     const alreadySelected = s.timeline.marks.some((m) => sameMark(m, mark));
     const toggle = e.shiftKey || e.metaKey || e.ctrlKey || e.altKey;
     const dragging = alreadySelected ? s.timeline.marks : [mark];
-    if (!alreadySelected && !toggle) store.set({ timeline: { ...s.timeline, marks: [mark] }, frame: mark.frame, playing: false });
+    if (!alreadySelected && !toggle) store.set({ timeline: { ...s.timeline, marks: [mark] }, selectedClip: null, frame: mark.frame, playing: false });
     const startX = e.clientX;
     const base = s.project;
     let moved = false;
@@ -209,23 +241,34 @@ export function Timeline() {
           </>
         )}
         <span className="divider" />
+        <label className="check" title="Play a little sound when stepping or scrubbing">
+          <input type="checkbox" checked={audioScrub} onChange={(e) => store.set({ audioScrub: e.target.checked })} />
+          Sound while scrubbing
+        </label>
         <label className="check" title="Show faint copies of nearby frames">
           <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
           Onion skin
         </label>
         <div className="spacer" />
-        <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>
+        {!active && <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>}
         <button onClick={() => setZoom(zoom / 1.3)} aria-label="Zoom timeline out">−</button>
         <button onClick={() => setZoom(zoom * 1.3)} aria-label="Zoom timeline in">+</button>
         <button className="primary" onClick={() => store.set({ exportOpen: true })}>Export…</button>
       </div>
+      {active && <DrawingPalette part={active.part} set={active.set} step={lipSyncStep} />}
       <div
         className="timeline-body"
         ref={scroller}
         tabIndex={0}
         data-testid="timeline"
         onKeyDown={(e) => {
-          if ((e.key === 'Delete' || e.key === 'Backspace') && store.getState().timeline.marks.length) {
+          if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+          const s = store.getState();
+          if (s.selectedClip) {
+            e.preventDefault();
+            e.stopPropagation();
+            removeClip(s.selectedClip);
+          } else if (s.timeline.marks.length) {
             e.preventDefault();
             e.stopPropagation();
             deleteSelectedMarks();
@@ -243,6 +286,18 @@ export function Timeline() {
               ))}
             </div>
           </div>
+          {project.scene.audio.length > 0 && (
+            <div className="tl-row tl-audio" data-testid="tl-audio">
+              <div className="tl-name">
+                <span className="name">Sound</span>
+              </div>
+              <div className="tl-lane" style={{ width: laneWidth }} onPointerDown={scrub}>
+                {project.scene.audio.map((clip) => (
+                  <AudioClipBlock key={clip.id} clip={clip} zoom={zoom} fps={fps} selected={clip.id === selectedClip} />
+                ))}
+              </div>
+            </div>
+          )}
           {rows.map((r) => {
             const frames = rowFrames(project, r.row, r.id);
             const pins = r.row === 'part' ? pinIntervals(project, r.id) : [];
@@ -271,6 +326,17 @@ export function Timeline() {
                 </div>
                 <div className="tl-lane" style={{ width: laneWidth }} onPointerDown={scrub}>
                   {loop && <div className="tl-loop" style={{ left: loop.in * zoom, width: (loop.out - loop.in + 1) * zoom }} />}
+                  {r.switchPart &&
+                    drawingBlocks(project, r.id).map((b) => (
+                      <div
+                        key={b.start}
+                        className={`tl-block key-${b.key.length === 1 ? b.key : 'other'}`}
+                        style={{ left: b.start * zoom + zoom / 2, width: Math.max(2, (b.end - b.start) * zoom) }}
+                        title={`${b.key} from frame ${b.start + 1}`}
+                      >
+                        {(b.end - b.start) * zoom > 14 && b.key}
+                      </div>
+                    ))}
                   {pins.map((p) => (
                     <div key={p.start} className="tl-pin" title="Pinned" style={{ left: p.start * zoom + zoom / 2, width: Math.max(2, (p.end - p.start) * zoom - zoom / 2) }} />
                   ))}
@@ -296,5 +362,108 @@ export function Timeline() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** An audio clip on the Sound row: its waveform; drag it to move it in time. */
+function AudioClipBlock({ clip, zoom, fps, selected }: { clip: AudioClip; zoom: number; fps: number; selected: boolean }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const frames = Math.max(1, Math.ceil(clip.duration * fps));
+  const width = frames * zoom;
+  const peaks = clipPeaks(clip.assetId, fps);
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    c.width = Math.min(16000, Math.round(width * dpr));
+    c.height = Math.round(20 * dpr);
+    const ctx = c.getContext('2d')!;
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (!peaks) return;
+    const mid = c.height / 2;
+    const perPx = peaks.perFrame / (zoom * dpr);
+    ctx.fillStyle = clip.muted ? 'rgba(200,200,200,0.35)' : 'rgba(120, 200, 255, 0.85)';
+    for (let x = 0; x < c.width; x++) {
+      const from = Math.floor(x * perPx);
+      const to = Math.max(from + 1, Math.floor((x + 1) * perPx));
+      let v = 0;
+      for (let i = from; i < to && i < peaks.peaks.length; i++) v = Math.max(v, peaks.peaks[i]!);
+      const h = Math.max(1, v * mid * clip.volume);
+      ctx.fillRect(x, mid - h, 1, h * 2);
+    }
+  }, [peaks, width, zoom, clip.volume, clip.muted]);
+
+  const down = (e: ReactPointerEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    store.set((s) => ({ selectedClip: clip.id, selection: [], timeline: { ...s.timeline, marks: [] } }));
+    const startX = e.clientX;
+    const base = store.getState().project;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const delta = Math.round((ev.clientX - startX) / zoom);
+      if (!moved && Math.abs(ev.clientX - startX) < 3) return;
+      if (!moved) {
+        moved = true;
+        store.beginGesture();
+      }
+      const audio = base.scene.audio.map((c) => (c.id === clip.id ? { ...c, startFrame: clip.startFrame + delta } : c));
+      store.preview({ ...base, scene: { ...base.scene, audio } }, { status: `Sound starts on frame ${clip.startFrame + delta + 1}` });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (moved) store.endGesture();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <div
+      className={`tl-clip ${selected ? 'selected' : ''}`}
+      style={{ left: clip.startFrame * zoom, width }}
+      onPointerDown={down}
+      title={`${clip.name} — drag to move`}
+      data-testid="audio-clip"
+    >
+      <canvas ref={canvas} style={{ width, height: 20 }} />
+      <span>{clip.name}</span>
+    </div>
+  );
+}
+
+/** The drawings of the selected switch layer; for mouths, typing their keys sets them (LS3). */
+function DrawingPalette({ part, set, step }: { part: Part; set: DrawingSet; step: 1 | 2 }) {
+  const mouth = set.vocabulary === 'mouth';
+  const showing = useEditor((s) => drawingAt(s.project, part.id, s.frame));
+  const hint = (key: string) => MOUTH_SHAPES.find((m) => m.key === key);
+  return (
+    <div className="drawing-palette" data-testid="drawing-palette">
+      <span className="label">{mouth ? `Lip sync “${part.name}”: type` : `“${part.name}”: click to show`}</span>
+      {set.drawings.map((d, i) => (
+        <button
+          key={d.key}
+          className={`palette-item ${d.key === showing ? 'current' : ''}`}
+          onMouseDown={(e) => e.preventDefault()}
+          title={mouth && hint(d.key) ? `${d.key}: ${hint(d.key)!.name} (${hint(d.key)!.sounds})` : `${d.name} (${i + 1})`}
+          onClick={() => enterDrawing(d.key)}
+        >
+          <DrawingThumb items={d.items} size={26} />
+          <span>{mouth ? d.key : i + 1}</span>
+        </button>
+      ))}
+      {mouth && (
+        <>
+          <span className="hint">then it moves on</span>
+          <select aria-label="Frames per key" value={step} onChange={(e) => store.set({ lipSyncStep: Number(e.target.value) as 1 | 2 })}>
+            <option value={1}>1 frame</option>
+            <option value={2}>2 frames</option>
+          </select>
+          <span className="hint">· Backspace steps back</span>
+        </>
+      )}
+    </div>
   );
 }

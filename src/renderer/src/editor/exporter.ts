@@ -1,5 +1,10 @@
+import { locatePart, restWorldMatrix, walkParts } from '../../../engine/edit';
 import { evaluateScene } from '../../../engine/evaluate';
+import type { Project } from '../../../engine/types';
+import { readImageInfo } from '../../../io/imageInfo';
 import type { ExportFormat } from '../../../preload/api';
+import { encodeWav } from '../../../io/wav';
+import { mixdown } from '../audio/audioEngine';
 import { renderScene } from '../render/canvasRenderer';
 import { store } from './store';
 
@@ -28,6 +33,42 @@ export function exportSize(sceneW: number, sceneH: number, height: number): { wi
   return { width: w, height: h, scale: h / sceneH };
 }
 
+/**
+ * PNGs that will be shown bigger than their own pixels in the video, so may
+ * look soft (docs/DESIGN.md S6). Checked at each part's rest size.
+ */
+export function enlargedImages(project: Project, assets: ReadonlyMap<string, Uint8Array>, exportScale: number): string[] {
+  const out: string[] = [];
+  const pixels = (assetId: string) => {
+    const bytes = assets.get(assetId);
+    return bytes ? readImageInfo(bytes) : null;
+  };
+  const assetName = (id: string) => project.assets.find((a) => a.id === id)?.name ?? 'an image';
+  for (const layer of project.scene.layers) {
+    for (const part of walkParts(layer.root)) {
+      const loc = locatePart(project, part.id);
+      if (!loc) continue;
+      const m = restWorldMatrix(loc);
+      const partScale = Math.max(Math.hypot(m[0], m[1]), Math.hypot(m[2], m[3])) * exportScale;
+      if (part.kind === 'image' && part.image && partScale > 1.01) {
+        out.push(`${part.name} (${assetName(part.image.assetId)}) at ${Math.round(partScale * 100)}%`);
+      }
+      if (part.kind !== 'switch') continue;
+      const set = project.drawingSets.find((d) => d.id === part.drawingSetId);
+      for (const drawing of set?.drawings ?? []) {
+        for (const item of drawing.items) {
+          if (item.kind !== 'image') continue;
+          const info = pixels(item.assetId);
+          if (!info) continue;
+          const scale = partScale * Math.max(item.width / info.width, item.height / info.height);
+          if (scale > 1.01) out.push(`${part.name} ${drawing.key} (${assetName(item.assetId)}) at ${Math.round(scale * 100)}%`);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 async function decodeImages(): Promise<Map<string, ImageBitmap>> {
   const s = store.getState();
   const out = new Map<string, ImageBitmap>();
@@ -41,6 +82,20 @@ async function decodeImages(): Promise<Map<string, ImageBitmap>> {
     }
   }
   return out;
+}
+
+/** The scene's sound for the exported frames, mixed and encoded as WAV (E5); undefined if there is none. */
+async function soundtrack(first: number, last: number): Promise<Uint8Array | undefined> {
+  const s = store.getState();
+  let mixed: AudioBuffer | null;
+  try {
+    mixed = await mixdown(s.project, s.assets, first, last);
+  } catch (err) {
+    throw new Error(`The sound couldn't be mixed (${(err as Error).message}).`);
+  }
+  if (!mixed) return undefined;
+  const channels = Array.from({ length: mixed.numberOfChannels }, (_, c) => mixed.getChannelData(c));
+  return encodeWav(channels, mixed.sampleRate);
 }
 
 /**
@@ -67,7 +122,8 @@ export async function runExport(
   if (!path) return null;
 
   const images = await decodeImages();
-  const session = await api.export.begin({ format: settings.format, path, width: size.width, height: size.height, fps });
+  const audio = await soundtrack(first, last);
+  const session = await api.export.begin({ format: settings.format, path, width: size.width, height: size.height, fps, audio });
   const canvas = new OffscreenCanvas(size.width, size.height);
   const ctx = canvas.getContext('2d', { willReadFrequently: settings.format === 'mp4' }) as unknown as CanvasRenderingContext2D;
   try {

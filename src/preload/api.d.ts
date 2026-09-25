@@ -46,7 +46,8 @@ export type ExportFormat = 'mp4' | 'png';
 export interface ExportApi {
   /** Asks where to save: a .mp4 file, or a folder for PNG frames. Null if cancelled. */
   choose(format: ExportFormat, suggestedName: string): Promise<string | null>;
-  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number }): Promise<number>;
+  /** `audio`: the mixed soundtrack as WAV bytes, if the scene has sound. */
+  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number; audio?: Uint8Array }): Promise<number>;
   /** MP4: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
   frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
   end(session: number): Promise<{ path: string }>;
@@ -83,15 +84,18 @@ export type MenuCommand =
   | 'toggleSnap'
   | 'saveToLibrary'
   | 'autoChainRoots'
-  | 'export';
+  | 'export'
+  | 'makeSwitchLayer';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
   openProject(): Promise<OpenedFile | null>;
   /** Saves to `path`, or shows a Save dialog when no path is given. Null if cancelled. */
   saveProject(bytes: Uint8Array, path?: string): Promise<SavedFile | null>;
-  /** Shows an Import dialog for SVG, PNG and JPEG files. Null if cancelled. */
+  /** Shows an Import dialog for SVG, PNG, JPEG and sound files. Null if cancelled. */
   importFile(): Promise<ImportedFile | null>;
+  /** Picks several SVG/PNG/JPEG files at once (for adding drawings to a switch layer). */
+  importFiles(): Promise<ImportedFile[]>;
   /** Subscribes to native menu commands. Returns an unsubscribe function. */
   onMenuCommand(listener: (command: MenuCommand) => void): () => void;
   library: LibraryApi;

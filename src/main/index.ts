@@ -10,10 +10,12 @@ import { buildMenu } from './menu';
 // can be unit-tested without Electron.
 
 const PROJECT_FILTERS = [{ name: 'Nyahmation Project', extensions: ['nyah'] }];
+const AUDIO_EXTENSIONS = ['wav', 'mp3', 'm4a', 'aac', 'ogg', 'oga', 'flac'];
 const IMPORT_FILTERS = [
-  { name: 'SVG or Image', extensions: ['svg', 'png', 'jpg', 'jpeg'] },
+  { name: 'Art or Sound', extensions: ['svg', 'png', 'jpg', 'jpeg', ...AUDIO_EXTENSIONS] },
   { name: 'SVG', extensions: ['svg'] },
   { name: 'Images', extensions: ['png', 'jpg', 'jpeg'] },
+  { name: 'Sound', extensions: AUDIO_EXTENSIONS },
 ];
 
 /** Unsaved-changes state reported by each window's renderer. */
@@ -84,6 +86,14 @@ ipcMain.handle('project:save', async (event, bytes: unknown, existingPath: unkno
   }
   await writeFileAtomic(path, bytes);
   return { path, name: basename(path) };
+});
+
+ipcMain.handle('file:importMany', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const options = { properties: ['openFile' as const, 'multiSelections' as const], filters: IMPORT_FILTERS.slice(1, 3) };
+  const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+  if (result.canceled) return [];
+  return Promise.all(result.filePaths.map(async (path) => ({ name: basename(path), bytes: new Uint8Array(await readFile(path)) })));
 });
 
 ipcMain.handle('file:import', async (event) => {

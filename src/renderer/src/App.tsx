@@ -4,7 +4,8 @@ import { createProject } from '../../engine/project';
 import type { MenuCommand } from '../../preload/api';
 import * as actions from './editor/actions';
 import * as library from './editor/library';
-import { store, useEditor, type ToolId } from './editor/store';
+import * as lipsync from './editor/lipsync';
+import { store, useEditor, type EditorState, type ToolId } from './editor/store';
 import { deleteSelectedMarks, jumpToPose, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
 import { ExportDialog } from './components/ExportDialog';
@@ -56,12 +57,32 @@ const MENU: Record<MenuCommand, () => void> = {
   saveToLibrary: () => store.set({ sidebarTab: 'library' }),
   autoChainRoots: library.autoChainRootsForActiveLayer,
   export: () => store.set({ exportOpen: true }),
+  makeSwitchLayer: lipsync.makeSwitchLayerFromSelection,
 };
 
 const TOOL_KEYS = {
   build: new Map<string, ToolId>(toolsFor('build').map((t) => [t.key.toLowerCase(), t.id])),
   animate: new Map<string, ToolId>(toolsFor('animate').map((t) => [t.key.toLowerCase(), t.id])),
 };
+
+/**
+ * Lip sync keys while a switch layer is selected in Animate mode (LS3): a
+ * drawing's key (A–H, X for mouths) or its number 1–9 shows it on this frame;
+ * Backspace steps back and clears. These win over tool keys (H is a mouth).
+ */
+function lipSyncKey(e: KeyboardEvent, s: EditorState): boolean {
+  const active = lipsync.activeSwitch(s);
+  if (!active || e.shiftKey) return false;
+  if (e.key === 'Backspace' && !s.timeline.marks.length && !s.selectedClip) {
+    lipsync.lipSyncBackspace();
+    return true;
+  }
+  const byKey = active.set.drawings.find((d) => d.key.toLowerCase() === e.key.toLowerCase());
+  const drawing = byKey ?? (/^[1-9]$/.test(e.key) ? active.set.drawings[Number(e.key) - 1] : undefined);
+  if (!drawing) return false;
+  lipsync.enterDrawing(drawing.key);
+  return true;
+}
 
 function onKeyDown(e: KeyboardEvent): void {
   if (isTyping(e.target)) {
@@ -71,6 +92,10 @@ function onKeyDown(e: KeyboardEvent): void {
   const s = store.getState();
   if (s.exportOpen) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (lipSyncKey(e, s)) {
+      e.preventDefault();
+      return;
+    }
     const tool = TOOL_KEYS.animate.get(e.key.toLowerCase());
     if (tool && !e.shiftKey) {
       actions.setTool(tool);
@@ -106,10 +131,11 @@ function onKeyDown(e: KeyboardEvent): void {
       case 'Delete':
       case 'Backspace':
         e.preventDefault();
-        deleteSelectedMarks();
+        if (s.selectedClip) actions.removeClip(s.selectedClip);
+        else deleteSelectedMarks();
         return;
       case 'Escape':
-        store.set((st) => ({ selection: [], timeline: { ...st.timeline, marks: [] } }));
+        store.set((st) => ({ selection: [], selectedClip: null, timeline: { ...st.timeline, marks: [] } }));
         return;
     }
     return;

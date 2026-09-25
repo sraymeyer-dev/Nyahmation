@@ -211,6 +211,8 @@ export interface AudioClip {
   name: string;
   /** The frame where the sound starts (can be negative to trim its beginning). */
   startFrame: number;
+  /** Length of the sound in seconds. */
+  duration: number;
   /** 0 to 1. */
   volume: number;
   muted?: boolean;

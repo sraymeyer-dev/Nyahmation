@@ -135,7 +135,9 @@ export function validateProject(project: Project): void {
   if (!Array.isArray(project.drawingSets) || !Array.isArray(project.assets)) fail('drawing sets/assets missing');
   if (!Array.isArray(scene.audio)) fail('scene audio missing');
   for (const clip of scene.audio) {
-    if (typeof clip?.assetId !== 'string' || !Number.isInteger(clip.startFrame) || !Number.isFinite(clip.volume)) fail('an audio clip is damaged');
+    if (typeof clip?.assetId !== 'string' || !Number.isInteger(clip.startFrame) || !Number.isFinite(clip.volume) || !(clip.duration >= 0)) {
+      fail('an audio clip is damaged');
+    }
   }
   for (const set of project.drawingSets) {
     for (const d of set.drawings ?? []) if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { locatePart, restWorldMatrix } from './edit';
-import { clearDrawingAt, drawingAt, drawingBlocks, makeSwitchLayer, matchMouthKey, setDrawingAt } from './drawings';
+import { centreItems, clearDrawingAt, drawingAt, drawingBlocks, makeSwitchLayer, matchMouthKey, partTreeItems, putDrawing, removeDrawing, renameDrawingKey, setDrawingAt } from './drawings';
 import { drawingItemsBounds } from './drawingItems';
 import { evaluateScene } from './evaluate';
 import { ellipsePath, rectPath } from './geometry';
@@ -133,5 +133,46 @@ describe('version 2 files', () => {
     const [a, b] = p.drawingSets[0]!.drawings;
     expect(a!.items[0]!.kind === 'shape' && a!.items[0]!.paths[0]!.points[0]!.anchor).toEqual({ x: 5, y: 0 });
     expect(b!.items[0]).toEqual({ kind: 'image', assetId: 'i', x: 1, y: 2, width: 3, height: 4 });
+  });
+});
+
+describe('managing drawing sets', () => {
+  function mouth() {
+    const { project, ids } = head();
+    const r = makeSwitchLayer(project, ids, 'Mouth')!;
+    return { project: setDrawingAt(r.project, r.partId, 10, 'D'), id: r.partId, setId: r.setId };
+  }
+
+  it('renaming a key keeps the lip sync and rest drawing pointing at the same drawing', () => {
+    const { project, id, setId } = mouth();
+    let p = renameDrawingKey(project, setId, 'D', 'C');
+    expect(drawingAt(p, id, 12)).toBe('C');
+    p = renameDrawingKey(p, setId, 'X', 'H');
+    expect(locatePart(p, id)!.part.restDrawing).toBe('H');
+    expect(drawingAt(p, id, 0)).toBe('H');
+    // Can't rename onto an existing key.
+    expect(renameDrawingKey(p, setId, 'A', 'C')).toBe(p);
+  });
+
+  it('adds, replaces and removes drawings', () => {
+    const { project, setId } = mouth();
+    const items = centreItems([{ kind: 'image', assetId: 'png', x: 100, y: 100, width: 40, height: 20 }]);
+    expect(items[0]).toMatchObject({ x: -20, y: -10 });
+    let p = putDrawing(project, setId, { key: 'E', name: 'E.png', items });
+    expect(p.drawingSets.find((s) => s.id === setId)!.drawings.map((d) => d.key)).toEqual(['A', 'D', 'X', 'E']);
+    p = putDrawing(p, setId, { key: 'E', name: 'E2.png', items });
+    expect(p.drawingSets.find((s) => s.id === setId)!.drawings.at(-1)!.name).toBe('E2.png');
+    p = removeDrawing(p, setId, 'E');
+    expect(p.drawingSets.find((s) => s.id === setId)!.drawings.map((d) => d.key)).toEqual(['A', 'D', 'X']);
+  });
+
+  it('flattens an imported part tree into items', () => {
+    const { project } = head();
+    const inner = createPart({ name: 'dot', kind: 'shape', rest: { x: 10, y: 0, rotation: 0, scaleX: 2, scaleY: 2 }, paths: [rectPath(0, 0, 1, 1)], style: { fill: '#000', stroke: null, strokeWidth: 0, lineCap: 'round', lineJoin: 'round', fillRule: 'nonzero' } });
+    const root = createPart({ name: 'svg', kind: 'group', children: [inner] });
+    const items = partTreeItems(project, root);
+    expect(items).toHaveLength(1);
+    const b = drawingItemsBounds(items, [1, 0, 0, 1, 0, 0]);
+    expect([b.minX, b.maxX]).toEqual([10, 12]);
   });
 });

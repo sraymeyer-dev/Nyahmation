@@ -22,7 +22,8 @@ import { evaluateRestPose, evaluateScene, type ResolvedScene } from '../../../en
 import { invert } from '../../../engine/math';
 import { deletePoints, movePoints } from '../../../engine/pathEdit';
 import { createId, createPart, createProject } from '../../../engine/project';
-import type { Layer, LayerKind, Project, Vec2 } from '../../../engine/types';
+import type { AudioClip, Layer, LayerKind, Project, Vec2 } from '../../../engine/types';
+import { decodeAudio } from '../audio/audioEngine';
 import { readImageInfo } from '../../../io/imageInfo';
 import { packProject, unpackProject } from '../../../io/projectFile';
 import { importSvg } from '../../../io/svg/importSvg';
@@ -95,7 +96,7 @@ export function select(ids: readonly string[], additive = false): void {
     selection = [...set];
   }
   const layerId = selection[0] ? locatePart(s.project, selection[0])?.layer.id : undefined;
-  store.set({ selection, points: [], activeLayerId: layerId ?? s.activeLayerId });
+  store.set({ selection, points: [], selectedClip: ids.length ? null : s.selectedClip, activeLayerId: layerId ?? s.activeLayerId });
 }
 
 export function deselect(): void {
@@ -315,7 +316,76 @@ export async function importFile(): Promise<void> {
   if (file) importBytes(file.name, file.bytes);
 }
 
+const AUDIO_TYPES: Record<string, string> = {
+  wav: 'audio/wav',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  flac: 'audio/flac',
+};
+
+/**
+ * Adds a sound file as an audio clip starting on the current frame (Animate
+ * mode) or frame 1. The scene gets longer if the sound runs past its end.
+ */
+export async function importAudio(name: string, bytes: Uint8Array): Promise<void> {
+  const ext = name.split('.').pop()!.toLowerCase();
+  let duration: number;
+  try {
+    duration = (await decodeAudio(bytes)).duration;
+  } catch {
+    store.set({ notice: { title: `Couldn't import ${name}`, lines: ["The sound file couldn't be read. WAV, MP3, M4A/AAC, OGG and FLAC are supported."] } });
+    return;
+  }
+  const s = get();
+  const { fps, durationFrames } = s.project.scene;
+  const assetId = createId();
+  const clip: AudioClip = {
+    id: createId(),
+    assetId,
+    name: name.replace(/\.[^.]+$/, ''),
+    startFrame: s.mode === 'animate' ? s.frame : 0,
+    duration,
+    volume: 1,
+  };
+  const end = clip.startFrame + Math.ceil(duration * fps);
+  const longer = end > durationFrames;
+  const project: Project = {
+    ...s.project,
+    assets: [...s.project.assets, { id: assetId, name, mimeType: AUDIO_TYPES[ext] ?? 'audio/wav' }],
+    scene: { ...s.project.scene, audio: [...s.project.scene.audio, clip], durationFrames: Math.max(durationFrames, end) },
+  };
+  store.commit(project, {
+    assets: new Map(s.assets).set(assetId, bytes),
+    selectedClip: clip.id,
+    status: `Imported ${name} (${duration.toFixed(1)} s)${longer ? `; the scene is now ${end} frames long to fit it` : ''}.`,
+  });
+}
+
+/** Changes one audio clip (name, start, volume, mute). */
+export function updateClip(id: string, change: Partial<Omit<AudioClip, 'id' | 'assetId'>>, coalesce?: string): void {
+  const s = get();
+  const audio = s.project.scene.audio.map((c) => (c.id === id ? { ...c, ...change } : c));
+  store.commit({ ...s.project, scene: { ...s.project.scene, audio } }, {}, coalesce);
+}
+
+export function removeClip(id: string): void {
+  const s = get();
+  const clip = s.project.scene.audio.find((c) => c.id === id);
+  if (!clip) return;
+  store.commit(
+    { ...s.project, scene: { ...s.project.scene, audio: s.project.scene.audio.filter((c) => c.id !== id) } },
+    { selectedClip: null, status: `Removed the sound “${clip.name}”.` },
+  );
+}
+
 export function importBytes(name: string, bytes: Uint8Array): void {
+  if (AUDIO_TYPES[name.split('.').pop()!.toLowerCase()]) {
+    void importAudio(name, bytes);
+    return;
+  }
   const s = get();
   const target = containerForNewPart(s);
   if (!target) return;

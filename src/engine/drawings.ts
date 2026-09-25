@@ -199,3 +199,94 @@ export function drawingBlocks(project: Project, partId: string): { key: string; 
   const poses = track.poses as Pose<string>[];
   return poses.map((p, i) => ({ key: p.value, start: p.frame, end: poses[i + 1]?.frame ?? project.scene.durationFrames }));
 }
+
+// ---- Managing drawing sets ---------------------------------------------------------
+
+function updateSet(project: Project, setId: string, fn: (s: DrawingSet) => DrawingSet): Project {
+  return { ...project, drawingSets: project.drawingSets.map((s) => (s.id === setId ? fn(s) : s)) };
+}
+
+/** Switch layers that use a drawing set. */
+function partsUsingSet(project: Project, setId: string): Part[] {
+  const out: Part[] = [];
+  for (const layer of project.scene.layers) for (const p of walkParts(layer.root)) if (p.drawingSetId === setId) out.push(p);
+  return out;
+}
+
+/**
+ * Renames a drawing's key, updating the lip sync (and rest drawing) of every
+ * switch layer using the set, so nothing that was set before changes.
+ */
+export function renameDrawingKey(project: Project, setId: string, from: string, to: string): Project {
+  const set = project.drawingSets.find((s) => s.id === setId);
+  if (!set || from === to || !to || set.drawings.some((d) => d.key === to)) return project;
+  let next = updateSet(project, setId, (s) => ({ ...s, drawings: s.drawings.map((d) => (d.key === from ? { ...d, key: to } : d)) }));
+  const users = new Set(partsUsingSet(project, setId).map((p) => p.id));
+  next = {
+    ...next,
+    scene: {
+      ...next.scene,
+      tracks: next.scene.tracks.map((t) =>
+        t.channel === 'drawing' && users.has(t.partId)
+          ? ({ ...t, poses: (t.poses as Pose<string>[]).map((p) => (p.value === from ? { ...p, value: to } : p)) } as Track)
+          : t,
+      ),
+      layers: next.scene.layers.map((l) => ({ ...l, root: renameRest(l.root, users, from, to) })),
+    },
+  };
+  return next;
+}
+
+function renameRest(p: Part, users: ReadonlySet<string>, from: string, to: string): Part {
+  const children = p.children.map((c) => renameRest(c, users, from, to));
+  const rest = users.has(p.id) && p.restDrawing === from ? to : p.restDrawing;
+  const changed = rest !== p.restDrawing || children.some((c, i) => c !== p.children[i]);
+  if (!changed) return p;
+  const next: Part = { ...p, children };
+  if (rest !== undefined) next.restDrawing = rest;
+  return next;
+}
+
+export function removeDrawing(project: Project, setId: string, key: string): Project {
+  return updateSet(project, setId, (s) => ({ ...s, drawings: s.drawings.filter((d) => d.key !== key) }));
+}
+
+/** Adds a drawing to a set, replacing one with the same key. */
+export function putDrawing(project: Project, setId: string, drawing: Drawing): Project {
+  return updateSet(project, setId, (s) => {
+    const i = s.drawings.findIndex((d) => d.key === drawing.key);
+    const drawings = s.drawings.slice();
+    if (i >= 0) drawings[i] = drawing;
+    else drawings.push(drawing);
+    return { ...s, drawings };
+  });
+}
+
+/** A drawing's items centred on the switch layer's origin. */
+export function centreItems(items: readonly DrawingItem[]): DrawingItem[] {
+  const b = drawingItemsBounds(items, [1, 0, 0, 1, 0, 0]);
+  if (isEmptyBounds(b)) return items.slice();
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  return transformItems(items, [1, 0, 0, 1, -cx, -cy]);
+}
+
+/** Flattens a stand-alone part tree (e.g. an imported SVG) into drawing items in the root's space. */
+export function partTreeItems(project: Project, root: Part): DrawingItem[] {
+  const items: { order: number; item: DrawingItem }[] = [];
+  const visit = (p: Part, m: Mat2D) => {
+    for (const item of transformItems(ownItems(project, p), m)) items.push({ order: p.drawOrder, item });
+    for (const c of p.children) visit(c, multiply(m, localMatrixOf(c)));
+  };
+  visit(root, [1, 0, 0, 1, 0, 0]);
+  return items.sort((a, b) => a.order - b.order).map((x) => x.item);
+}
+
+function localMatrixOf(p: Part): Mat2D {
+  const r = (p.rest.rotation * Math.PI) / 180;
+  const a = Math.cos(r) * p.rest.scaleX;
+  const b = Math.sin(r) * p.rest.scaleX;
+  const c = -Math.sin(r) * p.rest.scaleY;
+  const d = Math.cos(r) * p.rest.scaleY;
+  return [a, b, c, d, p.rest.x - (a * p.joint.pivot.x + c * p.joint.pivot.y), p.rest.y - (b * p.joint.pivot.x + d * p.joint.pivot.y)];
+}

@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v1.0. Requirements baseline for the MVP. Phases 0–3 are built; see §16.
+> **Status:** v1.1. Requirements baseline for the MVP. Phases 0–4 (the MVP) are built; see §16.
 > **Last updated:** 2026-09-25
 
 ---
@@ -206,7 +206,11 @@ This refines §6.2: IK is a posing tool **except** for pinned chains, which are 
 - **S3** Which drawing is showing is a **discrete** channel: it holds until the next change and is never blended. The layer's own position, rotation and scale still interpolate normally.
 - **S4** Uses: mouths, eyes (open, half, closed), hands (fist, open, point), brows, and alternate head angles.
 - **S5** A drawing in a set can be **vector** (drawn in Nyahmation or imported SVG) or a **PNG image** (with transparency). The two kinds can be mixed in one set.
-- **S6** PNGs have a fixed number of pixels, so they look soft if they're shown bigger than their own size. For example, a mouth that is 200 pixels wide in the PNG but 400 pixels wide on screen in a 4K export will look blurry. Before exporting, Nyahmation **warns you about any PNG that will be enlarged beyond its own size**, and says which one. Vector drawings stay sharp at any size.
+- **S6** PNGs have a fixed number of pixels, so they look soft if they're shown bigger than their own size. For example, a mouth that is 200 pixels wide in the PNG but 400 pixels wide on screen in a 4K export will look blurry. Before exporting, Nyahmation **warns you about any PNG that will be enlarged beyond its own size**, and says which one. Vector drawings stay sharp at any size. (Built in phase 4: the Export dialog lists them, checked at each part's rest size and the chosen export size.)
+- **S7** (Built in phase 4) **Make Switch Layer** (Object menu, Shift+Cmd/Ctrl+M) turns two or more selected parts into one switch layer. Each selected part, with everything inside it, becomes one drawing, so a mouth drawn as lips + teeth + tongue stays one drawing. The drawings are centred on the new layer's joint, and the layer sits where the originals were.
+- **S8** (Built in phase 4) A drawing is a short **list of items**: vector shapes and images, drawn in order. This is what lets S5 mix PNG and vector in one drawing, and S7 keep a multi-part mouth intact.
+- **S9** (Built in phase 4) **Names become keys.** A part or file named `A`, `mouth_D`, `X.png`, `rest`, `MBP`, `FV`, `L` or `OO` is matched to its mouth shape (A–H, X). When at least two names match, the set becomes a mouth set; otherwise drawings keep their names as keys. **Add drawings from files…** (Properties) adds SVG, PNG or JPEG files to a set the same way.
+- **S10** (Built in phase 4) Properties for a switch layer: pick its drawing set (so two characters can share mouths, or you can swap to a side-view set), rename the set and keys, choose Mouth or Other, choose the rest drawing (Build mode), remove drawings, and see which of A–H, X are missing. Renaming a key updates every frame that used it. Removing a drawing leaves its key on those frames; they show nothing until a drawing with that key is added again (LS6).
 
 ### 8.2 Mouth sets
 A mouth set is a drawing set whose entries are named by sound. The proposed default is 9 shapes, following the classic cartoon set that the open-source Rhubarb Lip Sync tool also uses:
@@ -233,7 +237,16 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 - **LS4** The lane shows labelled blocks with thumbnails. Drag block edges to retime them.
 - **LS5** Select a phrase and nudge it earlier or later. Lip sync often reads better 1–2 frames ahead of the audio.
 - **LS6** Proposed: **the lane stores sounds, not drawings.** The mouth set maps each sound to a drawing, so you can change a character's mouth art, or switch to a side-view mouth set, without redoing the lip sync.
+- **LS8** (Built in phase 4) While a switch layer is selected in Animate mode, a **palette** above the timeline shows its drawings. Mouth sets: type the letter (A–H, X; these win over tool keys such as H for Hand) and the playhead moves on. Other sets: press 1–9 or click a drawing; the playhead stays. The switch layer's row shows **coloured blocks**, one colour per mouth shape, from each change to the next.
+- **LS9** (Built in phase 4) Blocks are retimed by dragging the marks on the switch layer's own row, like any pose (§9.1c): Shift ripples a phrase, and several selected marks move together (LS5). Dragging block edges directly (LS4) is not built yet.
 - **LS7** (Could) **Automatic lip sync**: run Rhubarb Lip Sync (offline, open source) on the audio, optionally with the script, to fill the lane. Then fix it by hand.
+
+### 8.4 Sound
+- **AU1** (Built in phase 4) **Import Art or Sound…** (Cmd/Ctrl+I) takes WAV, MP3, M4A/AAC, OGG and FLAC. The sound becomes a **clip** on the timeline's Sound row, starting on the current frame (Animate mode) or frame 1. If it runs past the end, the scene gets longer to fit it. The file is stored inside the `.nyah` bundle unchanged.
+- **AU2** The Sound row shows each clip's **waveform**. Drag a clip to line it up; its Properties set name, start frame, volume (0–200%) and mute. Delete removes the selected clip.
+- **AU3** **Picture follows sound.** While playing, the frame shown is worked out from the sound card's clock, not a separate timer, so picture and sound can't drift apart, even on a slow computer (frames are skipped rather than the sound slowing down). Without sound it falls back to the ordinary clock.
+- **AU4** **Sound while scrubbing** (LS2, a timeline checkbox, on by default): stepping or dragging the playhead plays a short slice (about one and a half frames, with tiny fades so it doesn't click) of the sound under it.
+- **AU5** Sound is decoded without waking the sound card, at 48 kHz, the same rate used for export.
 
 ---
 
@@ -379,7 +392,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 - **E5** Resolution presets 720p, 1080p, 1440p and 4K; vertical 1080×1920; custom sizes. Frame rates 24 (default), 25, 30 and 60.
 - **E6** Export renders **offline, frame by frame, at full quality**, so frames are never dropped however slow the computer is. The output is deterministic.
 - **E7** Export the whole scene or a marked range, with a progress bar and a cancel button.
-- **E8** The audio is combined into the video file (muxed) with correct sync.
+- **E8** The audio is combined into the video file (muxed) with correct sync. (Built in phase 4: the app mixes all unmuted clips for the exported frames into one 48 kHz stereo track, clips and volumes applied, and FFmpeg adds it to the MP4 as AAC at 192 kbit/s. A PNG export saves it as `soundtrack.wav` beside the frames. The sound starts exactly at the first exported frame, so a loop-range export stays in sync.)
 
 ---
 
@@ -496,7 +509,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **1** ✅ | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
 | **2** ✅ | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
 | **3** ✅ | Move | Timeline, pose-anywhere (part poses), holds, retiming with ripple and copy, playback with a loop range, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 and PNG-sequence export**. Not yet: stretching a range of poses (A6), "View on ones" (ST6). |
-| **4** | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. |
+| **4** ✅ | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. Not yet: dragging block edges (LS4; drag the marks instead), automatic lip sync (LS7, phase 6). |
 | **5** | Polish | Camera; parallax, scrolling and atmosphere for backgrounds (BG4–BG8); glow, shadow and blend modes (FX1–FX6); draw-order swaps; ProRes/PNG export; easing curve editor. |
 | **6+** | Stretch | Automatic lip sync (Rhubarb), mirror poses, animation cycles, gradients and boolean operations. |
 
@@ -547,6 +560,11 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-38 | Scene and layer rows never move lip sync (RT5) | Proposed |
 | D-39 | A pin holds a clicked spot at a scene position, enforced live every frame; no extra poses are recorded for pinned limbs (P2a) | Proposed |
 | D-40 | Export draws each frame in the app and pipes raw pixels to a bundled FFmpeg (ffmpeg-static); PNG sequences need no FFmpeg | Proposed |
+| D-41 | A drawing in a set is a list of items (vector shapes and images), not one shape; file format v3 migrates older drawings (S8) | Proposed |
+| D-42 | Mouth keys are recognised from part and file names, including sound names like "rest", "MBP" and "FV" (S9) | Proposed |
+| D-43 | During playback the sound card's clock decides the frame; picture follows sound (AU3) | Proposed |
+| D-44 | The soundtrack is mixed in the app with Web Audio and handed to FFmpeg as a WAV; sound files are embedded unchanged (E8, AU1) | Proposed |
+| D-45 | Lip-sync letters take priority over tool keys while a switch layer is selected in Animate mode (LS8) | Proposed |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
@@ -579,6 +597,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.1 (2026-09-25):** Phase 4 built, completing the MVP: sound import, waveform, scrubbing and audio-clock playback (§8.4), Make Switch Layer, mouth sets from names or files (S7–S10), the lip-sync palette and blocks (LS8, LS9), MP4 with AAC audio and the PNG enlargement warning (E8, S6). Added D-41 to D-45.
 - **v1.0 (2026-09-25):** Phase 3 built. Added §9.1c Retiming (row scope, Shift ripple, copy, lip-sync exception), clarified pins (P1, P2a, P6) and holds (A5), and D-37 to D-40.
 - **v0.9 (2026-09-25):** Phase 2 built: joints, chain roots, limits, bend direction, drag-to-pose IK, and the library. Clarified R7 (modifiers) and added R7a–R7c, L6, D-34 to D-36.
 - **v0.8 (2026-09-25):** Phase 1 built. Recorded D-32 (click selects the part under the mouse) and D-33 (where new shapes go).

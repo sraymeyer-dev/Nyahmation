@@ -7,6 +7,7 @@ import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { store, useEditor } from '../editor/store';
 import { NumberField, PaintField, Row, Section } from './fields';
+import { AudioClipSection, SwitchSection } from './SwitchProperties';
 
 // Shows and edits whatever is selected: the scene (nothing selected), a
 // layer, one part, or several parts at once (shared settings only).
@@ -221,6 +222,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
         </Row>
         {single?.kind === 'image' && single.image && <ImageHint loc={locs[0]!} />}
       </Section>
+      {single?.kind === 'switch' && <SwitchSection part={single} />}
       {single && mode === 'build' && <JointSection loc={locs[0]!} />}
       {shapes.length > 0 && (
         <Section title={shapes.length === 1 ? 'Fill & stroke' : `Fill & stroke (${shapes.length} shapes)`}>
@@ -349,12 +351,14 @@ export function Properties() {
   const mode = useEditor((s) => s.mode);
   const locs = selection.map((id) => locatePart(project, id)).filter((l): l is PartLocation => !!l);
   const layerRoot = locs.length === 1 && !locs[0]!.parent ? locs[0] : null;
+  const clip = useEditor((s) => s.project.scene.audio.find((c) => c.id === s.selectedClip));
   return (
     <div className="properties" data-testid="properties">
       <div className="panel-header">
         <h2>Properties</h2>
       </div>
       <div className="properties-body">
+        {clip && <AudioClipSection clip={clip} />}
         {mode === 'animate' && <PoseMarks />}
         {locs.length === 0 && <SceneProperties project={project} />}
         {layerRoot && <LayerProperties loc={layerRoot} />}

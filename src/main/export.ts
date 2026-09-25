@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import ffmpegPath from 'ffmpeg-static';
@@ -8,6 +9,11 @@ import ffmpegPath from 'ffmpeg-static';
 // quality and sends it here, one at a time; this side either pipes raw
 // pixels into FFmpeg (MP4) or writes PNG files. Nothing is ever dropped:
 // each frame waits until the previous one has been written.
+//
+// The soundtrack arrives already mixed, as a WAV file's bytes (the renderer
+// mixes it with Web Audio, E5). For MP4 it goes into a temporary file that
+// FFmpeg reads as a second input; for PNG frames it is saved next to them as
+// soundtrack.wav.
 
 type Format = 'mp4' | 'png';
 
@@ -19,6 +25,8 @@ interface Session {
   ffmpeg?: ChildProcessWithoutNullStreams;
   stderr: string;
   exited?: Promise<number | null>;
+  /** Folder holding the temporary soundtrack for FFmpeg. */
+  tempDir?: string;
 }
 
 const sessions = new Map<number, Session>();
@@ -30,7 +38,7 @@ export function ffmpegBinary(): string | null {
   return p ? p.replace('app.asar', 'app.asar.unpacked') : null;
 }
 
-function mp4Args(s: Session, fps: number): string[] {
+function mp4Args(s: Session, fps: number, soundtrack: string | null): string[] {
   return [
     '-y',
     '-f', 'rawvideo',
@@ -38,7 +46,7 @@ function mp4Args(s: Session, fps: number): string[] {
     '-s', `${s.width}x${s.height}`,
     '-r', String(fps),
     '-i', '-',
-    '-an',
+    ...(soundtrack ? ['-i', soundtrack, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '192k'] : ['-an']),
     '-c:v', 'libx264',
     '-preset', 'medium',
     '-crf', '18',
@@ -47,6 +55,12 @@ function mp4Args(s: Session, fps: number): string[] {
     s.path,
   ];
 }
+
+async function cleanUp(s: Session): Promise<void> {
+  if (s.tempDir) await rm(s.tempDir, { recursive: true, force: true }).catch(() => undefined);
+}
+
+type BeginOptions = { format: Format; path: string; width: number; height: number; fps: number; audio?: unknown };
 
 export function registerExportHandlers(): void {
   ipcMain.handle('export:choose', async (event, format: unknown, suggestedName: unknown) => {
@@ -66,18 +80,26 @@ export function registerExportHandlers(): void {
     return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
   });
 
-  ipcMain.handle('export:begin', async (_event, opts: { format: Format; path: string; width: number; height: number; fps: number }) => {
-    const { format, path, width, height, fps } = opts;
+  ipcMain.handle('export:begin', async (_event, opts: BeginOptions) => {
+    const { format, path, width, height, fps, audio } = opts;
     if ((format !== 'mp4' && format !== 'png') || typeof path !== 'string' || !(width > 0 && height > 0 && fps > 0)) {
       throw new Error('Invalid export settings.');
     }
+    if (audio !== undefined && !(audio instanceof Uint8Array)) throw new Error('Invalid export settings.');
     const session: Session = { format, path, width, height, stderr: '' };
     if (format === 'png') {
       await mkdir(path, { recursive: true });
+      if (audio) await writeFile(join(path, 'soundtrack.wav'), audio);
     } else {
       const bin = ffmpegBinary();
       if (!bin) throw new Error('The video encoder (FFmpeg) is missing. Try reinstalling with npm install.');
-      const ff = spawn(bin, mp4Args(session, fps));
+      let soundtrack: string | null = null;
+      if (audio) {
+        session.tempDir = await mkdtemp(join(tmpdir(), 'nyahmation-'));
+        soundtrack = join(session.tempDir, 'soundtrack.wav');
+        await writeFile(soundtrack, audio);
+      }
+      const ff = spawn(bin, mp4Args(session, fps, soundtrack));
       session.ffmpeg = ff;
       ff.stderr.on('data', (d: Buffer) => {
         session.stderr = (session.stderr + d.toString()).slice(-4000);
@@ -112,6 +134,7 @@ export function registerExportHandlers(): void {
     if (s.format === 'png') return { path: s.path };
     s.ffmpeg!.stdin.end();
     const code = await s.exited;
+    await cleanUp(s);
     if (code !== 0) throw new Error(`The video encoder failed (code ${code}): ${s.stderr.split('\n').slice(-4).join(' ')}`);
     return { path: s.path, name: basename(s.path) };
   });
@@ -125,5 +148,6 @@ export function registerExportHandlers(): void {
       await s.exited;
       await rm(s.path, { force: true });
     }
+    await cleanUp(s);
   });
 }

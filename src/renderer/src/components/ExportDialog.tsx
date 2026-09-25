@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { exportSize, runExport, type ExportProgress, type ExportSettings } from '../editor/exporter';
+import { enlargedImages, exportSize, runExport, type ExportProgress, type ExportSettings } from '../editor/exporter';
 import { store, useEditor } from '../editor/store';
 
 // File → Export Video… (docs/DESIGN.md §11).
@@ -10,6 +10,8 @@ export function ExportDialog() {
   const open = useEditor((s) => s.exportOpen);
   const scene = useEditor((s) => s.project.scene);
   const loop = useEditor((s) => s.loop);
+  const project = useEditor((s) => s.project);
+  const assets = useEditor((s) => s.assets);
   const [settings, setSettings] = useState<ExportSettings>({ format: 'mp4', height: 0, range: 'all', transparent: false });
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +22,8 @@ export function ExportDialog() {
   const height = settings.height || scene.height;
   const size = exportSize(scene.width, scene.height, height);
   const frames = settings.range === 'loop' && loop ? loop.out - loop.in + 1 : scene.durationFrames;
+  const sounds = project.scene.audio.filter((c) => !c.muted && c.volume > 0).length;
+  const enlarged = enlargedImages(project, assets, size.scale);
   const busy = progress !== null && !done && !error;
   const close = () => {
     if (busy) return;
@@ -93,8 +97,26 @@ export function ExportDialog() {
         )}
         <p className="hint">
           {frames} frames at {scene.fps} fps = {(frames / scene.fps).toFixed(1)} s, {size.width} × {size.height}.
-          {size.scale > 1 && ' Larger than the scene: images may look soft.'}
         </p>
+        <p className="hint" data-testid="export-sound">
+          {sounds === 0
+            ? 'No sound.'
+            : settings.format === 'mp4'
+              ? `Includes the sound (${sounds} clip${sounds === 1 ? '' : 's'}, mixed).`
+              : 'The sound is saved next to the frames as soundtrack.wav.'}
+        </p>
+        {enlarged.length > 0 && (
+          <div className="hint warn" data-testid="export-enlarged">
+            These images are shown bigger than their own pixels, so they may look soft:
+            <ul>
+              {enlarged.slice(0, 6).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+              {enlarged.length > 6 && <li>and {enlarged.length - 6} more</li>}
+            </ul>
+            Use a smaller export size or larger PNGs.
+          </div>
+        )}
         {progress && (
           <div className="progress" aria-label="Export progress">
             <div className="bar" style={{ width: `${(progress.done / progress.total) * 100}%` }} />

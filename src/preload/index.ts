@@ -5,6 +5,7 @@ const api: NyahApi = {
   openProject: () => ipcRenderer.invoke('project:open'),
   saveProject: (bytes, path) => ipcRenderer.invoke('project:save', bytes, path),
   importFile: () => ipcRenderer.invoke('file:import'),
+  importFiles: () => ipcRenderer.invoke('file:importMany'),
   onMenuCommand: (listener) => {
     const handler = (_event: IpcRendererEvent, command: MenuCommand) => listener(command);
     ipcRenderer.on('menu:command', handler);

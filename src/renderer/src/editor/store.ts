@@ -67,6 +67,14 @@ export interface EditorState {
   /** Timeline zoom (pixels per frame) and selected pose marks. */
   timeline: { zoom: number; marks: readonly MarkRef[] };
   exportOpen: boolean;
+  /** Play a snippet of sound when stepping or scrubbing (LS2). */
+  audioScrub: boolean;
+  /** The audio clip selected on the timeline. */
+  selectedClip: string | null;
+  /** Frames the playhead moves after each typed mouth sound (LS3a). */
+  lipSyncStep: 1 | 2;
+  /** Increments when decoded audio becomes available, so waveforms redraw. */
+  audioVersion: number;
   library: { dir: string; items: readonly LibraryEntry[]; loaded: boolean };
 }
 
@@ -98,6 +106,10 @@ function initialState(): EditorState {
     onion: { enabled: false, before: 2, after: 2, step: 2 },
     timeline: { zoom: 14, marks: [] },
     exportOpen: false,
+    audioScrub: true,
+    selectedClip: null,
+    lipSyncStep: 1,
+    audioVersion: 0,
     library: { dir: '', items: [], loaded: false },
   };
 }

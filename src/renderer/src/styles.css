@@ -258,6 +258,7 @@ button:focus-visible {
   width: 300px;
   display: grid;
   grid-template-rows: minmax(180px, 1fr) minmax(220px, 1.2fr);
+  grid-template-columns: minmax(0, 1fr);
   background: var(--panel);
   border-left: 1px solid var(--border);
   min-height: 0;
@@ -562,7 +563,7 @@ button.icon {
 
 .row {
   display: grid;
-  grid-template-columns: 78px 1fr;
+  grid-template-columns: 78px minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   min-height: 26px;
@@ -887,4 +888,143 @@ input[type='color'] {
   height: 6px;
   cursor: ns-resize;
   z-index: 5;
+}
+
+/* Sound row */
+.tl-audio .tl-lane {
+  background: rgba(120, 200, 255, 0.04);
+}
+
+.tl-clip {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 3px;
+  background: rgba(40, 90, 130, 0.55);
+  border: 1px solid rgba(120, 200, 255, 0.35);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.tl-clip.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tl-clip canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+
+.tl-clip span {
+  position: sticky;
+  left: 194px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 20px;
+  color: #dbeeff;
+  text-shadow: 0 0 3px #000;
+  pointer-events: none;
+}
+
+/* Lip sync: which drawing shows, as coloured blocks on a switch layer's row */
+.tl-block {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 2px;
+  border-left: 2px solid rgba(0, 0, 0, 0.45);
+  background: #6d7380;
+  color: #111;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  padding-left: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tl-block.key-X { background: #8a8f99; }
+.tl-block.key-A { background: #e5484d; }
+.tl-block.key-B { background: #f5a524; }
+.tl-block.key-C { background: #e8d44d; }
+.tl-block.key-D { background: #46c37b; }
+.tl-block.key-E { background: #3fb7c9; }
+.tl-block.key-F { background: #4f8cff; }
+.tl-block.key-G { background: #9b6cf0; }
+.tl-block.key-H { background: #e36bc4; }
+
+/* The drawing palette above the timeline while a switch layer is selected */
+.drawing-palette {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.drawing-palette .label,
+.drawing-palette .hint {
+  color: var(--muted);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 2px;
+}
+
+.palette-item.current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.drawing-thumb {
+  display: block;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Drawing list in the Properties panel */
+.drawing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.drawing-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.drawing-row input[type='text'] {
+  width: 44px;
+}
+
+.drawing-row .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.drawing-row.showing .drawing-thumb {
+  outline: 1px solid var(--accent);
+}
+
+.drawing-row .hint {
+  margin: 0;
+}
+
+.drawing-row button.icon {
+  padding: 1px;
 }
