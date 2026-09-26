@@ -43,6 +43,16 @@ function findPart(name: string) {
   part(name: string) {
     return findPart(name)?.part ?? null;
   },
+  /** Screen position of a stage point. */
+  stageScreen(p: { x: number; y: number }) {
+    return toScreen(store.getState(), p);
+  },
+  /** How many extra copies of a repeating layer are drawn on the current frame. */
+  repeatCount(layerName: string) {
+    const s = store.getState();
+    const layer = s.project.scene.layers.find((l) => l.name === layerName);
+    return layer ? (evaluateScene(s.project, s.frame).repeats.get(layer.id)?.length ?? 0) : 0;
+  },
   nameOf(id: string) {
     return locatePart(store.getState().project, id)?.part.name ?? null;
   },

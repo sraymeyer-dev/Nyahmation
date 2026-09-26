@@ -86,8 +86,14 @@ export function LayerCameraSection({ layer }: { layer: Layer }) {
     });
   const targets = fixed ? followTargets(project.scene.layers, layer) : [];
   const followMissing = layer.follow && !project.scene.layers.some((l) => [...walkParts(l.root)].some((p) => p.id === layer.follow!.partId));
+  const scroll = layer.scroll ?? { speed: 0, repeat: false };
+  const setScroll = (next: { speed: number; repeat: boolean }, key: string) =>
+    update((l) => {
+      const { scroll: _s, ...rest } = l;
+      return next.speed === 0 && !next.repeat ? rest : { ...rest, scroll: next };
+    }, key);
   return (
-    <Section title="Camera">
+    <Section title="Camera and scrolling">
       <Row label="Fixed">
         <label className="check" title="Stays in the same place on screen, the same size, whatever the camera does: titles, speech bubbles, a narrator in the corner.">
           <input type="checkbox" aria-label="Fixed to camera" checked={fixed} onChange={(e) => setDepth(e.target.checked ? 0 : 1)} />
@@ -125,6 +131,16 @@ export function LayerCameraSection({ layer }: { layer: Layer }) {
           <p className="hint">How much the layer moves when the camera pans or zooms. 1 is the stage; less is further away and moves less (0.3 for far hills); more is foreground and moves more.</p>
         </>
       )}
+      <Row label="Scroll">
+        <NumberField label="Scroll speed" value={scroll.speed} digits={0} step={10} suffix="px a second" onCommit={(speed) => setScroll({ ...scroll, speed }, 'scroll')} />
+      </Row>
+      <Row label="Repeat">
+        <label className="check">
+          <input type="checkbox" aria-label="Repeat sideways" checked={scroll.repeat} onChange={(e) => setScroll({ ...scroll, repeat: e.target.checked }, 'repeat')} />
+          Repeat sideways
+        </label>
+      </Row>
+      <p className="hint">Scrolling slides the layer sideways as the scene plays (negative: to the left), for scenery passing a window or a walk on the spot. Repeat puts copies side by side so it never runs out.</p>
     </Section>
   );
 }

@@ -38,6 +38,26 @@ function sample() {
 }
 
 describe('library items', () => {
+  it('a background keeps its depth and scrolling, but not a link to a part in another project', () => {
+    const { project, assets, other, arm } = sample();
+    const styled: Project = {
+      ...project,
+      scene: {
+        ...project.scene,
+        layers: project.scene.layers.map((l) =>
+          l.id === other.id ? { ...l, depth: 0, follow: { partId: arm.id }, scroll: { speed: -30, repeat: true }, root: { ...l.root, children: [createPart({ name: 'Cloud', kind: 'shape', paths: [rectPath(0, 0, 50, 20)] })] } } : l,
+        ),
+      },
+    };
+    const item = unpackLibraryItem(packLibraryItem(itemFromLayer(styled, assets, other.id, 'Clouds', []), new Uint8Array()));
+    expect(item.doc.kind).toBe('background');
+    const inserted = insertLibraryItem(createProject(), new Map(), item);
+    const layer = inserted.project.scene.layers[0]!;
+    expect(layer.depth).toBe(0);
+    expect(layer.scroll).toEqual({ speed: -30, repeat: true });
+    expect(layer.follow).toBeUndefined();
+  });
+
   it('a character keeps only the drawing sets and images it uses', () => {
     const { project, assets, layer } = sample();
     const item = itemFromLayer(project, assets, layer.id, 'Pip', ['kid']);

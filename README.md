@@ -12,7 +12,8 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 3 (animating):** done. Posing on any frame, the timeline with retiming (ripple and copy), pins, onion skin, a loop range, and MP4 / PNG-sequence export.
 - **Phase 4 (dialogue):** done. Sound import with waveforms and scrubbing, switch layers and mouth sets (vector or PNG), lip sync by typing letters, and MP4 export with the sound. **This completes the MVP.**
 - **Phase 4.5 (hardening):** done. Autosave with crash recovery, a preview quality setting for slower computers, a speed check, and "View on ones".
-- Next: phase 5a (camera, parallax backgrounds, gradients), then 5b (glow, shadow, blend modes) and 5c (draw-order swaps, easing editor, ProRes). See the roadmap in the design document.
+- **Phase 5a (stage):** done. A camera you pose on the timeline, layers fixed to the camera (which can follow a character, like a speech bubble), parallax depth, scrolling and repeating scenery, gradient fills and a gradient sky.
+- Next: phase 5b (glow, shadow, blend modes), then 5c (draw-order swaps, easing editor, ProRes). See the roadmap in the design document.
 
 ## Running it on a Mac (step by step)
 
@@ -116,6 +117,17 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 - **Pin tool** (P): click a foot to pin it to the floor from this frame; click it again on a later frame to release it. The leg bends to keep the foot planted while the body moves.
 - **Playback:** Space plays and pauses. Shift+← / → jumps between poses. **I** and **O** set a loop range. **Onion skin** shows nearby frames in red (before) and green (after).
 - **Export** (Cmd+E, or the button on the timeline): MP4 video or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range. The sound goes into the MP4; a PNG export saves it next to the frames as `soundtrack.wav`. If a PNG drawing will be enlarged (and look soft), the Export window says which.
+
+**The camera (Animate mode):**
+- Press **C** for the **Camera** tool. Drag to pan, Shift-drag to turn, Option-drag (Alt on Windows) up or down to zoom. Each change is a camera pose on the current frame, and the camera glides between poses like a character does. The **Camera** row on the timeline shows its poses; drag them to retime.
+- **Camera view** (on the timeline) shows the picture as the video will be. Untick it to see the whole stage with the camera's frame drawn on it.
+- The camera only changes what you see: characters, poses and pinned feet stay where they are on the stage.
+- **Layer options** (select a layer, then Properties → Camera and scrolling):
+  - **Fixed to the camera**: stays in place on screen at the same size, for titles or a narrator in the corner.
+  - **Follows**: a fixed layer can ride along with a part, such as a speech bubble on Pip's head. Draw the bubble where it should sit above the head in Build mode; it follows the head, keeps its size, and stays clear of the head when the camera zooms in.
+  - **Depth**: 1 is the stage. Distant scenery at 0.3 moves less when the camera pans or zooms; foreground at 1.5 moves more.
+  - **Scroll** and **Repeat sideways**: slide the layer along (negative speeds go left) and repeat it so it never runs out, for scenery passing a car window or a walk on the spot.
+- **Gradients:** select a shape and choose a **Fill type** (straight or round gradient) with two colours and an angle. With nothing selected, the scene's **Sky** option paints a gradient sky behind everything. Gradients in imported SVGs come in too.
 
 **Dialogue and lip sync:**
 1. **Record or get the line** as a WAV, MP3, M4A, OGG or FLAC file. In Animate mode, go to the frame where it should start and **Import Art or Sound…** (Cmd+I). It appears on the **Sound** row with its waveform. Drag it to line it up; click it to set its volume or mute it. The scene gets longer if the sound needs it.

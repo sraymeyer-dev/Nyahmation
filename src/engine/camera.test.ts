@@ -161,3 +161,36 @@ describe('saved camera data', () => {
     expect(() => parseProject(JSON.parse(JSON.stringify(bad2)))).toThrow(/camera has no opacity/);
   });
 });
+
+describe('scrolling and repeating layers', () => {
+  it('slides at its speed, on ones', () => {
+    let { project, tag } = scene({ scroll: { speed: -48, repeat: false } });
+    project = { ...project, scene: { ...project.scene, stepping: 2 } };
+    // 24 fps: -48 px a second is -2 px a frame.
+    expect(onScreen(evaluateScene(project, 0), tag).x).toBeCloseTo(450);
+    expect(onScreen(evaluateScene(project, 5), tag).x).toBeCloseTo(440);
+    expect(onScreen(evaluateScene(project, 25), tag).x).toBeCloseTo(400);
+  });
+
+  it('repeats side by side to fill the picture, keeping the original near where it was drawn', () => {
+    const { project, tag } = scene({ scroll: { speed: 240, repeat: true } });
+    // The tag is 40 wide, so copies sit every 40 px; after 30 px of travel the
+    // original is 10 px left of where it was drawn (wrapped), not 30 px right.
+    const r = evaluateScene(project, 3);
+    expect(onScreen(r, tag).x).toBeCloseTo(440);
+    const copies = r.repeats.get('other')!;
+    const xs = [0, ...copies.map((m) => m[4])].map((dx) => 440 + dx).sort((a, b) => a - b);
+    // Enough copies to cover the 1000-wide picture, 40 apart.
+    expect(xs[0]).toBeLessThanOrEqual(0);
+    expect(xs.at(-1)! + 40).toBeGreaterThanOrEqual(W);
+    expect(xs[1]! - xs[0]!).toBeCloseTo(40);
+  });
+
+  it('keeps the camera: a repeating layer fixed to the camera still fills the picture', () => {
+    let { project } = scene({ depth: 0, scroll: { speed: 100, repeat: true } });
+    project = recordCamera(project, 5, { x: 3000, zoom: 0.5 });
+    const r = evaluateScene(project, 5);
+    const copies = r.repeats.get('other')!;
+    expect(copies.length).toBeGreaterThanOrEqual(W / 40 - 1);
+  });
+});

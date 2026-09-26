@@ -51,8 +51,24 @@ export interface VectorPath {
   closed: boolean;
 }
 
+/**
+ * A gradient fill (docs/DESIGN.md D10), in the shape's drawing coordinates.
+ * Linear: colours run from `from` to `to`. Radial: from the centre `from`
+ * out to the circle through `to`.
+ */
+export interface Gradient {
+  kind: 'linear' | 'radial';
+  from: Vec2;
+  to: Vec2;
+  /** Sorted by offset, 0..1. */
+  stops: { offset: number; color: string }[];
+}
+
 export interface ShapeStyle {
+  /** Solid fill. With a gradient, kept as its first colour (used where a gradient can't be). */
   fill: string | null;
+  /** Replaces the solid fill when set (and `fill` isn't null). */
+  fillGradient?: Gradient;
   stroke: string | null;
   strokeWidth: number;
   lineCap: 'butt' | 'round' | 'square';
@@ -126,6 +142,13 @@ export interface Layer {
    * in the rest pose (docs/DESIGN.md CAM6).
    */
   follow?: { partId: string };
+  /**
+   * Scrolling and repeating (docs/DESIGN.md BG5): the layer slides sideways
+   * at `speed` stage pixels a second (negative: to the left), always on
+   * ones; with `repeat`, copies of it sit side by side so it never runs out
+   * (a treadmill of scenery, the view from a car window).
+   */
+  scroll?: { speed: number; repeat: boolean };
 }
 
 // ---- Animation ---------------------------------------------------------------
@@ -229,6 +252,8 @@ export interface Scene {
   fps: number;
   durationFrames: number;
   background: string;
+  /** A sky behind everything instead of the plain background: top colour fading to bottom colour, fixed to the picture (BG7). */
+  sky?: { top: string; bottom: string };
   stepping: Stepping;
   /** Drawn in list order: later layers are on top. */
   layers: Layer[];

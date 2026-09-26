@@ -14,7 +14,7 @@ import {
 } from '../../engine/geometry';
 import { applyToPoint, decompose, IDENTITY, multiply, type Mat2D } from '../../engine/math';
 import { createId, createPart } from '../../engine/project';
-import type { Part, ShapeStyle, Vec2, VectorPath } from '../../engine/types';
+import type { Gradient, Part, ShapeStyle, Vec2, VectorPath } from '../../engine/types';
 import { formatColor, parseColor, type RGBA } from './color';
 import { parsePathData } from './pathData';
 import { parseTransform } from './transform';
@@ -342,7 +342,7 @@ class SvgImporter {
         rest: { x: c.x, y: c.y, rotation: 0, scaleX: 1, scaleY: 1 },
         drawOrder: this.drawOrder++,
         paths: baked.map((p) => translatePath(p, -c.x, -c.y)),
-        style: this.shapeStyle(style, matrix, tag === 'line' || tag === 'polyline'),
+        style: this.shapeStyle(style, matrix, tag === 'line' || tag === 'polyline', { box: pathsBounds(paths), toDrawing: multiply([1, 0, 0, 1, -c.x, -c.y], matrix) }),
       });
     }
 
@@ -394,14 +394,15 @@ class SvgImporter {
     }
   }
 
-  private paint(value: string | undefined, style: Style, fallback: string | null): RGBA | null {
+  private paint(value: string | undefined, style: Style, fallback: string | null, onGradient?: (id: string) => void): RGBA | null {
     const v = (value ?? fallback)?.trim();
     if (!v || v === 'none') return null;
     const url = /^url\(\s*['"]?#([^'")\s]+)['"]?\s*\)\s*(.*)$/.exec(v);
     if (url) {
       const stop = this.firstGradientStop(url[1]!);
       if (stop) {
-        this.warn('Gradients were simplified to a solid color; gradient fills are planned for phase 5.');
+        if (onGradient) onGradient(url[1]!);
+        else this.warn('Gradient outlines were simplified to a solid color (gradients work on fills).');
         return stop;
       }
       return url[2] ? parseColor(url[2]) : null;
@@ -425,8 +426,68 @@ class SvgImporter {
     return color ? { ...color, a: color.a * (Number.isFinite(opacity) ? opacity : 1) } : null;
   }
 
-  private shapeStyle(style: Style, matrix: Mat2D, open: boolean): ShapeStyle {
-    const fill = this.paint(style.fill, style, open ? 'none' : 'black');
+  /**
+   * A gradient fill (docs/DESIGN.md D10) in the shape's drawing coordinates.
+   * `box` is the shape's bounds in its own user space (for objectBoundingBox
+   * units); `toDrawing` maps user space to drawing coordinates.
+   */
+  private gradient(id: string, target: { box: Bounds; toDrawing: Mat2D }, opacity: number): Gradient | undefined {
+    // Attributes and stops can be inherited through href.
+    const chain: Element[] = [];
+    for (let el = this.byId.get(id); el && chain.length < 6 && !chain.includes(el); ) {
+      chain.push(el);
+      const href = el.getAttribute('href') ?? el.getAttribute('xlink:href');
+      el = href?.startsWith('#') ? this.byId.get(href.slice(1)) : undefined;
+    }
+    const kindEl = chain[0];
+    if (!kindEl || (kindEl.localName !== 'linearGradient' && kindEl.localName !== 'radialGradient')) return undefined;
+    const attr = (name: string) => chain.find((e) => e.hasAttribute(name))?.getAttribute(name) ?? null;
+    const stopsEl = chain.find((e) => [...e.children].some((c) => c.localName === 'stop'));
+    const stops: Gradient['stops'] = [];
+    let last = 0;
+    for (const stop of [...(stopsEl?.children ?? [])].filter((c) => c.localName === 'stop')) {
+      const inline = parseDeclarationsLoose(stop.getAttribute('style') ?? '');
+      const color = parseColor(inline['stop-color'] ?? stop.getAttribute('stop-color') ?? 'black');
+      const a = parseFloat(inline['stop-opacity'] ?? stop.getAttribute('stop-opacity') ?? '1');
+      const raw = stop.getAttribute('offset') ?? '0';
+      const offset = Math.min(1, Math.max(last, raw.trim().endsWith('%') ? parseFloat(raw) / 100 : parseFloat(raw) || 0));
+      last = offset;
+      const css = color ? formatColor(color, (Number.isFinite(a) ? a : 1) * opacity) : null;
+      if (css) stops.push({ offset, color: css });
+    }
+    if (stops.length === 0) return undefined;
+
+    const box = target.box;
+    const bbox = attr('gradientUnits') !== 'userSpaceOnUse';
+    const w = box.maxX - box.minX;
+    const h = box.maxY - box.minY;
+    // Gradient space → user space → drawing coordinates.
+    let m = multiply(target.toDrawing, bbox ? [w, 0, 0, h, box.minX, box.minY] : IDENTITY);
+    m = multiply(m, parseTransform(attr('gradientTransform')));
+    const coord = (name: string, fallback: string) => {
+      const v = (attr(name) ?? fallback).trim();
+      return v.endsWith('%') ? parseFloat(v) / 100 : parseFloat(v) || 0;
+    };
+    if (kindEl.localName === 'linearGradient') {
+      const from = applyToPoint(m, { x: coord('x1', '0%'), y: coord('y1', '0%') });
+      const to = applyToPoint(m, { x: coord('x2', '100%'), y: coord('y2', '0%') });
+      return { kind: 'linear', from, to, stops };
+    }
+    const cx = coord('cx', '50%');
+    const cy = coord('cy', '50%');
+    const r = coord('r', '50%');
+    const from = applyToPoint(m, { x: cx, y: cy });
+    const rx = applyToPoint(m, { x: cx + r, y: cy });
+    const ry = applyToPoint(m, { x: cx, y: cy + r });
+    const a = Math.hypot(rx.x - from.x, rx.y - from.y);
+    const b = Math.hypot(ry.x - from.x, ry.y - from.y);
+    if (Math.abs(a - b) > 0.02 * Math.max(a, b)) this.warn('Oval (stretched) round gradients were made circular.');
+    return { kind: 'radial', from, to: { x: from.x + Math.max(a, b), y: from.y }, stops };
+  }
+
+  private shapeStyle(style: Style, matrix: Mat2D, open: boolean, target?: { box: Bounds; toDrawing: Mat2D }): ShapeStyle {
+    const found: { gradient?: string } = {};
+    const fill = this.paint(style.fill, style, open ? 'none' : 'black', (id) => (found.gradient = id));
     const stroke = this.paint(style.stroke, style, 'none');
     const scale = Math.sqrt(Math.abs(matrix[0] * matrix[3] - matrix[1] * matrix[2]));
     const width = parseLength(style['stroke-width']) ?? 1;
@@ -434,7 +495,9 @@ class SvgImporter {
     const strokeOpacity = parseFloat(style['stroke-opacity'] ?? '1');
     const cap = style['stroke-linecap'];
     const join = style['stroke-linejoin'];
+    const fillGradient = fill && found.gradient && target ? this.gradient(found.gradient, target, Number.isFinite(fillOpacity) ? fillOpacity : 1) : undefined;
     return {
+      ...(fillGradient ? { fillGradient } : {}),
       fill: fill ? formatColor(fill, Number.isFinite(fillOpacity) ? fillOpacity : 1) : null,
       stroke: stroke ? formatColor(stroke, Number.isFinite(strokeOpacity) ? strokeOpacity : 1) : null,
       strokeWidth: width * scale,

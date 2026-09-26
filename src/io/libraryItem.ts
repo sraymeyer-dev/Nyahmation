@@ -213,7 +213,9 @@ export function insertLibraryItem(
   };
 
   if (doc.layer) {
-    const layer: Layer = { ...doc.layer, id: createId(), name: doc.name, root: remapPart(doc.layer.root, maps) };
+    // A layer that followed a part in another project follows nothing here (it stays fixed to the camera).
+    const { follow: _follow, ...saved } = doc.layer;
+    const layer: Layer = { ...saved, id: createId(), name: doc.name, root: remapPart(doc.layer.root, maps) };
     layer.root = { ...layer.root, name: doc.name };
     const layers = next.scene.layers.slice();
     layers.splice(target.layerIndex ?? layers.length, 0, layer);

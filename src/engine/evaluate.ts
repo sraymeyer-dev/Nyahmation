@@ -73,6 +73,12 @@ export interface ResolvedScene {
    * Poses and pins are stored in layer space.
    */
   layerMatrices: ReadonlyMap<string, Mat2D>;
+  /**
+   * Repeating layers (BG5): extra stage-space matrices, one per copy beside
+   * the original, covering what the camera sees. Draw the layer's parts once
+   * more through each (multiply(copy, part.world)).
+   */
+  repeats: ReadonlyMap<string, readonly Mat2D[]>;
 }
 
 type TrackIndex = Map<string, Map<Channel, Track>>;
@@ -111,8 +117,11 @@ export function evaluateScene(project: Project, frame: number, options: Evaluate
   const toPicture = cameraMatrix(camera, scene.width, scene.height);
   const toStage = invert(toPicture);
   const layerMatrices = new Map<string, Mat2D>();
+  const repeats = new Map<string, Mat2D[]>();
   const moveLayer = (i: number, pictureMatrix: Mat2D) => {
-    const m = multiply(toStage, pictureMatrix);
+    const scrolled = scrollLayer(project, scene.layers[i]!, frame, pictureMatrix);
+    const m = multiply(toStage, scrolled.pictureMatrix);
+    if (scrolled.copies.length) repeats.set(scene.layers[i]!.id, scrolled.copies.map((c) => multiply(multiply(m, c), invert(m))));
     if (isIdentity(m)) return;
     layerMatrices.set(scene.layers[i]!.id, m);
     for (const part of byLayer[i]!) {
@@ -124,7 +133,7 @@ export function evaluateScene(project: Project, frame: number, options: Evaluate
   scene.layers.forEach((layer, i) => {
     const depth = layer.depth ?? 1;
     if (depth === 0 && layer.follow) followers.push(i);
-    else if (depth !== 1) moveLayer(i, cameraMatrix(cameraForDepth(camera, home, depth), scene.width, scene.height));
+    else moveLayer(i, depth === 1 ? toPicture : cameraMatrix(cameraForDepth(camera, home, depth), scene.width, scene.height));
   });
   // Layers fixed to the camera that follow a part (docs/DESIGN.md CAM6): the
   // layer keeps its size and angle on screen, and its middle keeps its place
@@ -163,7 +172,49 @@ export function evaluateScene(project: Project, frame: number, options: Evaluate
     camera,
     cameraMatrix: toPicture,
     layerMatrices,
+    repeats,
   };
+}
+
+const MAX_COPIES = 200;
+
+/**
+ * Slides a scrolling layer (docs/DESIGN.md BG5) and, if it repeats, lists
+ * the copies (as layer-space shifts) needed to fill the picture. The
+ * original copy is kept nearest its drawn place, so it can still be clicked.
+ */
+function scrollLayer(project: Project, layer: Layer, frame: number, pictureMatrix: Mat2D): { pictureMatrix: Mat2D; copies: Mat2D[] } {
+  const scroll = layer.scroll;
+  if (!scroll || scroll.speed === 0) return { pictureMatrix, copies: [] };
+  const travelled = (scroll.speed * frame) / project.scene.fps;
+  const bounds = layerBounds(project, layer);
+  const period = bounds ? bounds.maxX - bounds.minX : 0;
+  if (!scroll.repeat || !bounds || period < 1) return { pictureMatrix: multiply(pictureMatrix, [1, 0, 0, 1, travelled, 0]), copies: [] };
+  const offset = travelled - period * Math.round(travelled / period);
+  // What the picture shows, across the layer (before sliding).
+  const toLayer = invert(pictureMatrix);
+  const { width: W, height: H } = project.scene;
+  const xs = [
+    { x: 0, y: 0 },
+    { x: W, y: 0 },
+    { x: 0, y: H },
+    { x: W, y: H },
+  ].map((c) => applyToPoint(toLayer, c).x);
+  const from = Math.ceil((Math.min(...xs) - bounds.maxX - offset) / period);
+  const to = Math.floor((Math.max(...xs) - bounds.minX - offset) / period);
+  const copies: Mat2D[] = [];
+  for (let k = Math.max(from, -MAX_COPIES); k <= Math.min(to, MAX_COPIES); k++) if (k !== 0) copies.push([1, 0, 0, 1, k * period, 0]);
+  return { pictureMatrix: multiply(pictureMatrix, [1, 0, 0, 1, offset, 0]), copies };
+}
+
+const boundsCache = new WeakMap<Layer, { minX: number; minY: number; maxX: number; maxY: number } | null>();
+/** A layer's artwork in the rest pose, in layer space (null if empty). */
+function layerBounds(project: Project, layer: Layer) {
+  if (!boundsCache.has(layer)) {
+    const b = subtreeBounds(project, layer.root, localMatrix(layer.root.rest, layer.root.joint.pivot));
+    boundsCache.set(layer, isEmptyBounds(b) ? null : b);
+  }
+  return boundsCache.get(layer)!;
 }
 
 const det = (m: Mat2D) => m[0] * m[3] - m[1] * m[2];
@@ -173,8 +224,8 @@ const middles = new WeakMap<Layer, Vec2>();
 function layerMiddle(project: Project, layer: Layer): Vec2 {
   let m = middles.get(layer);
   if (!m) {
-    const b = subtreeBounds(project, layer.root, localMatrix(layer.root.rest, layer.root.joint.pivot));
-    m = isEmptyBounds(b) ? applyToPoint(localMatrix(layer.root.rest, layer.root.joint.pivot), layer.root.joint.pivot) : { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+    const b = layerBounds(project, layer);
+    m = b ? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 } : applyToPoint(localMatrix(layer.root.rest, layer.root.joint.pivot), layer.root.joint.pivot);
     middles.set(layer, m);
   }
   return m;

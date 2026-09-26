@@ -9,6 +9,7 @@ import { store, useEditor } from '../editor/store';
 import { NumberField, PaintField, Row, Section } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
+import { GradientFields } from './GradientFields';
 
 // Shows and edits whatever is selected: the scene (nothing selected), a
 // layer, one part, or several parts at once (shared settings only).
@@ -80,6 +81,26 @@ function SceneProperties({ project }: { project: Project }) {
         </Row>
         <Row label="Background">
           <input type="color" aria-label="Background color" value={scene.background} onChange={(e) => set({ background: e.target.value }, 'bg')} />
+        </Row>
+        <Row label="Sky">
+          <label className="check" title="A gradient behind everything, fixed to the picture: top colour fading to the bottom colour.">
+            <input
+              type="checkbox"
+              aria-label="Sky gradient"
+              checked={!!scene.sky}
+              onChange={(e) => {
+                const { sky: _old, ...rest } = scene;
+                store.commit({ ...project, scene: e.target.checked ? { ...rest, sky: { top: '#5b9bd5', bottom: scene.background } } : rest });
+              }}
+            />
+            Gradient
+          </label>
+          {scene.sky && (
+            <>
+              <input type="color" aria-label="Sky top colour" title="Top" value={scene.sky.top} onChange={(e) => set({ sky: { ...scene.sky!, top: e.target.value } }, 'skyTop')} />
+              <input type="color" aria-label="Sky bottom colour" title="Bottom" value={scene.sky.bottom} onChange={(e) => set({ sky: { ...scene.sky!, bottom: e.target.value } }, 'skyBottom')} />
+            </>
+          )}
         </Row>
         <Row label="Animate on">
           <select aria-label="Animate on" value={scene.stepping} onChange={(e) => set({ stepping: Number(e.target.value) as Stepping }, 'step')}>
@@ -247,6 +268,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
               )
             }
           />
+          <GradientFields shapes={shapes} commit={(fn, key) => commitParts(shapes.map((p) => p.id), fn, key)} />
         </Section>
       )}
     </>

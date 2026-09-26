@@ -144,8 +144,12 @@ export function validateProject(project: Project): void {
     }
   }
   for (const set of project.drawingSets) {
-    for (const d of set.drawings ?? []) if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);
+    for (const d of set.drawings ?? []) {
+      if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);
+      for (const item of d.items) if (item.kind === 'shape' && item.style?.fillGradient !== undefined && !validGradient(item.style.fillGradient)) fail(`drawing ${d.key} in ${set.name} has a damaged gradient`);
+    }
   }
+  if (scene.sky !== undefined && !(typeof scene.sky?.top === 'string' && typeof scene.sky?.bottom === 'string')) fail('the sky is damaged');
 
   const partIds = new Set<string>();
   const checkPart = (part: Part) => {
@@ -153,6 +157,8 @@ export function validateProject(project: Project): void {
     if (partIds.has(part.id)) fail(`part id ${part.id} is used twice`);
     partIds.add(part.id);
     if (!Array.isArray(part.children)) fail(`part ${part.name} has no children list`);
+    const g = part.style?.fillGradient;
+    if (g !== undefined && !validGradient(g)) fail(`part ${part.name} has a damaged gradient`);
     part.children.forEach(checkPart);
   };
   scene.layers.forEach((layer: Layer) => {
@@ -160,6 +166,7 @@ export function validateProject(project: Project): void {
     if (layer.stepping !== undefined && !isStepping(layer.stepping)) fail(`layer ${layer.name} has invalid stepping`);
     if (layer.depth !== undefined && !(Number.isFinite(layer.depth) && layer.depth >= 0)) fail(`layer ${layer.name} has an invalid depth`);
     if (layer.follow !== undefined && typeof layer.follow?.partId !== 'string') fail(`layer ${layer.name} follows nothing`);
+    if (layer.scroll !== undefined && !(Number.isFinite(layer.scroll?.speed) && typeof layer.scroll?.repeat === 'boolean')) fail(`layer ${layer.name} has invalid scrolling`);
     checkPart(layer.root);
   });
 
@@ -188,6 +195,12 @@ export function validateProject(project: Project): void {
       }
     }
   });
+}
+
+function validGradient(g: unknown): boolean {
+  if (!isObject(g) || (g.kind !== 'linear' && g.kind !== 'radial')) return false;
+  const point = (p: unknown) => isObject(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
+  return point(g.from) && point(g.to) && Array.isArray(g.stops) && g.stops.every((s: unknown) => isObject(s) && Number.isFinite(s.offset) && typeof s.color === 'string');
 }
 
 function isStepping(v: unknown): v is Stepping {

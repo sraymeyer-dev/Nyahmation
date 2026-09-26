@@ -662,6 +662,76 @@ test('a layer fixed to the camera follows a part, keeping its size', async () =>
   await page.screenshot({ path: 'test-results/camera-follow.png' });
 });
 
+test('a sky, a gradient fill, parallax depth and a scrolling layer', async () => {
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  const pixel = (at: Pt) =>
+    page.evaluate((p) => {
+      const c = document.querySelector<HTMLCanvasElement>('[data-testid="stage"]')!;
+      const dpr = window.devicePixelRatio || 1;
+      return [...c.getContext('2d')!.getImageData(Math.round(p.x * dpr), Math.round(p.y * dpr), 1, 1).data.slice(0, 3)];
+    }, at);
+  const stagePoint = (x: number, y: number) => page.evaluate(([px, py]) => (window as any).__nyah.stageScreen({ x: px, y: py }), [x, y] as const);
+
+  // Sky: a gradient behind everything, from the scene's properties.
+  await page.keyboard.press('Escape');
+  await page.getByLabel('Sky gradient').check();
+  await page.getByLabel('Sky top colour').fill('#0000ff');
+  await page.waitForTimeout(50);
+  const top = await pixel(await stagePoint(200, 3));
+  expect(top[2]).toBeGreaterThan(200);
+  expect(top[0]).toBeLessThan(40);
+
+  // A round gradient on the sun: its middle and its edge differ.
+  const sun = (await debug<Pt>('partScreen', 'Sun', { x: 1560, y: 220 }))!;
+  await click([sun.x, sun.y]);
+  await page.getByLabel('Fill type').selectOption('radial');
+  await page.getByLabel('Gradient end colour').fill('#ff0000');
+  await page.waitForTimeout(50);
+  const middle = await pixel(sun);
+  const edge = await pixel(await stagePoint(1560 + 80, 220));
+  expect(edge[0]! - edge[1]!).toBeGreaterThan(middle[0]! - middle[1]! + 40);
+
+  // The scenery layer: half depth, scrolling left, repeating.
+  await page.getByTestId('layer-row').filter({ hasText: 'Scenery' }).click();
+  const depth = page.getByLabel('Layer depth');
+  await depth.fill('0.5');
+  await depth.press('Enter');
+  const speed = page.getByLabel('Scroll speed');
+  await speed.fill('-240');
+  await speed.press('Enter');
+  await page.getByLabel('Repeat sideways').check();
+
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  const sunAt = (f: number) =>
+    page.evaluate((frame) => {
+      const nyah = (window as any).__nyah;
+      nyah.store.set({ frame });
+      return nyah.framePartScreen('Sun', { x: 1560, y: 220 });
+    }, f);
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
+  const s0 = await sunAt(0);
+  const s12 = await sunAt(12);
+  // Half a second at -240 px a second: 120 px left (the layer repeats every 2000 px).
+  expect((s12.x - s0.x) / zoom).toBeCloseTo(-120, 0);
+  // Once it has slid far enough, a copy fills the gap behind it.
+  expect(await page.evaluate(() => (window as any).__nyah.repeatCount('Scenery'))).toBe(0);
+  await sunAt(60);
+  expect(await page.evaluate(() => (window as any).__nyah.repeatCount('Scenery'))).toBeGreaterThan(0);
+  await page.screenshot({ path: 'test-results/scenery.png' });
+
+  // The camera pans 400 px right; the half-depth scenery only shifts 200 px on screen.
+  await page.keyboard.press('c');
+  await goToFrame(12);
+  const before = await sunAt(12);
+  const camX = page.getByLabel('Camera X');
+  await camX.fill('1360');
+  await camX.press('Enter');
+  const after = await sunAt(12);
+  expect((after.x - before.x) / zoom).toBeCloseTo(-200, 0);
+});
+
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {
   await page.evaluate(() => {
     window.confirm = () => true;

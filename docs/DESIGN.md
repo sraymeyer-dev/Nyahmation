@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v1.2. Phases 0–4 (the MVP) and phase 4.5 (hardening) are built; phase 5 is next, split into 5a–5c. See §16.
+> **Status:** v1.3. Phases 0–4 (the MVP), 4.5 (hardening) and 5a (stage: camera, parallax, scrolling, gradients) are built; 5b is next. See §16.
 > **Last updated:** 2026-09-26
 
 ---
@@ -130,7 +130,7 @@ type Pose = {
 - **D9** Undo and redo for everything.
 
 ### 4.2 Should have
-- **D10** Linear and radial gradients.
+- **D10** Linear and radial gradients. (Built in phase 5a: **Fill type** in a shape's properties — solid, straight or round gradient, two colours and an angle, fitted to the shape. Stored in the shape's drawing coordinates with any number of colour stops; the solid fill is kept as the first colour for anything that can't show a gradient. SVG gradients are imported (linear and radial, `href` inheritance, `gradientUnits`, `gradientTransform`, stop opacity); oval radial gradients become circles, with a warning. Gradient outlines are still simplified to a solid colour.)
 - **D11** Boolean operations (union, subtract, intersect).
 - **D12** Clipping masks (for example, pupils clipped to the eye).
 - **D13** Color swatches per project, and an eyedropper.
@@ -141,7 +141,7 @@ type Pose = {
 
 | # | Format | Priority | Notes |
 |---|---|---|---|
-| **I1** | SVG | Must | Paths, basic shapes, groups, transforms, fills and strokes. **The group structure is kept**, so art drawn in layers elsewhere arrives as a parts tree ready to rig. |
+| **I1** | SVG | Must | Paths, basic shapes, groups, transforms, fills (including gradients, D10) and strokes. **The group structure is kept**, so art drawn in layers elsewhere arrives as a parts tree ready to rig. |
 | **I2** | PNG (with transparency) / JPG | Must | For drawings in drawing sets (mouths, hands, eyes; see S5), backgrounds and tracing reference. |
 
 **SVG is the only vector format.** Art from other apps (Illustrator, Affinity, Inkscape and so on) comes in by exporting SVG from that app. PDF, AI and EPS import are out of scope.
@@ -260,11 +260,11 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 - **BG3** Layers can be renamed, reordered, hidden and locked. A locked layer can't be selected on the canvas, so you don't bump the scenery while posing a character.
 
 ### 8a.2 Should have (phase 5)
-- **BG4** **Parallax depth** per layer. When the camera (A11) pans or zooms, distant layers move less and foreground layers move more, which gives a sense of depth. Depth 0 is fixed to the camera (a sky), 1 moves with the world, and above 1 is foreground.
-- **BG5** **Scrolling and tiling.** A layer can repeat horizontally and scroll at a set speed, for walk cycles on a "treadmill" and scenery passing a car window.
+- **BG4** **Parallax depth** per layer. When the camera (A11) pans or zooms, distant layers move less and foreground layers move more, which gives a sense of depth. Depth 0 is fixed to the camera (a sky), 1 moves with the world, and above 1 is foreground. (Built in phase 5a: **Depth** in a layer's properties. A layer at depth *d* sees a camera whose pan is scaled by *d*, whose zoom is raised to the power *d*, and which turns fully from depth 1 up and not at all at depth 0. Depth 0 is the **Fixed to the camera** checkbox, see §9.3.)
+- **BG5** **Scrolling and tiling.** A layer can repeat horizontally and scroll at a set speed, for walk cycles on a "treadmill" and scenery passing a car window. (Built in phase 5a: **Scroll** in stage pixels a second, negative to the left, and **Repeat sideways**. Scrolling is always on ones. A repeating layer repeats every width of its artwork (in the rest pose); the evaluator lists just enough copies to fill what the camera sees, up to 200, and keeps the original nearest where it was drawn so it can still be clicked.)
 - **BG6** **Atmosphere.** Per-layer blur (depth of field) and haze (fading distant layers toward the sky color).
-- **BG7** **Gradient skies** and fills (with D10 gradients).
-- **BG8** **Background library items** (L2): save a set of background layers and reuse it in other projects.
+- **BG7** **Gradient skies** and fills (with D10 gradients). (Built in phase 5a: the scene's **Sky** option fills the picture with a gradient from a top to a bottom colour, fixed to the picture whatever the camera does. Any shape can have a gradient fill, D10.)
+- **BG8** **Background library items** (L2): save a set of background layers and reuse it in other projects. (Built: a background layer saved to the library keeps its depth, scrolling and fixed-to-camera setting. A "follows" link is dropped on the way in, since the part it named belongs to another project.)
 
 ## 8b. Effects: glow and shadow (phase 5)
 
@@ -338,9 +338,20 @@ Hand-drawn animation often changes the picture only every 2nd frame ("on twos"):
 
 ### 9.2 Should have
 - **A10** Custom easing curve editor. (The engine already evaluates custom `cubic-bezier` curves; only the editor is missing. Phase 5c.)
-- **A11** **Camera**: pan, zoom and rotate the view, animated like any part.
+- **A11** **Camera**: pan, zoom and rotate the view, animated like any part. (Built in phase 5a; see §9.3.)
 - **A12** Multiple characters per scene (the layer stack, §8a).
 - **A13** Copy and paste poses between frames and characters. Mirror a pose (swap left and right).
+
+### 9.3 The camera (built in phase 5a)
+The camera works like a rostrum camera over a cutout table: moving it changes what the picture shows, never the artwork under it (D-48).
+
+- **CAM1** The camera is posed like a part: its centre (the stage point in the middle of the picture), zoom and turn are channels with poses, easing and retiming like any other. It has its own **Camera** row on the timeline, and the **Scene** row includes it (so a ripple of the whole scene moves camera moves too). The first camera pose after frame 0 also records where the camera started (A2a). The camera is always on ones (ST4).
+- **CAM2** **Camera tool** (C, Animate mode): drag to pan, Shift-drag to turn around the middle of the picture, Option/Alt-drag up or down to zoom. Its Properties give exact values, **Whole scene on this frame**, and **Remove all camera moves**.
+- **CAM3** **Camera view** (timeline, on by default): the canvas looks through the camera, exactly as the video will be. Off, it shows the stage with the camera's frame drawn on it (orange when the camera has moved), which helps when posing something that is off-screen. Tools work in either view.
+- **CAM4** The camera only changes what you see. Poses and pins stay in stage coordinates, so a planted foot never slides because the camera moved. Export renders through the camera.
+- **CAM5** **Fixed to the camera** (a layer option, depth 0): the layer stays put on screen at the same size whatever the camera does: titles, a narrator in the corner.
+- **CAM6** **Follows a part**: a fixed layer can ride along with a part in another layer, such as a speech bubble or name tag on a head. It keeps its own size and angle on screen. Its middle stays where it was drawn relative to the part's joint (in Build mode), and that distance grows or shrinks with how big the part is shown, so a bubble above a head stays above it when the camera zooms in rather than overlapping it. Deleting the part leaves the layer fixed to the camera.
+- **CAM7** The export dialog's enlarged-PNG warning (S6) includes the camera's closest zoom, since zooming in enlarges pictures.
 
 ---
 
@@ -376,7 +387,7 @@ evaluate(track, f):
 Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) work. Because IK writes joint angles (§6.2), limbs swing in arcs.
 
 ### 10.4 Scene evaluation
-`evaluate(scene, frame) → resolvedScene`: evaluate every track (for a stepped character, at the start of the current step, §9.1b), then combine transforms from the root down (parent × child, around each joint), then **apply active pins** (re-solve each pinned chain so the pinned part stays put, §6.3), then sort by draw order. The renderer draws only the resolved scene. **Preview, scrubbing, onion skinning and export all call this same function.**
+`evaluate(scene, frame) → resolvedScene`: evaluate every track (for a stepped character, at the start of the current step, §9.1b), then combine transforms from the root down (parent × child, around each joint), then **apply active pins** (re-solve each pinned chain so the pinned part stays put, §6.3), then sort by draw order. Then the camera (on ones): its matrix from stage to picture, and for each layer that the camera moves differently (parallax depth, fixed to the camera, following a part, scrolling) a layer matrix that places it on the stage, plus the copies of repeating layers. The renderer draws only the resolved scene, through the camera for export. **Preview, scrubbing, onion skinning and export all call this same function.**
 
 ---
 
@@ -520,7 +531,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **3** ✅ | Move | Timeline, pose-anywhere (part poses), holds, retiming with ripple and copy, playback with a loop range, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 and PNG-sequence export**. Not yet: stretching a range of poses (A6). |
 | **4** ✅ | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. Not yet: dragging block edges (LS4; drag the marks instead), automatic lip sync (LS7, phase 6). |
 | **4.5** ✅ | Harden | **Autosave and crash recovery** (F3, §12.1); **preview quality** (N9); the playback rate readout and **Measure Preview Speed** (N11); **View on ones** (ST6). Still to do by hand: run the MVP success test on the reference machine and record the numbers (N2, N8). |
-| **5a** | Stage | **Camera** (A11): pan, zoom and rotate, animated like a part, on ones (ST4). Parallax depth (BG4), scrolling and tiling (BG5). **Linear and radial gradients** (D10, moved up from phase 6), then gradient skies (BG7). Check background library items (BG8), which mostly work already. |
+| **5a** ✅ | Stage | **Camera** (A11, §9.3): pan, zoom and turn, posed on the timeline, on ones; camera view; **layers fixed to the camera, optionally following a part**. Parallax depth (BG4), scrolling and repeating (BG5). **Linear and radial gradients** (D10) including SVG import, and a gradient sky (BG7). Background library items keep these settings (BG8). |
 | **5b** | Look | First, **off-screen group rendering** (draw a group into its own canvas, then combine it). On top of it: drop shadow and outer glow (FX1), effects on a whole group (FX2), animatable effect settings (FX3), blend modes (FX4), layer blur and haze (BG6), clipping masks (D12). Caching for parts that don't change (FX6). |
 | **5c** | Craft | Draw-order swaps recorded in Animate mode (R9); easing curve editor (A10); MOV ProRes 4444 export (E3); copy and paste poses (A13, without mirror). Leftovers: stretching a range of poses (A6), dragging lip-sync block edges (LS4). |
 | **6+** | Stretch | Automatic lip sync (Rhubarb, LS7), mirror poses, animation cycles, boolean operations (D11), stepping that changes over time (ST7), contact-shadow preset (FX5), WebM and H.265 (E4), swatches and eyedropper (D13), "update from library" (L5). |
@@ -581,8 +592,13 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-45 | Lip-sync letters take priority over tool keys while a switch layer is selected in Animate mode (LS8) | Proposed |
 | D-46 | Autosave writes one recovery file per window in the app's data folder; a normal close deletes it, so leftovers mean a crash. Restored work opens as unsaved changes to the original file (§12.1) | Proposed |
 | D-47 | Preview quality is a per-computer preference (not saved in the project) and never affects export (N9) | Proposed |
-| D-48 | The camera (phase 5a) will be a view transform applied when drawing, not a part of the scene: pins and poses stay in stage coordinates, so a moving camera can't make a planted foot slide. It is evaluated by the same `evaluate(scene, frame)` so preview, onion skin and export match | Proposed |
+| D-48 | The camera is a view transform applied when drawing, not a part of the scene: pins and poses stay in stage coordinates, so a moving camera can't make a planted foot slide. It is evaluated by the same `evaluate(scene, frame)` so preview, onion skin and export match | **Decided** |
 | D-49 | Phase 5 is split into 5a (stage), 5b (look) and 5c (craft), foundations first; gradients (D10) move from phase 6 into 5a because gradient skies (BG7) need them | **Decided** |
+| D-50 | The camera's poses live on tracks for a pseudo-part (`camera`) with channels x, y, zoom and rotation, so easing, retiming and deleting work as for parts. Project format v4 | Proposed |
+| D-51 | "Fixed to the camera" is parallax depth 0; a fixed layer can follow a part, keeping its size and angle, with its distance from the part scaled by how big the part is shown (CAM6) | **Decided** |
+| D-52 | In Animate mode the canvas looks through the camera by default (CAM3), so the preview matches the export (N3) | Proposed |
+| D-53 | Scrolling is on ones; a repeating layer repeats every width of its rest-pose artwork (BG5) | Proposed |
+| D-54 | Gradients are stored in the shape's drawing coordinates with a solid fallback colour; the sky is a scene setting fixed to the picture (D10, BG7) | Proposed |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
@@ -615,6 +631,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.3 (2026-09-26):** Phase 5a built: the camera (§9.3) with camera view, layers fixed to the camera that can follow a part, parallax depth (BG4), scrolling and repeating (BG5), gradients with SVG import (D10), a gradient sky (BG7), library backgrounds keeping these (BG8). D-48 and D-51 decided; D-50 to D-54 added.
 - **v1.2 (2026-09-26):** Phase 4.5 (hardening) built: autosave and crash recovery (F3, §12.1), preview quality (N9), playback rate and Measure Preview Speed (N11), View on ones (ST6). Phase 5 split into 5a–5c (§16); gradients (D10) and clipping masks (D12) scheduled. Noted that the engine parts of R9 and A10 already exist. Added D-46 to D-49.
 - **v1.1 (2026-09-25):** Phase 4 built, completing the MVP: sound import, waveform, scrubbing and audio-clock playback (§8.4), Make Switch Layer, mouth sets from names or files (S7–S10), the lip-sync palette and blocks (LS8, LS9), MP4 with AAC audio and the PNG enlargement warning (E8, S6). Added D-41 to D-45.
 - **v1.0 (2026-09-25):** Phase 3 built. Added §9.1c Retiming (row scope, Shift ripple, copy, lip-sync exception), clarified pins (P1, P2a, P6) and holds (A5), and D-37 to D-40.
