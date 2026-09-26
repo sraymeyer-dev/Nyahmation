@@ -8,6 +8,7 @@ import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings
 import type { AudioClip, DrawingSet, Part } from '../../../engine/types';
 import { clipPeaks, playbackClock, playFrom, scrubAt, stopPlayback } from '../audio/audioEngine';
 import { activeSwitch, enterDrawing } from '../editor/lipsync';
+import { playbackStats, resetPlaybackStats } from '../render/perf';
 import { DrawingThumb } from './DrawingThumb';
 
 // The timeline (docs/DESIGN.md A1, A6): one row for the whole scene, one per
@@ -64,6 +65,7 @@ export function Timeline() {
   const audioScrub = useEditor((s) => s.audioScrub);
   const selectedClip = useEditor((s) => s.selectedClip);
   const lipSyncStep = useEditor((s) => s.lipSyncStep);
+  const viewOnOnes = useEditor((s) => s.viewOnOnes);
   useEditor((s) => s.audioVersion); // redraw waveforms once sound is decoded
   const active = useMemo(() => activeSwitch({ ...store.getState(), project, selection }), [project, selection]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
@@ -73,6 +75,7 @@ export function Timeline() {
   const { durationFrames: duration, fps } = project.scene;
 
   const rows = useMemo(() => buildRows(project, collapsed), [project, collapsed]);
+  const stepped = project.scene.stepping !== 1 || project.scene.layers.some((l) => (l.stepping ?? 1) !== 1);
   const selectedParts = new Set(selection);
 
   // Playback: the sound plays and the frame follows the audio clock, looping
@@ -249,6 +252,13 @@ export function Timeline() {
           <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
           Onion skin
         </label>
+        {stepped && (
+          <label className="check" title="Preview every frame smoothly, even for characters animated on twos or threes. Export still uses twos and threes.">
+            <input type="checkbox" checked={viewOnOnes} onChange={(e) => store.set({ viewOnOnes: e.target.checked })} />
+            View on ones
+          </label>
+        )}
+        {playing && <PlaybackRate fps={fps} />}
         <div className="spacer" />
         {!active && <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>}
         <button onClick={() => setZoom(zoom / 1.3)} aria-label="Zoom timeline out">−</button>
@@ -362,6 +372,28 @@ export function Timeline() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** While playing: how many frames a second the preview really shows (docs/DESIGN.md N2, N9). */
+function PlaybackRate({ fps }: { fps: number }) {
+  const [stats, setStats] = useState<ReturnType<typeof playbackStats>>(null);
+  useEffect(() => {
+    resetPlaybackStats();
+    const timer = window.setInterval(() => setStats(playbackStats()), 500);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!stats) return null;
+  const shown = Math.min(Math.round(stats.fps), fps);
+  const slow = shown < fps * 0.9;
+  return (
+    <span
+      className={`playback-rate ${slow ? 'slow' : ''}`}
+      data-testid="playback-rate"
+      title={`Each frame takes about ${stats.drawMs.toFixed(1)} ms to draw.${slow ? ' Frames are being skipped; a lower Preview quality (top bar) may help. Export is not affected.' : ''}`}
+    >
+      Showing {shown} of {fps} fps
+    </span>
   );
 }
 

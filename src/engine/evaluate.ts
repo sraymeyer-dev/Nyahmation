@@ -14,6 +14,7 @@ import type {
   Pose,
   Project,
   ShapeStyle,
+  Stepping,
   Track,
   Transform,
   Vec2,
@@ -68,17 +69,26 @@ function indexTracks(tracks: readonly Track[]): TrackIndex {
   return index;
 }
 
+export interface EvaluateOptions {
+  /**
+   * Ignore twos and threes and show every frame's in-between: the editor's
+   * "View on ones" (docs/DESIGN.md ST6). Never used for export.
+   */
+  onOnes?: boolean;
+}
+
 /**
  * The single source of truth for what is on screen: preview, scrubbing, onion
  * skinning and export all call this. It is pure and deterministic.
  * See docs/DESIGN.md §10.4.
  */
-export function evaluateScene(project: Project, frame: number): ResolvedScene {
+export function evaluateScene(project: Project, frame: number, options: EvaluateOptions = {}): ResolvedScene {
   const { scene } = project;
   const tracks = indexTracks(scene.tracks);
   const parts: ResolvedPart[] = [];
   for (const layer of scene.layers) {
-    parts.push(...evaluateLayer(layer, frame, scene.stepping, tracks));
+    const stepping = options.onOnes ? 1 : (layer.stepping ?? scene.stepping);
+    parts.push(...evaluateLayer(layer, frame, stepping, tracks));
   }
   return { frame, width: scene.width, height: scene.height, background: scene.background, parts };
 }
@@ -88,15 +98,9 @@ export function evaluateRestPose(project: Project): ResolvedScene {
   return evaluateScene({ ...project, scene: { ...project.scene, tracks: [] } }, 0);
 }
 
-function evaluateLayer(
-  layer: Layer,
-  frame: number,
-  sceneStepping: Project['scene']['stepping'],
-  tracks: TrackIndex,
-): ResolvedPart[] {
+function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: TrackIndex): ResolvedPart[] {
   // Motion is sampled at the stepped frame; discrete channels (mouths,
   // visibility, draw order, pins) always use the real frame, so they stay on ones.
-  const stepping = layer.stepping ?? sceneStepping;
   let motionFrame = frame;
   if (stepping !== 1) {
     const poseLists: Pose<unknown>[][] = [];

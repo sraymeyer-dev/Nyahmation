@@ -11,7 +11,8 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 2 (rigging):** done. Joints, chain roots, joint limits, drag-to-pose (inverse kinematics), and a library of reusable characters and shapes.
 - **Phase 3 (animating):** done. Posing on any frame, the timeline with retiming (ripple and copy), pins, onion skin, a loop range, and MP4 / PNG-sequence export.
 - **Phase 4 (dialogue):** done. Sound import with waveforms and scrubbing, switch layers and mouth sets (vector or PNG), lip sync by typing letters, and MP4 export with the sound. **This completes the MVP.**
-- Next: phase 5 (camera, parallax backgrounds, glow and shadow).
+- **Phase 4.5 (hardening):** done. Autosave with crash recovery, a preview quality setting for slower computers, a speed check, and "View on ones".
+- Next: phase 5a (camera, parallax backgrounds, gradients), then 5b (glow, shadow, blend modes) and 5c (draw-order swaps, easing editor, ProRes). See the roadmap in the design document.
 
 ## Running it on a Mac (step by step)
 
@@ -132,6 +133,12 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 3. Select the layer and click **Mark branch joints as chain roots** (or double-click joints yourself). This stops a dragged hand from tilting the whole body.
 4. Optionally, select a part and turn on **Limits** in its Joint settings (for example, so an elbow can't bend backwards).
 5. Try it with the **Pose** tool.
+
+**Autosave and recovery:** while you have unsaved changes, Nyahmation keeps a copy of your work, updated about once a minute. If the app or the computer crashes, the next time Nyahmation starts it offers the work back: click **Restore**, then **Save** to keep it. The copy is deleted when you save or choose to discard your changes, so it never replaces saving.
+
+**If playback stutters:** choose **Preview → Half** (or Quarter) in the top bar. The canvas is drawn at lower resolution while you work; exported videos are always full quality. While playing, the timeline shows how many frames a second you're really seeing ("Showing 17 of 24 fps"; orange means frames are being skipped). **View → Measure Preview Speed** times the open scene at each quality and recommends one for this computer.
+
+**View on ones:** for characters animated on twos or threes, tick **View on ones** on the timeline to see every in-between while you check the motion. It only changes the preview; the export still uses twos and threes.
 
 **Library tab:** select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them.
 

@@ -79,6 +79,8 @@ export function buildMenu(): void {
         item('Show Grid', 'toggleGrid', "CmdOrCtrl+'"),
         item('Snap to Grid', 'toggleSnap', "Shift+CmdOrCtrl+'"),
         { type: 'separator' },
+        item('Measure Preview Speed', 'measurePreview'),
+        { type: 'separator' },
         { role: 'toggleDevTools' },
         { role: 'togglefullscreen' },
       ],

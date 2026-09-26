@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import type { Mat2D } from '../../../engine/math';
 import { assetMimeType, resolvedScene, zoomToFit } from '../editor/actions';
 import { drawGrid, drawOutsideScene, drawSelection, makeOverlayContext } from '../editor/overlay';
 import { store } from '../editor/store';
@@ -7,45 +6,10 @@ import { onInvalidate } from '../editor/tools/common';
 import { TOOLS } from '../editor/tools';
 import type { Tool, ToolPointer } from '../editor/tools/types';
 import { screenToScene, zoomAt } from '../editor/view';
-import { renderScene } from '../render/canvasRenderer';
 import { getImage } from '../render/images';
+import { recordPlaybackDraw } from '../render/perf';
+import { renderPreview } from '../render/preview';
 import { drawPins } from '../editor/tools/pin';
-import { evaluateScene } from '../../../engine/evaluate';
-import type { EditorState } from '../editor/store';
-import type { ImageLookup } from '../render/canvasRenderer';
-
-let onionCanvas: OffscreenCanvas | null = null;
-
-/**
- * Onion skinning (docs/DESIGN.md A8): earlier frames tinted red, later frames
- * tinted green, fading with distance.
- */
-function drawOnionSkins(ctx: CanvasRenderingContext2D, s: EditorState, view: Mat2D, images: ImageLookup): void {
-  const { width, height } = ctx.canvas;
-  if (!onionCanvas || onionCanvas.width !== width || onionCanvas.height !== height) onionCanvas = new OffscreenCanvas(width, height);
-  const off = onionCanvas.getContext('2d') as unknown as CanvasRenderingContext2D;
-  const n = s.project.scene.durationFrames;
-  const { before, after, step } = s.onion;
-  const skins: { frame: number; color: string; alpha: number }[] = [];
-  for (let k = before; k >= 1; k--) skins.push({ frame: s.frame - k * step, color: '#e5484d', alpha: 0.35 / k });
-  for (let k = after; k >= 1; k--) skins.push({ frame: s.frame + k * step, color: '#30a46c', alpha: 0.35 / k });
-  for (const skin of skins) {
-    if (skin.frame < 0 || skin.frame >= n) continue;
-    off.setTransform(1, 0, 0, 1, 0, 0);
-    off.globalCompositeOperation = 'source-over';
-    off.clearRect(0, 0, width, height);
-    renderScene(off, s.project, evaluateScene(s.project, skin.frame), view, images, { clip: false, background: false });
-    off.setTransform(1, 0, 0, 1, 0, 0);
-    off.globalCompositeOperation = 'source-in';
-    off.fillStyle = skin.color;
-    off.fillRect(0, 0, width, height);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = skin.alpha;
-    ctx.drawImage(onionCanvas, 0, 0);
-    ctx.restore();
-  }
-}
 
 // The drawing canvas: renders the scene, the editor overlays, and routes
 // mouse input to the active tool. Wheel scrolls/pans; pinch or Cmd/Ctrl+wheel
@@ -66,24 +30,15 @@ export function Viewport() {
 
     const draw = () => {
       frame = 0;
+      const started = performance.now();
       const s = store.getState();
       const dpr = window.devicePixelRatio || 1;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#26272b';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       const resolved = resolvedScene(s);
-      const { zoom, panX, panY } = s.view;
-      const view: Mat2D = [zoom * dpr, 0, 0, zoom * dpr, panX * dpr, panY * dpr];
       const images = (id: string) => getImage(id, s.assets.get(id), assetMimeType(s, id));
-      const onion = s.mode === 'animate' && s.onion.enabled && !s.playing;
-      if (onion) {
-        // Scene background, then faint tinted copies of nearby frames, then this frame on top.
-        ctx.setTransform(...view);
-        ctx.fillStyle = s.project.scene.background;
-        ctx.fillRect(0, 0, s.project.scene.width, s.project.scene.height);
-        drawOnionSkins(ctx, s, view, images);
-      }
-      renderScene(ctx, s.project, resolved, view, images, { clip: false, background: !onion });
+      renderPreview(ctx, s, resolved, dpr, images);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const o = makeOverlayContext(ctx, s, resolved);
       drawOutsideScene(o, canvas.width / dpr, canvas.height / dpr);
@@ -91,6 +46,7 @@ export function Viewport() {
       drawSelection(o);
       if (s.mode === 'animate') drawPins(o);
       TOOLS[s.tool].drawOverlay?.(o);
+      if (s.playing) recordPlaybackDraw(s.frame, performance.now() - started);
     };
     const requestDraw = () => {
       if (!frame) frame = requestAnimationFrame(draw);

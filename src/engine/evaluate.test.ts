@@ -163,6 +163,16 @@ describe('evaluateScene', () => {
       };
       expect(rotationAt(onOnes, arm.id, 2)).toBeCloseTo(10);
     });
+
+    it('"View on ones" shows every in-between, even for a character that overrides the scene', () => {
+      const { project, arm } = twos();
+      const onThrees: Project = { ...project, scene: { ...project.scene, layers: project.scene.layers.map((c) => ({ ...c, stepping: 3 as const })) } };
+      const viewed = (p: Project, f: number) => part(evaluateScene(p, f, { onOnes: true }), arm.id).local.rotation;
+      expect(viewed(project, 2)).toBeCloseTo(10);
+      expect(viewed(onThrees, 2)).toBeCloseTo(10);
+      // Without it, the stepping still applies (export never passes it).
+      expect(rotationAt(onThrees, arm.id, 2)).toBeCloseTo(0);
+    });
   });
 
   it('is deterministic', () => {

@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
 import { buildMenu } from './menu';
+import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
 
 // The main process only touches the file system. Everything about the
 // project's contents (packing, validation) happens in the renderer, so it
@@ -109,6 +110,20 @@ function createWindow(): void {
     });
     if (choice === 1) event.preventDefault();
   });
+  // Closed on purpose (saved, or changes discarded): its autosave isn't needed.
+  const webContentsId = win.webContents.id;
+  win.on('closed', () => forgetWindow(webContentsId));
+  // If the page crashes, keep its autosave and reload: the fresh page offers it
+  // back. Not again within half a minute, so a page that keeps crashing can't loop.
+  let lastCrashReload = -Infinity;
+  win.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit') return;
+    releaseWindow(webContentsId);
+    dirtyWindows.delete(win);
+    if (Date.now() - lastCrashReload < 30_000) return;
+    lastCrashReload = Date.now();
+    win.reload();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -183,6 +198,7 @@ void app.whenReady().then(() => {
   if (!isFirstInstance) return;
   registerLibraryHandlers();
   registerExportHandlers();
+  registerRecoveryHandlers();
   buildMenu();
   createWindow();
   app.on('activate', () => {

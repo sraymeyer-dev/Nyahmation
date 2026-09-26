@@ -5,11 +5,14 @@ import type { MenuCommand } from '../../preload/api';
 import * as actions from './editor/actions';
 import * as library from './editor/library';
 import * as lipsync from './editor/lipsync';
+import { measurePreviewSpeed } from './editor/measure';
+import { startAutosave } from './editor/recovery';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
 import { deleteSelectedMarks, jumpToPose, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
 import { ExportDialog } from './components/ExportDialog';
 import { Notice } from './components/Notice';
+import { RecoveryPrompt } from './components/RecoveryPrompt';
 import { Sidebar } from './components/Sidebar';
 import { ToolOptions } from './components/ToolOptions';
 import { Toolbar } from './components/Toolbar';
@@ -58,6 +61,7 @@ const MENU: Record<MenuCommand, () => void> = {
   autoChainRoots: library.autoChainRootsForActiveLayer,
   export: () => store.set({ exportOpen: true }),
   makeSwitchLayer: lipsync.makeSwitchLayerFromSelection,
+  measurePreview: () => void measurePreviewSpeed(),
 };
 
 const TOOL_KEYS = {
@@ -193,7 +197,11 @@ export function App() {
     // Then open any project double-clicked in Finder or Explorer.
     const unsubscribe = window.nyah?.onOpenFile((file) => actions.openProjectFile(file));
     window.nyah?.readyForFiles();
-    return unsubscribe;
+    const stopAutosave = startAutosave();
+    return () => {
+      unsubscribe?.();
+      stopAutosave();
+    };
   }, []);
 
   useEffect(() => {
@@ -228,6 +236,7 @@ export function App() {
           <div className="stage">
             <Viewport />
             <Notice />
+            <RecoveryPrompt />
           </div>
           {mode === 'animate' && <Timeline />}
         </div>

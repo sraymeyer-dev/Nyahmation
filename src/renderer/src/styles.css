@@ -1028,3 +1028,57 @@ input[type='color'] {
 .drawing-row button.icon {
   padding: 1px;
 }
+
+/* Recovering autosaved work */
+.notice.recovery {
+  z-index: 5;
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+.notice.recovery p {
+  margin: 6px 0;
+}
+
+.notice.recovery ul {
+  list-style: none;
+  padding: 0;
+}
+
+.notice.recovery li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.recovery-name {
+  font-weight: 600;
+}
+
+.recovery-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Preview quality and playback rate (N9) */
+.preview-quality {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.playback-rate {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.playback-rate.slow {
+  color: var(--warn);
+}

@@ -41,6 +41,28 @@ export interface LibraryApi {
   reveal(): Promise<void>;
 }
 
+/** Unsaved work autosaved by a window that didn't close normally (docs/DESIGN.md F3). */
+export interface RecoveryEntry {
+  id: string;
+  /** The project's file name, or "Untitled". */
+  name: string;
+  /** Where the project was saved, if it had been. */
+  path: string | null;
+  /** When it was autosaved (milliseconds since 1970). */
+  savedAt: number;
+}
+
+export interface RecoveryApi {
+  /** Writes this window's recovery file, replacing its previous one. */
+  write(bytes: Uint8Array, meta: { name: string; path: string | null }): Promise<void>;
+  /** Deletes this window's recovery file (the work was saved or discarded). */
+  clear(): Promise<void>;
+  /** Recovery files left by windows that closed without saving, newest first. */
+  list(): Promise<RecoveryEntry[]>;
+  read(id: string): Promise<Uint8Array>;
+  discard(id: string): Promise<void>;
+}
+
 export type ExportFormat = 'mp4' | 'png';
 
 export interface ExportApi {
@@ -85,7 +107,8 @@ export type MenuCommand =
   | 'saveToLibrary'
   | 'autoChainRoots'
   | 'export'
-  | 'makeSwitchLayer';
+  | 'makeSwitchLayer'
+  | 'measurePreview';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -107,6 +130,7 @@ export interface NyahApi {
   readyForFiles(): void;
   library: LibraryApi;
   export: ExportApi;
+  recovery: RecoveryApi;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }

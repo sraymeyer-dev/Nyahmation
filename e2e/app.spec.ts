@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -11,7 +11,7 @@ let page: Page;
 const dir = mkdtempSync(join(tmpdir(), 'nyah-'));
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library') } });
+  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery') } });
   page = await app.firstWindow();
   page.on('pageerror', (err) => console.error('Page error:', err.message));
   await page.setViewportSize({ width: 1400, height: 860 });
@@ -247,6 +247,15 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   expect(await signature()).toBe(pose);
   await nextFrame();
   expect(await signature()).not.toBe(pose);
+
+  // View on ones (preview only): the in-between on frame 24 is shown after all.
+  await page.keyboard.press('ArrowLeft');
+  await page.getByLabel('View on ones').check();
+  await page.waitForTimeout(50);
+  expect(await signature()).not.toBe(pose);
+  await page.getByLabel('View on ones').uncheck();
+  await page.waitForTimeout(50);
+  expect(await signature()).toBe(pose);
 });
 
 type Pt = { x: number; y: number };
@@ -569,4 +578,117 @@ test('a .nyah file opened from Finder opens in the app', async () => {
   }, file);
   await expect(page.getByText('Opened Mouth test.nyah')).toBeVisible();
   expect((await state()).names).toContain('Mouth');
+});
+
+test('preview quality draws the canvas at lower resolution, and is remembered', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  // The choice is remembered between runs, so start from Full.
+  await page.getByLabel('Preview quality').selectOption('1');
+  const sharpness = () =>
+    page.evaluate(() => {
+      // Edge energy between neighbouring pixels: blurred edges score lower.
+      const c = document.querySelector<HTMLCanvasElement>('[data-testid="stage"]')!;
+      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+      let sum = 0;
+      let n = 0;
+      for (let i = 0; i + 4 < d.length; i += 4 * 3) {
+        sum += (d[i]! - d[i + 4]!) ** 2 + (d[i + 1]! - d[i + 5]!) ** 2 + (d[i + 2]! - d[i + 6]!) ** 2;
+        n++;
+      }
+      return sum / n;
+    });
+  await page.waitForTimeout(100);
+  const full = await sharpness();
+  await page.getByLabel('Preview quality').selectOption('0.25');
+  await page.waitForTimeout(100);
+  expect(await sharpness()).toBeLessThan(full * 0.8);
+  await page.screenshot({ path: 'test-results/preview-quarter.png' });
+  expect(await page.evaluate(() => localStorage.getItem('nyah.previewQuality'))).toBe('0.25');
+  await page.getByLabel('Preview quality').selectOption('1');
+});
+
+test('measures preview speed and shows the playback rate', async () => {
+  await menu('measurePreview');
+  await expect(page.getByTestId('notice')).toContainText('Preview speed on this computer', { timeout: 20_000 });
+  await expect(page.getByTestId('notice')).toContainText('Quarter:');
+  await page.getByTestId('notice').getByRole('button', { name: 'Dismiss' }).click();
+
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
+  await expect(page.getByTestId('playback-rate')).toContainText(/Showing \d+ of 24 fps/);
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await page.getByRole('tab', { name: 'Build' }).click();
+});
+
+test('autosaves unsaved work, and deletes the autosave once saved', async () => {
+  const recovery = join(dir, 'recovery');
+  const autosaves = () => (existsSync(recovery) ? readdirSync(recovery).filter((f) => f.endsWith('.nyah')) : []);
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.keyboard.press('m');
+  await drag([300, 300], [360, 350]);
+  expect((await state()).dirty).toBe(true);
+  await expect.poll(autosaves, { timeout: 10_000 }).toHaveLength(1);
+
+  const path = join(dir, 'Autosaved.nyah');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath })) as typeof dialog.showSaveDialog;
+  }, path);
+  await menu('saveAs');
+  await expect.poll(autosaves, { timeout: 10_000 }).toHaveLength(0);
+});
+
+test('offers back work left by a crash, and restores it', async () => {
+  // What a crashed session leaves behind: its last autosave and a description.
+  const saved = join(dir, 'Before the crash.nyah');
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath })) as typeof dialog.showSaveDialog;
+  }, saved);
+  await menu('saveAs');
+  await expect.poll(() => existsSync(saved)).toBe(true);
+  await menu('new');
+  const recovery = join(dir, 'recovery');
+  mkdirSync(recovery, { recursive: true });
+  const id = '0f0e0d0c-0b0a-4908-8706-050403020100';
+  copyFileSync(saved, join(recovery, `${id}.nyah`));
+  writeFileSync(join(recovery, `${id}.json`), JSON.stringify({ name: 'Before the crash.nyah', path: saved, savedAt: Date.now() }));
+
+  await page.reload();
+  await page.waitForSelector('[data-testid="stage"]');
+  await expect(page.getByTestId('recovery')).toContainText('Before the crash.nyah');
+  await page.screenshot({ path: 'test-results/recovery.png' });
+  await page.getByTestId('recovery').getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByTestId('recovery')).toHaveCount(0);
+  const s = await state();
+  expect(s.names).toContain('Forearm (front)');
+  expect(s.dirty).toBe(true);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().file?.name)).toBe('Before the crash.nyah');
+  // Restoring writes this window's own autosave, then removes the crashed one.
+  await expect.poll(() => existsSync(join(recovery, `${id}.nyah`)), { timeout: 10_000 }).toBe(false);
+  expect(readdirSync(recovery).filter((f) => f.endsWith('.nyah'))).toHaveLength(1);
+});
+
+test('if the page crashes, it reloads and offers the unsaved work back', async () => {
+  // The restored project from the previous test is unsaved and autosaved.
+  const recovery = join(dir, 'recovery');
+  await expect.poll(() => readdirSync(recovery).filter((f) => f.endsWith('.nyah')).length, { timeout: 10_000 }).toBe(1);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.forcefullyCrashRenderer());
+  // Playwright's handle on the crashed page is gone, so look at the reloaded page from the main process.
+  // Gives up after a second: a call made while the page is still crashed never answers.
+  const inPage = (js: string) =>
+    Promise.race([
+      app.evaluate(({ BrowserWindow }, code) => BrowserWindow.getAllWindows()[0]!.webContents.executeJavaScript(code), js).catch(() => null),
+      new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+    ]);
+  await expect.poll(() => inPage(`document.querySelector('[data-testid="recovery"]')?.textContent ?? ''`), { timeout: 15_000 }).toContain('Before the crash.nyah');
+  await inPage(`[...document.querySelectorAll('[data-testid="recovery"] button')].find((b) => b.textContent === 'Restore').click()`);
+  await expect
+    .poll(() => inPage(`JSON.stringify(window.__nyah.store.getState().project.scene.layers.map((l) => l.name))`), { timeout: 10_000 })
+    .toContain('Pip');
 });

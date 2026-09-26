@@ -32,6 +32,13 @@ const api: NyahApi = {
     end: (session) => ipcRenderer.invoke('export:end', session),
     cancel: (session) => ipcRenderer.invoke('export:cancel', session),
   },
+  recovery: {
+    write: (bytes, meta) => ipcRenderer.invoke('recovery:write', bytes, meta),
+    clear: () => ipcRenderer.invoke('recovery:clear'),
+    list: () => ipcRenderer.invoke('recovery:list'),
+    read: (id) => ipcRenderer.invoke('recovery:read', id),
+    discard: (id) => ipcRenderer.invoke('recovery:discard', id),
+  },
 };
 
 contextBridge.exposeInMainWorld('nyah', api);

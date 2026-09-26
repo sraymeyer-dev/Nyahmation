@@ -41,7 +41,7 @@ const get = () => store.getState();
 const restCache = new WeakMap<Project, ResolvedScene>();
 /** What the canvas shows: the rest pose in Build mode, the animation in Animate mode. */
 export function resolvedScene(s: EditorState): ResolvedScene {
-  if (s.mode === 'animate') return evaluateScene(s.project, s.frame);
+  if (s.mode === 'animate') return evaluateScene(s.project, s.frame, { onOnes: s.viewOnOnes });
   let r = restCache.get(s.project);
   if (!r) restCache.set(s.project, (r = evaluateRestPose(s.project)));
   return r;
@@ -257,11 +257,11 @@ export function toggleSnap(): void {
 
 // ---- Files ---------------------------------------------------------------------------
 
-function confirmDiscard(): boolean {
+export function confirmDiscard(): boolean {
   return !get().dirty || window.confirm('You have unsaved changes. Discard them?');
 }
 
-function loadProject(project: Project, assets: ReadonlyMap<string, Uint8Array>, file: EditorState['file']): void {
+export function loadProject(project: Project, assets: ReadonlyMap<string, Uint8Array>, file: EditorState['file']): void {
   store.load(project, assets, file);
   store.set({ status: file ? `Opened ${file.name}` : '' });
   zoomToFit();
@@ -304,18 +304,24 @@ export function openProjectFile(opened: OpenedFile, confirm = true): void {
   }
 }
 
+/** The project as .nyah file bytes, keeping only the files it still uses. */
+export function packForSave(s: Pick<EditorState, 'project' | 'assets'>): Uint8Array {
+  const used = referencedAssetIds(s.project);
+  const project = { ...s.project, assets: s.project.assets.filter((a) => used.has(a.id)) };
+  const assets = new Map([...s.assets].filter(([id]) => used.has(id)));
+  return packProject({ project, assets });
+}
+
 export async function save(saveAs = false): Promise<void> {
   const api = window.nyah;
   if (!api) return;
   const s = get();
   try {
-    // Only keep the files the project still uses.
-    const used = referencedAssetIds(s.project);
-    const project = { ...s.project, assets: s.project.assets.filter((a) => used.has(a.id)) };
-    const assets = new Map([...s.assets].filter(([id]) => used.has(id)));
-    const saved = await api.saveProject(packProject({ project, assets }), saveAs ? undefined : s.file?.path);
+    const saved = await api.saveProject(packForSave(s), saveAs ? undefined : s.file?.path);
     if (!saved) return;
-    store.set({ file: saved, dirty: false, status: `Saved ${saved.name}` });
+    // Anything changed while the file was being written stays unsaved.
+    const unchanged = get().project === s.project && get().assets === s.assets;
+    store.set({ file: saved, dirty: !unchanged, status: `Saved ${saved.name}` });
   } catch (err) {
     store.set({ notice: { title: "Couldn't save", lines: [(err as Error).message] } });
   }

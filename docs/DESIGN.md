@@ -1,7 +1,7 @@
 # Nyahmation — Design Document
 
-> **Status:** v1.1. Requirements baseline for the MVP. Phases 0–4 (the MVP) are built; see §16.
-> **Last updated:** 2026-09-25
+> **Status:** v1.2. Phases 0–4 (the MVP) and phase 4.5 (hardening) are built; phase 5 is next, split into 5a–5c. See §16.
+> **Last updated:** 2026-09-26
 
 ---
 
@@ -162,7 +162,7 @@ type Pose = {
 - **R7b Rigging helper.** "Mark branch joints as chain roots" flags every limb that branches off a body part (upper arms and head off the torso, legs off the hips), a good starting point for most characters.
 - **R7c In Build mode, posing sets the rest pose.** Posing on the timeline comes with Animate-mode editing in phase 3, using the same solver.
 - **R8 Pins** (Must). Pin a part so it stays fixed in place, for example a foot planted on the ground. Dragging the body then bends the legs instead of dragging the feet along. Pins hold across frames, not just while dragging. See §6.3.
-- **R9 Draw-order swaps** (Should). A part can move in front of or behind a sibling from one pose to the next, such as an arm swinging behind the body.
+- **R9 Draw-order swaps** (Should). A part can move in front of or behind a sibling from one pose to the next, such as an arm swinging behind the body. (The engine already has the `drawOrder` channel and sorts by it; recording it from Bring Forward / Send Backward in Animate mode, and showing it on the timeline, is phase 5c.)
 - **R10 Draw order is separate from the parent/child tree.** Each part has a stacking number within its character. The tree decides what moves with what; the stacking number decides what's in front. This is how a far arm can be a child of the torso (so it moves with it) and still be drawn behind it. The same approach is used by professional cutout tools such as Spine.
 
 ### 6.2 Proposed: IK is a posing tool, not a live constraint
@@ -333,11 +333,11 @@ Hand-drawn animation often changes the picture only every 2nd frame ("on twos"):
 - **ST3** **What steps:** a character's motion (position, rotation, scale, opacity, and pinned limbs).
 - **ST4** **What doesn't step:** mouths and other switch layers stay on ones, so lip sync timing stays exact. The camera stays on ones by default, because a stepped camera move judders the whole picture. The audio never steps.
 - **ST5** **Steps restart at every pose on any part of the character**, so every pose you set is shown exactly on the frame you set it, and the whole character changes picture on the same frames, as a hand-drawn drawing would. For example, on twos with poses on frames 1 and 8, the part shows new positions on frames 1, 3, 5, 7 and then exactly the pose on 8. Without this rule, an odd-numbered pose could be skipped.
-- **ST6** (Should) A **View on ones** toggle for checking the motion while you work. It affects only the preview, never the export.
+- **ST6** (Should) A **View on ones** toggle for checking the motion while you work. It affects only the preview, never the export. (Built in phase 4.5: a timeline checkbox, shown when the scene or a character is on twos or threes. It also applies to onion skins.)
 - **ST7** (Could) Change the stepping over time, such as ones during a fast action and twos elsewhere.
 
 ### 9.2 Should have
-- **A10** Custom easing curve editor.
+- **A10** Custom easing curve editor. (The engine already evaluates custom `cubic-bezier` curves; only the editor is missing. Phase 5c.)
 - **A11** **Camera**: pan, zoom and rotate the view, animated like any part.
 - **A12** Multiple characters per scene (the layer stack, §8a).
 - **A13** Copy and paste poses between frames and characters. Mirror a pose (swap left and right).
@@ -400,10 +400,17 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 
 - **F1** A project is **one scene in one `.nyah` file**: a zip bundle holding `project.json` plus the embedded audio and images. It is easy to move and back up. Characters move between projects through the library.
 - **F2** The file format has a version number, and old files are migrated when opened.
-- **F3** **Autosave** to a recovery file every minute or so, with an offer to restore after a crash.
+- **F3** **Autosave** to a recovery file every minute or so, with an offer to restore after a crash. (Built in phase 4.5; see §12.1.)
 - **F4** The library is a plain folder (§7).
 - **F5** No server, no database, no account, no network needed.
 - **F6** (Built) The installed app owns `.nyah` files: double-clicking one in Finder or Explorer (or dropping it on the Dock icon) opens it. Only one copy of the app runs; opening another file while it runs brings the window forward and offers to replace the current project if it has unsaved changes.
+
+### 12.1 Autosave and recovery (built in phase 4.5)
+- **AS1** While a project has unsaved changes, it is written to a **recovery file** soon after the first change, then at most once a minute. It is never written in the middle of a drag, and not rewritten if nothing changed. A failed write waits a minute before trying again, and the status bar says so.
+- **AS2** Recovery files live in the app's own data folder (`Recovery/` under Electron's user-data folder, e.g. `~/Library/Application Support/Nyahmation/Recovery` on a Mac), one per window, packed exactly like a `.nyah` file, with a small description (name, original path, time).
+- **AS3** Saving, opening another project, or discarding changes deletes the recovery file. A window that closes normally deletes its own. So any recovery file found at startup was left by a crash or a force-quit.
+- **AS4** At startup, Nyahmation lists that work ("Nyahmation didn't close properly last time") with **Restore**, **Delete** and **Decide later**. Restore opens it as unsaved changes to the original file, so Save writes it back where it came from. The old recovery file is removed only after the window has autosaved its own copy.
+- **AS5** If the page itself crashes, the window reloads and offers the work back straight away.
 
 ---
 
@@ -417,7 +424,8 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 - **N6** The engine (model, interpolation, IK, evaluation) is pure code with no UI dependencies, and it is unit-tested.
 - **N7** Keyboard-first: shortcuts for tools, frame stepping and lip-sync entry.
 - **N8** **Reference machine:** 2020 MacBook Air (Intel, 1.2 GHz quad-core i7, integrated Intel Iris Plus graphics, macOS 15 Sequoia). This is the slowest machine Nyahmation targets. Performance goals are measured on it, and every phase is checked on it.
-- **N9** **Preview quality setting** (Full / Half / Quarter resolution). If playback can't keep up on the reference machine, the preview can be drawn at lower resolution to stay smooth. Export always renders at full quality.
+- **N9** **Preview quality setting** (Full / Half / Quarter resolution). If playback can't keep up on the reference machine, the preview can be drawn at lower resolution to stay smooth. Export always renders at full quality. (Built in phase 4.5: **Preview** in the top bar, remembered per computer. The scene is drawn into a smaller canvas and scaled up; handles and outlines stay sharp. On a Retina screen, Half is still one image pixel per screen point.)
+- **N11** (Built in phase 4.5) **Measuring speed.** While playing, the timeline shows how many frames a second are really shown ("Showing 17 of 24 fps"), in orange when frames are being skipped. **View → Measure Preview Speed** draws frames of the open scene as fast as it can at each quality, reports the time per frame (and how much of it is working out poses), and recommends the sharpest quality that keeps up with a quarter of each frame's time to spare. This is how N2 is checked on the reference machine.
 - **N10** Minimum OS: whatever the chosen Electron version supports (currently about macOS 12 and Windows 10). macOS 15 on the reference machine is well within that.
 
 ---
@@ -509,10 +517,15 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **0** ✅ | Foundations | Electron skeleton; engine (data model, Smooth interpolation, stepping, parent/child evaluation) with unit tests; save/load `.nyah`; demo puppet test harness. |
 | **1** ✅ | Draw | Build mode; canvas, pen tool, primitives, point editing, fill and stroke, layers (background and character) and outliner, undo; SVG and PNG import. |
 | **2** ✅ | Rig | Parenting, joints, drag-to-pose IK with limits and chain roots; save characters to the library. |
-| **3** ✅ | Move | Timeline, pose-anywhere (part poses), holds, retiming with ripple and copy, playback with a loop range, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 and PNG-sequence export**. Not yet: stretching a range of poses (A6), "View on ones" (ST6). |
+| **3** ✅ | Move | Timeline, pose-anywhere (part poses), holds, retiming with ripple and copy, playback with a loop range, onion skin, **pins**, **on ones/twos/threes**; **silent MP4 and PNG-sequence export**. Not yet: stretching a range of poses (A6). |
 | **4** ✅ | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. Not yet: dragging block edges (LS4; drag the marks instead), automatic lip sync (LS7, phase 6). |
-| **5** | Polish | Camera; parallax, scrolling and atmosphere for backgrounds (BG4–BG8); glow, shadow and blend modes (FX1–FX6); draw-order swaps; ProRes/PNG export; easing curve editor. |
-| **6+** | Stretch | Automatic lip sync (Rhubarb), mirror poses, animation cycles, gradients and boolean operations. |
+| **4.5** ✅ | Harden | **Autosave and crash recovery** (F3, §12.1); **preview quality** (N9); the playback rate readout and **Measure Preview Speed** (N11); **View on ones** (ST6). Still to do by hand: run the MVP success test on the reference machine and record the numbers (N2, N8). |
+| **5a** | Stage | **Camera** (A11): pan, zoom and rotate, animated like a part, on ones (ST4). Parallax depth (BG4), scrolling and tiling (BG5). **Linear and radial gradients** (D10, moved up from phase 6), then gradient skies (BG7). Check background library items (BG8), which mostly work already. |
+| **5b** | Look | First, **off-screen group rendering** (draw a group into its own canvas, then combine it). On top of it: drop shadow and outer glow (FX1), effects on a whole group (FX2), animatable effect settings (FX3), blend modes (FX4), layer blur and haze (BG6), clipping masks (D12). Caching for parts that don't change (FX6). |
+| **5c** | Craft | Draw-order swaps recorded in Animate mode (R9); easing curve editor (A10); MOV ProRes 4444 export (E3); copy and paste poses (A13, without mirror). Leftovers: stretching a range of poses (A6), dragging lip-sync block edges (LS4). |
+| **6+** | Stretch | Automatic lip sync (Rhubarb, LS7), mirror poses, animation cycles, boolean operations (D11), stepping that changes over time (ST7), contact-shadow preset (FX5), WebM and H.265 (E4), swatches and eyedropper (D13), "update from library" (L5). |
+
+**Why phase 5 is split, and in this order.** Several phase 5 features rest on the same foundations, so those come first. The camera is what gives parallax, scrolling and haze any meaning. Off-screen group rendering is what whole-group shadows, blend modes, blur and clipping masks all need. Preview quality (built in 4.5) has to exist before blur, the most expensive thing Nyahmation will draw (FX6). Each sub-phase ends usable, and changes the file format at most once.
 
 **MVP = Phases 0–4.** Success test: *make a 10-second clip of a character who takes a few steps without the feet sliding, waves, and speaks one line of dialogue, lip-synced, exported as MP4 with audio.*
 
@@ -566,6 +579,10 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-43 | During playback the sound card's clock decides the frame; picture follows sound (AU3) | Proposed |
 | D-44 | The soundtrack is mixed in the app with Web Audio and handed to FFmpeg as a WAV; sound files are embedded unchanged (E8, AU1) | Proposed |
 | D-45 | Lip-sync letters take priority over tool keys while a switch layer is selected in Animate mode (LS8) | Proposed |
+| D-46 | Autosave writes one recovery file per window in the app's data folder; a normal close deletes it, so leftovers mean a crash. Restored work opens as unsaved changes to the original file (§12.1) | Proposed |
+| D-47 | Preview quality is a per-computer preference (not saved in the project) and never affects export (N9) | Proposed |
+| D-48 | The camera (phase 5a) will be a view transform applied when drawing, not a part of the scene: pins and poses stay in stage coordinates, so a moving camera can't make a planted foot slide. It is evaluated by the same `evaluate(scene, frame)` so preview, onion skin and export match | Proposed |
+| D-49 | Phase 5 is split into 5a (stage), 5b (look) and 5c (craft), foundations first; gradients (D10) move from phase 6 into 5a because gradient skies (BG7) need them | **Decided** |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
@@ -598,6 +615,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.2 (2026-09-26):** Phase 4.5 (hardening) built: autosave and crash recovery (F3, §12.1), preview quality (N9), playback rate and Measure Preview Speed (N11), View on ones (ST6). Phase 5 split into 5a–5c (§16); gradients (D10) and clipping masks (D12) scheduled. Noted that the engine parts of R9 and A10 already exist. Added D-46 to D-49.
 - **v1.1 (2026-09-25):** Phase 4 built, completing the MVP: sound import, waveform, scrubbing and audio-clock playback (§8.4), Make Switch Layer, mouth sets from names or files (S7–S10), the lip-sync palette and blocks (LS8, LS9), MP4 with AAC audio and the PNG enlargement warning (E8, S6). Added D-41 to D-45.
 - **v1.0 (2026-09-25):** Phase 3 built. Added §9.1c Retiming (row scope, Shift ripple, copy, lip-sync exception), clarified pins (P1, P2a, P6) and holds (A5), and D-37 to D-40.
 - **v0.9 (2026-09-25):** Phase 2 built: joints, chain roots, limits, bend direction, drag-to-pose IK, and the library. Clarified R7 (modifiers) and added R7a–R7c, L6, D-34 to D-36.
