@@ -4,6 +4,8 @@ A desktop studio for making character-animated videos: draw or import a vector c
 
 The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 
+**New to Nyahmation?** Read the illustrated [user manual (PDF)](docs/Nyahmation-User-Manual.pdf). It walks through drawing, rigging, animating, sound, lip sync and export, with annotated pictures of the app. To rebuild it after the app changes: `npm run manual` (on Linux, under `xvfb-run`).
+
 ## Status
 
 - **Phase 0 (foundations):** done. Animation engine and `.nyah` project files.
