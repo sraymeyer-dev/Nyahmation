@@ -98,6 +98,13 @@ export interface NyahApi {
   importFiles(): Promise<ImportedFile[]>;
   /** Subscribes to native menu commands. Returns an unsubscribe function. */
   onMenuCommand(listener: (command: MenuCommand) => void): () => void;
+  /**
+   * Projects opened from Finder or Explorer (double-click, or dropped on the
+   * Dock icon). Call `readyForFiles` once listening; files that arrived
+   * while the app was starting are sent then.
+   */
+  onOpenFile(listener: (file: OpenedFile) => void): () => void;
+  readyForFiles(): void;
   library: LibraryApi;
   export: ExportApi;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */

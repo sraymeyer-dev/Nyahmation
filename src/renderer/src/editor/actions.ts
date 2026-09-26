@@ -27,6 +27,7 @@ import { decodeAudio } from '../audio/audioEngine';
 import { readImageInfo } from '../../../io/imageInfo';
 import { packProject, unpackProject } from '../../../io/projectFile';
 import { importSvg } from '../../../io/svg/importSvg';
+import type { OpenedFile } from '../../../preload/api';
 import { createDemoProject } from '../demo';
 import { store, type EditorState, type ToolId } from './store';
 import { fitView, zoomAt } from './view';
@@ -283,11 +284,23 @@ export async function openProject(): Promise<void> {
   if (!api || !confirmDiscard()) return;
   try {
     const opened = await api.openProject();
-    if (!opened) return;
+    if (opened) openProjectFile(opened, false);
+  } catch (err) {
+    store.set({ notice: { title: "Couldn't open the project", lines: [(err as Error).message] } });
+  }
+}
+
+/** Opens a project's bytes, e.g. a .nyah file double-clicked in Finder. */
+export function openProjectFile(opened: OpenedFile, confirm = true): void {
+  if (confirm) {
+    if (get().file?.path === opened.path) return; // already open: the window just comes to the front
+    if (!confirmDiscard()) return;
+  }
+  try {
     const bundle = unpackProject(opened.bytes);
     loadProject(bundle.project, bundle.assets, { path: opened.path, name: opened.name });
   } catch (err) {
-    store.set({ notice: { title: "Couldn't open the project", lines: [(err as Error).message] } });
+    store.set({ notice: { title: `Couldn't open ${opened.name}`, lines: [(err as Error).message] } });
   }
 }
 

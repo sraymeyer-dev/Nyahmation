@@ -190,6 +190,10 @@ export function App() {
     // Start with an empty scene that has one background layer to draw on.
     const { project } = addLayer(createProject(), 'background', 'Background');
     store.load(project, new Map(), null);
+    // Then open any project double-clicked in Finder or Explorer.
+    const unsubscribe = window.nyah?.onOpenFile((file) => actions.openProjectFile(file));
+    window.nyah?.readyForFiles();
+    return unsubscribe;
   }, []);
 
   useEffect(() => {

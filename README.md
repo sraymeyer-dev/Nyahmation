@@ -49,21 +49,33 @@ Try **File → Open Demo Puppet**, then press **K** (Pose tool) and drag Pip's h
 
 The first time you save to the library, macOS may ask whether Nyahmation can use your **Documents** folder. Allow it: the library lives in `Documents/Nyahmation Library`.
 
-### Optional: make a real Mac app
+### Make it a normal app you click to open (recommended)
 
-Instead of starting from Terminal each time, you can build a normal app:
+Do this once and nobody needs Terminal again: Nyahmation gets an icon in Applications and the Dock like any other app, for every account on the Mac.
+
+**1. Build the app.** In Terminal, in the Nyahmation folder:
 
 ```sh
 npm run dist:mac
 ```
 
-This makes `release/Nyahmation-0.0.1.dmg` on an Intel Mac, or `release/Nyahmation-0.0.1-arm64.dmg` on Apple Silicon (it takes several minutes). The app is built for the kind of Mac you build it on. Open it and drag Nyahmation to Applications.
+It takes 5–10 minutes. When it's done, a Finder window opens showing `Nyahmation-0.0.1.dmg` (on an Apple Silicon Mac: `Nyahmation-0.0.1-arm64.dmg`).
 
-The app isn't signed with a paid Apple Developer ID, so macOS Sequoia blocks it the first time. To allow it once: try to open it, click **Done**, then go to **System Settings → Privacy & Security**, scroll down to the message about Nyahmation, click **Open Anyway**, and confirm with your password. After that it opens normally.
+**2. Install it.** Double-click the `.dmg`. In the window that appears, drag the **Nyahmation** cat icon onto the **Applications** folder. Then eject the disk image (the ⏏ button next to it in Finder's sidebar). You can now delete the `release` folder if you like.
+
+**3. Open it.** Open **Applications** (or Launchpad) and double-click **Nyahmation**. To keep it handy, drag it from Applications onto the **Dock**, or right-click its Dock icon while it's open and choose **Options → Keep in Dock**.
+
+If macOS says it can't check the app for malicious software (the app isn't signed with a paid Apple Developer ID), click **Done**, go to **System Settings → Privacy & Security**, scroll down to the message about Nyahmation, click **Open Anyway**, and confirm with your password. This is needed only once.
+
+Once it's installed, double-clicking a saved project (a `.nyah` file) in Finder opens it in Nyahmation, and you can drop one onto the Dock icon too.
+
+**For a child's own account:** apps in Applications are shared by every account on the Mac, so after you install it she'll find Nyahmation in her Applications and Launchpad too; add it to her Dock from her account. Her projects and her library (`Documents/Nyahmation Library`) are kept in her own account. The first time she saves to the library, macOS asks whether Nyahmation may use her **Documents** folder; click **Allow**.
+
+**Updating the app later:** get the new code (below), run `npm run dist:mac` again, and drag the new version onto Applications, choosing **Replace**. Projects and the library aren't touched.
 
 ### Getting updates
 
-Download the ZIP again (or `git pull` if you used Git), then run `npm install` and `npm run dev` as before. Your projects and library are separate files, so they're not affected.
+Download the ZIP again (or `git pull` if you used Git), then run `npm install` and `npm run dev` as before, or `npm run dist:mac` to rebuild the clickable app. Your projects and library are separate files, so they're not affected.
 
 ## Running it on Windows or for development
 
@@ -141,4 +153,4 @@ npm run dist:mac  # macOS .dmg for this Mac's chip (Intel or Apple Silicon), in 
 npm run dist:win  # Windows installer, in release/
 ```
 
-See "Make a real Mac app" above for opening an unsigned app on macOS Sequoia.
+See "Make it a normal app you click to open" above for opening an unsigned app on macOS Sequoia.

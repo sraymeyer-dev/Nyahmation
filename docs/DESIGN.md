@@ -403,6 +403,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 - **F3** **Autosave** to a recovery file every minute or so, with an offer to restore after a crash.
 - **F4** The library is a plain folder (§7).
 - **F5** No server, no database, no account, no network needed.
+- **F6** (Built) The installed app owns `.nyah` files: double-clicking one in Finder or Explorer (or dropping it on the Dock icon) opens it. Only one copy of the app runs; opening another file while it runs brings the window forward and offers to replace the current project if it has unsaved changes.
 
 ---
 

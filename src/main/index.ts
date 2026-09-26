@@ -21,6 +21,66 @@ const IMPORT_FILTERS = [
 /** Unsaved-changes state reported by each window's renderer. */
 const dirtyWindows = new WeakSet<BrowserWindow>();
 
+// ---- Opening project files from Finder or Explorer ---------------------------
+// Double-clicking a .nyah file (or dropping it on the Dock icon) opens it.
+// macOS reports it with the 'open-file' event, possibly before the window
+// exists; Windows passes it on the command line. Paths wait here until a
+// window's page says it's ready to receive them.
+
+const pendingPaths: string[] = [];
+/** Windows whose page has asked for files (see 'project:ready'). */
+const readyWindows = new WeakSet<BrowserWindow>();
+
+function projectPathIn(argv: readonly string[]): string | undefined {
+  return argv.slice(1).find((a) => a.toLowerCase().endsWith('.nyah') && !a.startsWith('-'));
+}
+
+async function sendProject(win: BrowserWindow, path: string): Promise<void> {
+  try {
+    const bytes = new Uint8Array(await readFile(path));
+    win.webContents.send('project:openFile', { path, name: basename(path), bytes });
+  } catch (err) {
+    dialog.showErrorBox("Couldn't open the project", `${basename(path)}: ${(err as Error).message}`);
+  }
+}
+
+function openPath(path: string): void {
+  const win = BrowserWindow.getAllWindows().find((w) => readyWindows.has(w));
+  if (!win) {
+    pendingPaths.push(path);
+    if (app.isReady() && BrowserWindow.getAllWindows().length === 0) createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.focus();
+  void sendProject(win, path);
+}
+
+app.on('open-file', (event, path) => {
+  event.preventDefault();
+  openPath(path);
+});
+
+// One copy of the app: opening a file while it runs goes to the open window.
+const isFirstInstance = app.requestSingleInstanceLock();
+if (!isFirstInstance) app.quit();
+app.on('second-instance', (_event, argv) => {
+  const path = projectPathIn(argv);
+  if (path) openPath(path);
+  else BrowserWindow.getAllWindows()[0]?.focus();
+});
+{
+  const path = projectPathIn(process.argv);
+  if (path) pendingPaths.push(path);
+}
+
+ipcMain.on('project:ready', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  readyWindows.add(win);
+  for (const path of pendingPaths.splice(0)) void sendProject(win, path);
+});
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -120,6 +180,7 @@ ipcMain.on('document:state', (event, state: { title?: unknown; path?: unknown; d
 });
 
 void app.whenReady().then(() => {
+  if (!isFirstInstance) return;
   registerLibraryHandlers();
   registerExportHandlers();
   buildMenu();

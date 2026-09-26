@@ -553,3 +553,20 @@ test('makes a mouth switch layer from shapes named after mouth shapes', async ()
   expect(set.drawings.map((d: any) => d.key).sort()).toEqual(['A', 'D', 'X']);
   await expect(page.getByTestId('drawing-list')).toBeVisible();
 });
+
+test('a .nyah file opened from Finder opens in the app', async () => {
+  const file = join(dir, 'Mouth test.nyah');
+  await app.evaluate(({ dialog }, p) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: p })) as typeof dialog.showSaveDialog;
+  }, file);
+  await menu('saveAs');
+  await expect.poll(() => existsSync(file)).toBe(true);
+  await menu('new');
+  expect((await state()).names).not.toContain('Mouth');
+  // What macOS does when the file is double-clicked or dropped on the Dock icon.
+  await app.evaluate(({ app: electronApp }, p) => {
+    electronApp.emit('open-file', { preventDefault() {} }, p);
+  }, file);
+  await expect(page.getByText('Opened Mouth test.nyah')).toBeVisible();
+  expect((await state()).names).toContain('Mouth');
+});

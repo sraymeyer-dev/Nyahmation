@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a6cf0"/>
+      <stop offset="1" stop-color="#4f8cff"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd9a8"/>
+      <stop offset="1" stop-color="#f6b877"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824px rounded square centred in 1024 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- ears -->
+  <path d="M292 470 L330 250 L470 360 Z" fill="url(#fur)" stroke="#3b2a20" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M732 470 L694 250 L554 360 Z" fill="url(#fur)" stroke="#3b2a20" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M332 420 L350 310 L420 365 Z" fill="#f59ab0"/>
+  <path d="M692 420 L674 310 L604 365 Z" fill="#f59ab0"/>
+  <!-- head -->
+  <ellipse cx="512" cy="560" rx="265" ry="230" fill="url(#fur)" stroke="#3b2a20" stroke-width="22"/>
+  <!-- eyes -->
+  <ellipse cx="420" cy="520" rx="34" ry="46" fill="#3b2a20"/>
+  <ellipse cx="604" cy="520" rx="34" ry="46" fill="#3b2a20"/>
+  <circle cx="432" cy="504" r="12" fill="#fff"/>
+  <circle cx="616" cy="504" r="12" fill="#fff"/>
+  <!-- nose -->
+  <path d="M492 590 L532 590 L512 612 Z" fill="#e5707f" stroke="#3b2a20" stroke-width="10" stroke-linejoin="round"/>
+  <!-- open "nyah" mouth: the D mouth shape -->
+  <path d="M452 640 Q512 735 572 640 Q512 662 452 640 Z" fill="#8a2c3b" stroke="#3b2a20" stroke-width="14" stroke-linejoin="round"/>
+  <!-- whiskers -->
+  <g stroke="#3b2a20" stroke-width="12" stroke-linecap="round">
+    <line x1="300" y1="600" x2="200" y2="585"/>
+    <line x1="300" y1="630" x2="205" y2="645"/>
+    <line x1="724" y1="600" x2="824" y2="585"/>
+    <line x1="724" y1="630" x2="819" y2="645"/>
+  </g>
+  <!-- a rig joint and pin, hinting at animation -->
+  <circle cx="512" cy="330" r="26" fill="#fff" stroke="#e5484d" stroke-width="12"/>
+</svg>
