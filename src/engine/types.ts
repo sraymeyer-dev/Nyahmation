@@ -78,6 +78,46 @@ export interface ShapeStyle {
 
 export type PartKind = 'group' | 'shape' | 'switch' | 'image';
 
+/**
+ * How a part is combined with what is behind it (docs/DESIGN.md FX4).
+ * Multiply darkens (shading), screen and add lighten (light, glows),
+ * overlay boosts contrast.
+ */
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'add' | 'overlay';
+
+/**
+ * An effect on a part and everything inside it, applied to the group as a
+ * whole (docs/DESIGN.md FX1, FX2, BG6). Distances are in stage pixels.
+ * `id` is unique within the part; animated settings are tracks on the
+ * channel `fx:<id>:<setting>` (FX3).
+ */
+export type Effect =
+  | {
+      id: string;
+      kind: 'shadow';
+      color: string;
+      /** 0..1 */
+      opacity: number;
+      /** Direction the shadow falls, in degrees on screen: 0 right, 90 down. */
+      angle: number;
+      distance: number;
+      /** Blur radius. */
+      softness: number;
+    }
+  | { id: string; kind: 'glow'; color: string; opacity: number; size: number; /** 1 is normal; up to 4 is stronger. */ strength: number }
+  | { id: string; kind: 'blur'; amount: number }
+  | { id: string; kind: 'haze'; color: string; /** 0 none .. 1 all haze colour. */ amount: number };
+
+export type EffectKind = Effect['kind'];
+
+/** Settings of each effect that can be animated. */
+export const EFFECT_SETTINGS = {
+  shadow: ['opacity', 'angle', 'distance', 'softness'],
+  glow: ['opacity', 'size', 'strength'],
+  blur: ['amount'],
+  haze: ['amount'],
+} as const satisfies Record<EffectKind, readonly string[]>;
+
 export interface Part {
   id: string;
   name: string;
@@ -103,6 +143,15 @@ export interface Part {
   restDrawing?: string;
   /** kind === 'image': drawn with its top-left corner at the part's (0, 0). */
   image?: ImageRef;
+  /** Effects, applied in the order haze, blur, then shadows and glows behind (FX1). */
+  effects?: Effect[];
+  /** Default 'normal'. */
+  blend?: BlendMode;
+  /**
+   * The part's children (and their children) only show where the part's own
+   * artwork is: pupils inside an eye (docs/DESIGN.md D12).
+   */
+  clipChildren?: boolean;
 }
 
 export interface ImageRef {
@@ -160,7 +209,9 @@ export interface EaseCurve {
 }
 export type Ease = EasePreset | EaseCurve;
 
-export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity' | 'zoom';
+/** An animated effect setting: `fx:<effect id>:<setting>` (FX3). */
+export type EffectChannel = `fx:${string}:${string}`;
+export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity' | 'zoom' | EffectChannel;
 export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin';
 
 /**

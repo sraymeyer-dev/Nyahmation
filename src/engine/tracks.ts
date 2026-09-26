@@ -1,5 +1,5 @@
 import { poseIndexAtOrBefore } from './interpolate';
-import type { Channel, ChannelValue, Ease, Pose, Project, Track } from './types';
+import type { Channel, ChannelValue, ContinuousChannel, Ease, EffectChannel, Pose, Project, Track } from './types';
 
 // Immutable helpers for editing poses. They return new arrays/objects and keep
 // the invariants the evaluator relies on: poses sorted by frame, one per frame.
@@ -7,8 +7,22 @@ import type { Channel, ChannelValue, Ease, Pose, Project, Track } from './types'
 export const CONTINUOUS_CHANNELS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity', 'zoom'] as const;
 export const DISCRETE_CHANNELS = ['drawing', 'visible', 'drawOrder', 'pin'] as const;
 
-export function isContinuousChannel(channel: Channel): channel is (typeof CONTINUOUS_CHANNELS)[number] {
-  return (CONTINUOUS_CHANNELS as readonly Channel[]).includes(channel);
+export function isContinuousChannel(channel: Channel): channel is ContinuousChannel {
+  return (CONTINUOUS_CHANNELS as readonly Channel[]).includes(channel) || isEffectChannel(channel);
+}
+
+export function isEffectChannel(channel: string): channel is EffectChannel {
+  return channel.startsWith('fx:');
+}
+
+export function effectChannel(effectId: string, setting: string): EffectChannel {
+  return `fx:${effectId}:${setting}`;
+}
+
+/** The effect id and setting of an effect channel. */
+export function parseEffectChannel(channel: string): { effectId: string; setting: string } | null {
+  const m = /^fx:([^:]+):([^:]+)$/.exec(channel);
+  return m ? { effectId: m[1]!, setting: m[2]! } : null;
 }
 
 /** Adds a pose, replacing any pose already on that frame (keeping its ease unless a new one is given). */

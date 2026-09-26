@@ -1,6 +1,6 @@
 # Nyahmation — Design Document
 
-> **Status:** v1.3. Phases 0–4 (the MVP), 4.5 (hardening) and 5a (stage: camera, parallax, scrolling, gradients) are built; 5b is next. See §16.
+> **Status:** v1.4. Phases 0–4 (the MVP), 4.5 (hardening), 5a (stage) and 5b (look: shadows, glows, blur, haze, blend modes, clipping) are built; 5c is next. See §16.
 > **Last updated:** 2026-09-26
 
 ---
@@ -132,7 +132,7 @@ type Pose = {
 ### 4.2 Should have
 - **D10** Linear and radial gradients. (Built in phase 5a: **Fill type** in a shape's properties — solid, straight or round gradient, two colours and an angle, fitted to the shape. Stored in the shape's drawing coordinates with any number of colour stops; the solid fill is kept as the first colour for anything that can't show a gradient. SVG gradients are imported (linear and radial, `href` inheritance, `gradientUnits`, `gradientTransform`, stop opacity); oval radial gradients become circles, with a warning. Gradient outlines are still simplified to a solid colour.)
 - **D11** Boolean operations (union, subtract, intersect).
-- **D12** Clipping masks (for example, pupils clipped to the eye).
+- **D12** Clipping masks (for example, pupils clipped to the eye). (Built in phase 5b: a part with artwork and children can **Clip** them, in its Effects: everything inside it only shows on its own artwork. Put the pupil inside the eye in the Layers panel, then tick Clip on the eye. Clicking still selects a clipped part where it is hidden.)
 - **D13** Color swatches per project, and an eyedropper.
 
 ---
@@ -262,11 +262,11 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 ### 8a.2 Should have (phase 5)
 - **BG4** **Parallax depth** per layer. When the camera (A11) pans or zooms, distant layers move less and foreground layers move more, which gives a sense of depth. Depth 0 is fixed to the camera (a sky), 1 moves with the world, and above 1 is foreground. (Built in phase 5a: **Depth** in a layer's properties. A layer at depth *d* sees a camera whose pan is scaled by *d*, whose zoom is raised to the power *d*, and which turns fully from depth 1 up and not at all at depth 0. Depth 0 is the **Fixed to the camera** checkbox, see §9.3.)
 - **BG5** **Scrolling and tiling.** A layer can repeat horizontally and scroll at a set speed, for walk cycles on a "treadmill" and scenery passing a car window. (Built in phase 5a: **Scroll** in stage pixels a second, negative to the left, and **Repeat sideways**. Scrolling is always on ones. A repeating layer repeats every width of its artwork (in the rest pose); the evaluator lists just enough copies to fill what the camera sees, up to 200, and keeps the original nearest where it was drawn so it can still be clicked.)
-- **BG6** **Atmosphere.** Per-layer blur (depth of field) and haze (fading distant layers toward the sky color).
+- **BG6** **Atmosphere.** Per-layer blur (depth of field) and haze (fading distant layers toward the sky color). (Built in phase 5b as Blur and Haze effects, which work on a layer through **Layer effects**, or on any part; see §8b.)
 - **BG7** **Gradient skies** and fills (with D10 gradients). (Built in phase 5a: the scene's **Sky** option fills the picture with a gradient from a top to a bottom colour, fixed to the picture whatever the camera does. Any shape can have a gradient fill, D10.)
 - **BG8** **Background library items** (L2): save a set of background layers and reuse it in other projects. (Built: a background layer saved to the library keeps its depth, scrolling and fixed-to-camera setting. A "follows" link is dropped on the way in, since the part it named belongs to another project.)
 
-## 8b. Effects: glow and shadow (phase 5)
+## 8b. Effects: glow and shadow (built in phase 5b)
 
 - **FX1** Each part, group or layer can have an **effects stack**:
   - **Drop shadow**: color, opacity, offset (angle and distance), blur.
@@ -277,6 +277,14 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 - **FX4** **Blend modes** per part or layer: Normal, Multiply (for shading), Screen and Add (for light and glows), Overlay.
 - **FX5** (Could) A **contact shadow** preset: a soft ellipse on the ground that follows a character's feet.
 - **FX6** **Performance.** Blur is the most expensive thing Nyahmation will draw, especially on the reference machine. Effects follow the preview quality setting (N9), and the results for parts that don't change (most scenery) are cached. The export always renders effects at full quality.
+
+**As built (phase 5b):**
+- **FX7** Properties has an **Effects** section for a part, and **Layer effects** for a layer (effects on its root, so the whole layer): blend mode, Clip (D12), and **Add an effect…**: Drop shadow (colour, opacity, direction, distance, softness), Outer glow (colour, opacity, size, strength 0–4), Blur (amount) and Haze (colour, amount; it starts with the sky or background colour). Each effect can be removed with ×, which also removes its animation.
+- **FX8** A part with effects, or one that clips its children, is drawn as a **unit** (D-55): it and everything inside it, in their own draw order, go into an off-screen picture just big enough for them and their effects; haze, then blur, change that picture; shadows and glows are tinted, blurred copies of its silhouette drawn behind it; the result is placed **where the part itself sits in the draw order**, with its blend mode. Parts inside keep their order among themselves, but a unit is drawn in one go, so a part from elsewhere can no longer slip between two of its members.
+- **FX9** In Animate mode, changing an effect's number records a pose on that frame (FX3), with the first-pose rule (A2a); effect poses show as marks on the part's timeline row and retime like any other. Colours don't animate. Effect settings step with the character on twos (ST3).
+- **FX10** Blend modes inside a unit mix with the unit's other members only (the unit is isolated); on an ordinary part they mix with everything behind it.
+- **FX11** Each finished unit is kept with a note of everything that decides its pixels (the view, each member's position, artwork, opacity, effects and whether its images are loaded); if the next frame's note is identical, the kept picture is reused. Onion skins skip effects.
+- Not built: inner shadow and inner glow (Could), the contact-shadow preset (FX5).
 
 ## 9. Animation
 
@@ -532,7 +540,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **4** ✅ | Talk | Audio import, waveform and scrubbing; switch layers; mouth sets (vector and PNG); lip-sync lane with auto-advance; **MP4 with audio**. Not yet: dragging block edges (LS4; drag the marks instead), automatic lip sync (LS7, phase 6). |
 | **4.5** ✅ | Harden | **Autosave and crash recovery** (F3, §12.1); **preview quality** (N9); the playback rate readout and **Measure Preview Speed** (N11); **View on ones** (ST6). Still to do by hand: run the MVP success test on the reference machine and record the numbers (N2, N8). |
 | **5a** ✅ | Stage | **Camera** (A11, §9.3): pan, zoom and turn, posed on the timeline, on ones; camera view; **layers fixed to the camera, optionally following a part**. Parallax depth (BG4), scrolling and repeating (BG5). **Linear and radial gradients** (D10) including SVG import, and a gradient sky (BG7). Background library items keep these settings (BG8). |
-| **5b** | Look | First, **off-screen group rendering** (draw a group into its own canvas, then combine it). On top of it: drop shadow and outer glow (FX1), effects on a whole group (FX2), animatable effect settings (FX3), blend modes (FX4), layer blur and haze (BG6), clipping masks (D12). Caching for parts that don't change (FX6). |
+| **5b** ✅ | Look | **Off-screen group rendering** (FX8). On top of it: drop shadow and outer glow (FX1), effects on a whole group (FX2), animatable effect settings (FX3), blend modes (FX4), layer blur and haze (BG6), clipping masks (D12). Unchanged groups are reused from frame to frame (FX6, FX11). |
 | **5c** | Craft | Draw-order swaps recorded in Animate mode (R9); easing curve editor (A10); MOV ProRes 4444 export (E3); copy and paste poses (A13, without mirror). Leftovers: stretching a range of poses (A6), dragging lip-sync block edges (LS4). |
 | **6+** | Stretch | Automatic lip sync (Rhubarb, LS7), mirror poses, animation cycles, boolean operations (D11), stepping that changes over time (ST7), contact-shadow preset (FX5), WebM and H.265 (E4), swatches and eyedropper (D13), "update from library" (L5). |
 
@@ -599,6 +607,9 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-52 | In Animate mode the canvas looks through the camera by default (CAM3), so the preview matches the export (N3) | Proposed |
 | D-53 | Scrolling is on ones; a repeating layer repeats every width of its rest-pose artwork (BG5) | Proposed |
 | D-54 | Gradients are stored in the shape's drawing coordinates with a solid fallback colour; the sky is a scene setting fixed to the picture (D10, BG7) | Proposed |
+| D-55 | A part with effects or clipping is drawn as one off-screen unit placed at the part's own draw-order slot; its members keep their order among themselves (FX8). Effects apply in a fixed order: haze, blur, then shadows and glows behind | Proposed |
+| D-56 | Effects have ids; their animated settings are continuous tracks on the channel `fx:<effect id>:<setting>`, so easing, retiming and stepping work unchanged. Project format v5 | Proposed |
+| D-57 | Clipping is a part option ("Clip") that clips the part's children to its own artwork, rather than a separate mask object | Proposed |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
@@ -631,6 +642,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.4 (2026-09-26):** Phase 5b built: effects on parts and layers (§8b: drop shadow, outer glow, blur, haze), applied to groups as a whole off-screen (FX8), animatable (FX9), blend modes (FX4), clipping (D12), reuse of unchanged groups (FX11). Added D-55 to D-57.
 - **v1.3 (2026-09-26):** Phase 5a built: the camera (§9.3) with camera view, layers fixed to the camera that can follow a part, parallax depth (BG4), scrolling and repeating (BG5), gradients with SVG import (D10), a gradient sky (BG7), library backgrounds keeping these (BG8). D-48 and D-51 decided; D-50 to D-54 added.
 - **v1.2 (2026-09-26):** Phase 4.5 (hardening) built: autosave and crash recovery (F3, §12.1), preview quality (N9), playback rate and Measure Preview Speed (N11), View on ones (ST6). Phase 5 split into 5a–5c (§16); gradients (D10) and clipping masks (D12) scheduled. Noted that the engine parts of R9 and A10 already exist. Added D-46 to D-49.
 - **v1.1 (2026-09-25):** Phase 4 built, completing the MVP: sound import, waveform, scrubbing and audio-clock playback (§8.4), Make Switch Layer, mouth sets from names or files (S7–S10), the lip-sync palette and blocks (LS8, LS9), MP4 with AAC audio and the PNG enlargement warning (E8, S6). Added D-41 to D-45.

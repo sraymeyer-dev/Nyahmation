@@ -3,7 +3,7 @@ import { evaluateScene, type ResolvedPart } from './evaluate';
 import { evaluateContinuous } from './interpolate';
 import { IDENTITY, type Mat2D } from './math';
 import { findTrack, setPartPose } from './tracks';
-import type { ContinuousChannel, Project, Transform } from './types';
+import type { ContinuousChannel, EffectChannel, Project, Transform } from './types';
 
 // Editing tools work the same way in both modes (docs/DESIGN.md §9.0): they
 // read a part's current transform and write a new one. What "current" and
@@ -68,7 +68,7 @@ export function frameAccess(project: Project, frame: number): TransformAccess {
 const CHANNELS: readonly (keyof Transform & ContinuousChannel)[] = ['x', 'y', 'rotation', 'scaleX', 'scaleY'];
 
 /** The continuous channels a part has (zoom belongs to the camera). */
-export type PartChannel = Exclude<ContinuousChannel, 'zoom'>;
+export type PartChannel = Exclude<ContinuousChannel, 'zoom' | EffectChannel>;
 
 /** A part's own (not inherited) value of a continuous channel on a frame, ignoring stepping and pins. */
 export function channelValueAt(project: Project, id: string, channel: PartChannel, frame: number): number | undefined {

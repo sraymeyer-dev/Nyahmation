@@ -732,6 +732,158 @@ test('a sky, a gradient fill, parallax depth and a scrolling layer', async () =>
   expect((after.x - before.x) / zoom).toBeCloseTo(-200, 0);
 });
 
+/** A small scene for effects: two overlapping red and green squares in one group, and a yellow eye with a blue pupil. */
+function effectsScene() {
+  const style = (fill: string) => ({ fill, stroke: null, strokeWidth: 0, lineCap: 'round', lineJoin: 'round', fillRule: 'nonzero' });
+  const square = (size: number) => [
+    { closed: true, points: [{ anchor: { x: 0, y: 0 } }, { anchor: { x: size, y: 0 } }, { anchor: { x: size, y: size } }, { anchor: { x: 0, y: size } }] },
+  ];
+  const part = (id: string, name: string, kind: string, x: number, y: number, extra: object = {}) => ({
+    id,
+    name,
+    kind,
+    rest: { x, y, rotation: 0, scaleX: 1, scaleY: 1 },
+    joint: { pivot: { x: 0, y: 0 } },
+    opacity: 1,
+    visible: true,
+    drawOrder: 0,
+    children: [],
+    ...extra,
+  });
+  const a = part('a', 'Red', 'shape', 200, 200, { paths: square(100), style: style('#ff0000'), drawOrder: 1 });
+  const b = part('b', 'Green', 'shape', 250, 200, { paths: square(100), style: style('#00ff00'), drawOrder: 2 });
+  const group = part('g', 'Squares', 'group', 0, 0, { children: [a, b] });
+  const pupil = part('pupil', 'Pupil', 'shape', 80, 20, { paths: square(60), style: style('#0000ff'), drawOrder: 2 });
+  const eye = part('eye', 'Eye', 'shape', 600, 200, { paths: square(100), style: style('#ffff00'), drawOrder: 1, children: [pupil] });
+  return {
+    format: 'nyahmation',
+    version: 5,
+    scene: {
+      width: 1000,
+      height: 500,
+      fps: 24,
+      durationFrames: 24,
+      background: '#ffffff',
+      stepping: 1,
+      layers: [
+        { id: 'squares', name: 'Squares', kind: 'character', root: part('sq', 'Squares', 'group', 0, 0, { children: [group] }) },
+        { id: 'eyes', name: 'Eyes', kind: 'character', root: part('ey', 'Eyes', 'group', 0, 0, { children: [eye] }) },
+      ],
+      tracks: [],
+      audio: [],
+    },
+    drawingSets: [],
+    assets: [],
+  };
+}
+
+async function stagePixel(x: number, y: number): Promise<number[]> {
+  await page.waitForTimeout(60);
+  return page.evaluate(([sx, sy]) => {
+    const p = (window as any).__nyah.stageScreen({ x: sx, y: sy });
+    const c = document.querySelector<HTMLCanvasElement>('[data-testid="stage"]')!;
+    const dpr = window.devicePixelRatio || 1;
+    return [...c.getContext('2d')!.getImageData(Math.round(p.x * dpr), Math.round(p.y * dpr), 1, 1).data.slice(0, 3)];
+  }, [x, y] as const);
+}
+
+/** A part's row in the Layers panel, by exact name. */
+const outlineRow = (name: string) => page.getByTestId('part-row').filter({ has: page.locator('.name', { hasText: new RegExp(`^${name}$`) }) });
+
+const near = (a: number[], b: number[], tolerance = 12) => a.every((v, i) => Math.abs(v - b[i]!) <= tolerance);
+
+test('a drop shadow on a group is one shadow of the whole group', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  expect(near(await stagePixel(420, 250), [255, 255, 255])).toBe(true);
+
+  // Select the group and give it a hard shadow 100 px to the right.
+  await outlineRow('Squares').click();
+  await page.getByLabel('Add effect').selectOption('shadow');
+  await expect(page.getByTestId('effect-shadow')).toBeVisible();
+  for (const [label, value] of [
+    ['Drop shadow direction', '0'],
+    ['Drop shadow distance', '100'],
+    ['Drop shadow softness', '0'],
+    ['Drop shadow opacity', '50'],
+  ]) {
+    await page.getByLabel(label).fill(value);
+    await page.getByLabel(label).press('Enter');
+  }
+  const single = await stagePixel(420, 250); // behind the green square's shadow only
+  const overlap = await stagePixel(370, 250); // where both squares' shadows would overlap
+  expect(near(single, [128, 128, 128], 20)).toBe(true);
+  // One shadow of the whole group: no darker patch where the squares overlap.
+  expect(near(overlap, single, 6)).toBe(true);
+  await page.screenshot({ path: 'test-results/effects-shadow.png' });
+});
+
+test('blend modes, clipping, haze and an animated glow', async () => {
+  // Multiply: green over red makes black, only inside the group.
+  await outlineRow('Green').click();
+  await page.getByLabel('Blend mode').selectOption('multiply');
+  expect(near(await stagePixel(275, 250), [0, 0, 0], 20)).toBe(true);
+  expect(near(await stagePixel(325, 250), [0, 255, 0], 20)).toBe(true);
+
+  // Clipping: the pupil only shows on the eye.
+  expect(near(await stagePixel(720, 250), [0, 0, 255])).toBe(true);
+  await outlineRow('Eye').click();
+  await page.getByLabel('Clip children').check();
+  expect(near(await stagePixel(720, 250), [255, 255, 255])).toBe(true);
+  expect(near(await stagePixel(690, 250), [0, 0, 255])).toBe(true);
+
+  // Layer haze: the whole Eyes layer fades toward the background colour.
+  await page.getByTestId('layer-row').filter({ hasText: 'Eyes' }).click();
+  await page.getByLabel('Add effect').selectOption('haze');
+  await page.getByLabel('Haze amount').fill('100');
+  await page.getByLabel('Haze amount').press('Enter');
+  expect(near(await stagePixel(650, 250), [255, 255, 255])).toBe(true);
+  await page.getByLabel('Remove Haze').click();
+  expect(near(await stagePixel(650, 250), [255, 255, 0])).toBe(true);
+
+  // Animate a glow on the eye: bigger on frame 10.
+  await outlineRow('Eye').click();
+  await page.getByLabel('Add effect').selectOption('glow');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await goToFrame(10);
+  await page.getByLabel('Outer glow size').fill('60');
+  await page.getByLabel('Outer glow size').press('Enter');
+  const track = await page.evaluate(() =>
+    (window as any).__nyah.store.getState().project.scene.tracks.find((t: any) => t.partId === 'eye' && t.channel.endsWith(':size')),
+  );
+  expect(track.poses.map((p: any) => [p.frame, p.value])).toEqual([
+    [0, 18],
+    [10, 60],
+  ]);
+  await expect(row('Eye').locator('.tl-mark')).toHaveCount(2);
+  const glowAt = async (f: number) => {
+    await page.evaluate((frame) => (window as any).__nyah.store.set({ frame }), f);
+    return stagePixel(600 - 25, 250); // just left of the eye
+  };
+  const weak = await glowAt(0);
+  const strong = await glowAt(10);
+  expect(strong[2]!).toBeLessThan(weak[2]! - 10); // more yellow (less blue) at the bigger glow
+  await page.screenshot({ path: 'test-results/effects-glow.png' });
+});
+
+test('groups that look the same as last frame are reused, not redrawn', async () => {
+  // The squares' shadow group doesn't move; stepping through frames reuses it.
+  const stats = () => page.evaluate(() => ({ ...(window as any).__nyah.groupStats }));
+  await page.evaluate(() => (window as any).__nyah.store.set({ frame: 3 }));
+  await page.waitForTimeout(50);
+  const before = await stats();
+  for (let f = 4; f < 8; f++) {
+    await page.evaluate((frame) => (window as any).__nyah.store.set({ frame }), f);
+    await page.waitForTimeout(30);
+  }
+  const after = await stats();
+  expect(after.reused - before.reused).toBeGreaterThanOrEqual(4);
+});
+
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {
   await page.evaluate(() => {
     window.confirm = () => true;

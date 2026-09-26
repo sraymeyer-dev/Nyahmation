@@ -10,6 +10,7 @@ import { NumberField, PaintField, Row, Section } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
 import { GradientFields } from './GradientFields';
+import { EffectsSection } from './EffectsSection';
 
 // Shows and edits whatever is selected: the scene (nothing selected), a
 // layer, one part, or several parts at once (shared settings only).
@@ -172,6 +173,7 @@ function LayerSections({ loc }: { loc: PartLocation }) {
     <>
       <LayerProperties loc={loc} />
       <LayerCameraSection layer={loc.layer} />
+      <EffectsSection part={loc.layer.root} title="Layer effects" />
     </>
   );
 }
@@ -254,6 +256,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
         {single?.kind === 'image' && single.image && <ImageHint loc={locs[0]!} />}
       </Section>
       {single?.kind === 'switch' && <SwitchSection part={single} />}
+      {single && <EffectsSection part={single} />}
       {single && mode === 'build' && <JointSection loc={locs[0]!} />}
       {shapes.length > 0 && (
         <Section title={shapes.length === 1 ? 'Fill & stroke' : `Fill & stroke (${shapes.length} shapes)`}>

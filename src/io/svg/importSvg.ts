@@ -280,9 +280,9 @@ class SvgImporter {
     if (style.display === 'none') return null;
     let matrix = multiply(parentMatrix, parseTransform(el.getAttribute('transform')));
 
-    if (el.getAttribute('clip-path')) this.warn('Clipping paths were ignored.');
+    if (el.getAttribute('clip-path')) this.warn('Clipping paths were ignored. To clip parts to a shape, put them inside it and tick "Clip" in its Effects.');
     if (el.getAttribute('mask')) this.warn('Masks were ignored.');
-    if (el.getAttribute('filter')) this.warn('Filters (such as blur or drop shadow) were ignored; glow and shadow effects are planned for phase 5.');
+    if (el.getAttribute('filter')) this.warn('Filters (such as blur or drop shadow) were ignored. Add them back with the Effects section in Properties.');
 
     let part: Part | null = null;
     let bounds: Bounds = EMPTY_BOUNDS;

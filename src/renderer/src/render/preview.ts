@@ -41,7 +41,7 @@ function drawOnionSkins(ctx: CanvasRenderingContext2D, s: PreviewState, screen: 
     off.clearRect(0, 0, width, height);
     // Through the camera, each skin is shown as that frame's picture showed it.
     const resolved = evaluateScene(s.project, skin.frame, { onOnes: s.viewOnOnes });
-    renderScene(off, s.project, resolved, multiply(screen, lens(s, resolved)), images, { clip: false, background: false });
+    renderScene(off, s.project, resolved, multiply(screen, lens(s, resolved)), images, { clip: false, background: false, effects: false });
     off.setTransform(1, 0, 0, 1, 0, 0);
     off.globalCompositeOperation = 'source-in';
     off.fillStyle = skin.color;

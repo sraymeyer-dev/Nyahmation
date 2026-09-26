@@ -13,7 +13,8 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 4 (dialogue):** done. Sound import with waveforms and scrubbing, switch layers and mouth sets (vector or PNG), lip sync by typing letters, and MP4 export with the sound. **This completes the MVP.**
 - **Phase 4.5 (hardening):** done. Autosave with crash recovery, a preview quality setting for slower computers, a speed check, and "View on ones".
 - **Phase 5a (stage):** done. A camera you pose on the timeline, layers fixed to the camera (which can follow a character, like a speech bubble), parallax depth, scrolling and repeating scenery, gradient fills and a gradient sky.
-- Next: phase 5b (glow, shadow, blend modes), then 5c (draw-order swaps, easing editor, ProRes). See the roadmap in the design document.
+- **Phase 5b (look):** done. Drop shadows, glows, blur and haze on parts or whole layers (animatable), blend modes, and clipping (pupils that stay inside the eye).
+- Next: phase 5c (draw-order swaps, easing editor, ProRes). See the roadmap in the design document.
 
 ## Running it on a Mac (step by step)
 
@@ -128,6 +129,14 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - **Depth**: 1 is the stage. Distant scenery at 0.3 moves less when the camera pans or zooms; foreground at 1.5 moves more.
   - **Scroll** and **Repeat sideways**: slide the layer along (negative speeds go left) and repeat it so it never runs out, for scenery passing a car window or a walk on the spot.
 - **Gradients:** select a shape and choose a **Fill type** (straight or round gradient) with two colours and an angle. With nothing selected, the scene's **Sky** option paints a gradient sky behind everything. Gradients in imported SVGs come in too.
+
+**Effects (Properties → Effects, or Layer effects for a whole layer):**
+- **Add an effect…**: **Drop shadow**, **Outer glow**, **Blur** or **Haze**. Effects on a group or layer apply to it as a whole, so a shadow on Pip is one shadow of all of Pip, not darker where his arm crosses his body. Remove one with ×.
+- In **Animate** mode, changing an effect's number (a glow's size, a shadow's distance) records it on that frame, so effects can pulse or grow. The marks appear on that part's timeline row.
+- **Blend**: Multiply for shading, Screen or Add for light, Overlay for contrast.
+- **Clip**: put parts inside a shape (drag the pupil onto the eye in the Layers panel), select the shape and tick **Clip**: the pupil only shows on the eye.
+- **Depth of field and distance:** give far-away scenery layers a little **Blur** and **Haze** (it fades them toward the sky).
+- Effects are the slowest thing to draw. Groups that don't change from frame to frame are reused rather than redrawn; if playback stutters, try Preview → Half. Exports are always full quality.
 
 **Dialogue and lip sync:**
 1. **Record or get the line** as a WAV, MP3, M4A, OGG or FLAC file. In Animate mode, go to the frame where it should start and **Import Art or Sound…** (Cmd+I). It appears on the **Sound** row with its waveform. Drag it to line it up; click it to set its volume or mute it. The scene gets longer if the sound needs it.

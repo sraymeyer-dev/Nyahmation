@@ -1,9 +1,9 @@
 import { translatePath } from './geometry';
-import { isContinuousChannel } from './tracks';
-import { CAMERA_ID, type Layer, type LayerKind, type Part, type PartKind, type Project, type Scene, type Stepping, type Track } from './types';
+import { isContinuousChannel, parseEffectChannel } from './tracks';
+import { CAMERA_ID, EFFECT_SETTINGS, type BlendMode, type Effect, type Layer, type LayerKind, type Part, type PartKind, type Project, type Scene, type Stepping, type Track } from './types';
 
 /** Bump when the saved format changes, and add a migration from the old version. */
-export const PROJECT_VERSION = 4;
+export const PROJECT_VERSION = 5;
 
 export class ProjectFormatError extends Error {
   override name = 'ProjectFormatError';
@@ -88,6 +88,9 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   // fixed to the camera. Nothing to convert; the number marks files that older
   // versions can't show correctly.
   3: (raw) => raw,
+  // v5: effects (shadow, glow, blur, haze), blend modes and clipping on
+  // parts, and effect animation tracks. Nothing to convert.
+  4: (raw) => raw,
 };
 
 export function migrateProject(
@@ -152,6 +155,7 @@ export function validateProject(project: Project): void {
   if (scene.sky !== undefined && !(typeof scene.sky?.top === 'string' && typeof scene.sky?.bottom === 'string')) fail('the sky is damaged');
 
   const partIds = new Set<string>();
+  const effectsOf = new Map<string, Effect[]>();
   const checkPart = (part: Part) => {
     if (!isObject(part) || typeof part.id !== 'string') fail('a part has no id');
     if (partIds.has(part.id)) fail(`part id ${part.id} is used twice`);
@@ -159,6 +163,16 @@ export function validateProject(project: Project): void {
     if (!Array.isArray(part.children)) fail(`part ${part.name} has no children list`);
     const g = part.style?.fillGradient;
     if (g !== undefined && !validGradient(g)) fail(`part ${part.name} has a damaged gradient`);
+    if (part.blend !== undefined && !BLEND_MODES.includes(part.blend)) fail(`part ${part.name} has an unknown blend mode`);
+    if (part.effects !== undefined) {
+      if (!Array.isArray(part.effects)) fail(`part ${part.name} has damaged effects`);
+      const ids = new Set<string>();
+      for (const e of part.effects) {
+        if (!validEffect(e) || ids.has(e.id)) fail(`part ${part.name} has a damaged effect`);
+        ids.add(e.id);
+      }
+      effectsOf.set(part.id, part.effects);
+    }
     part.children.forEach(checkPart);
   };
   scene.layers.forEach((layer: Layer) => {
@@ -179,6 +193,11 @@ export function validateProject(project: Project): void {
       if (!['x', 'y', 'zoom', 'rotation'].includes(track.channel)) fail(`the camera has no ${track.channel} channel`);
     } else if (!partIds.has(track.partId)) fail(`track for unknown part ${track.partId}`);
     if (track.partId !== CAMERA_ID && track.channel === 'zoom') fail(`only the camera zooms (${key})`);
+    const fx = parseEffectChannel(track.channel);
+    if (track.channel.startsWith('fx:')) {
+      const effect = fx && effectsOf.get(track.partId)?.find((e) => e.id === fx.effectId);
+      if (!fx || !effect || !(EFFECT_SETTINGS[effect.kind] as readonly string[]).includes(fx.setting)) fail(`animation for a missing effect (${key})`);
+    }
     let lastFrame = -1;
     for (const pose of track.poses) {
       if (!Number.isInteger(pose.frame) || pose.frame <= lastFrame) {
@@ -195,6 +214,15 @@ export function validateProject(project: Project): void {
       }
     }
   });
+}
+
+const BLEND_MODES: readonly BlendMode[] = ['normal', 'multiply', 'screen', 'add', 'overlay'];
+
+function validEffect(e: unknown): e is Effect {
+  if (!isObject(e) || typeof e.id !== 'string' || !(e.kind in EFFECT_SETTINGS)) return false;
+  const settings = EFFECT_SETTINGS[e.kind as Effect['kind']] as readonly string[];
+  if (!settings.every((k) => Number.isFinite(e[k]))) return false;
+  return e.kind === 'blur' || typeof e.color === 'string';
 }
 
 function validGradient(g: unknown): boolean {

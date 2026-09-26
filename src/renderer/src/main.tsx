@@ -6,6 +6,9 @@ import { evaluateScene } from '../../engine/evaluate';
 import { pathsBounds } from '../../engine/geometry';
 import { applyToPoint } from '../../engine/math';
 import { store } from './editor/store';
+import { zoomToFit } from './editor/actions';
+import { parseProject } from '../../engine/project';
+import { groupStats } from './render/groups';
 import { toScreen } from './editor/screen';
 import './styles.css';
 
@@ -43,6 +46,12 @@ function findPart(name: string) {
   part(name: string) {
     return findPart(name)?.part ?? null;
   },
+  /** Opens a project from its JSON (tests). */
+  loadProjectJson(json: unknown) {
+    store.load(parseProject(json), new Map(), null);
+    zoomToFit();
+  },
+  groupStats,
   /** Screen position of a stage point. */
   stageScreen(p: { x: number; y: number }) {
     return toScreen(store.getState(), p);

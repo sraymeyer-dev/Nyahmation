@@ -5,9 +5,12 @@ import { chainFromAncestors, solveIk, type IkLink } from './ik';
 import { evaluateContinuous, evaluateDiscrete, evaluateDiscreteFrom } from './interpolate';
 import { applyToPoint, IDENTITY, invert, localMatrix, multiply, type Mat2D } from './math';
 import { collectAnchors, steppedFrame } from './stepping';
-import { isContinuousChannel } from './tracks';
+import { effectChannel, isContinuousChannel } from './tracks';
+import { EFFECT_SETTINGS } from './types';
 import type {
+  BlendMode,
   CameraState,
+  Effect,
   Channel,
   ImageRef,
   Layer,
@@ -55,6 +58,12 @@ export interface ResolvedPart {
   pin?: { at: Vec2; reached: boolean };
   /** The joint point in the part's drawing coordinates. */
   pivot: Vec2;
+  /** The parent part (absent for a layer's root). */
+  parentId?: string;
+  /** Effects with this frame's values (docs/DESIGN.md §8b). */
+  effects?: Effect[];
+  blend?: BlendMode;
+  clipChildren?: boolean;
 }
 
 export interface ResolvedScene {
@@ -254,7 +263,7 @@ function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: 
     motionFrame = steppedFrame(frame, stepping, collectAnchors(poseLists));
   }
 
-  const cont = (part: Part, channel: Channel, rest: number) => {
+  const cont = (part: Part, channel: Channel, rest: number): number => {
     const track = tracks.get(part.id)?.get(channel);
     return track ? evaluateContinuous(track.poses as Pose<number>[], motionFrame, rest) : rest;
   };
@@ -318,7 +327,7 @@ function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: 
 
   // 3. World matrices, opacity, visibility; resolve each part.
   const out: ResolvedPart[] = [];
-  const visit = (part: Part, parentWorld: Mat2D, parentOpacity: number, parentVisible: boolean, parentLocked: boolean) => {
+  const visit = (part: Part, parentWorld: Mat2D, parentOpacity: number, parentVisible: boolean, parentLocked: boolean, parentId?: string) => {
     const local = locals.get(part.id)!;
     const world = multiply(parentWorld, localMatrix(local, part.joint.pivot));
     const opacity = parentOpacity * Math.min(Math.max(cont(part, 'opacity', part.opacity), 0), 1);
@@ -338,6 +347,16 @@ function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: 
       drawOrder: disc(part, 'drawOrder', part.drawOrder),
       pivot: part.joint.pivot,
     };
+    if (parentId) resolved.parentId = parentId;
+    if (part.effects?.length) {
+      resolved.effects = part.effects.map((effect) => {
+        const out: Record<string, unknown> = { ...effect };
+        for (const setting of EFFECT_SETTINGS[effect.kind]) out[setting] = cont(part, effectChannel(effect.id, setting), out[setting] as number);
+        return out as unknown as Effect;
+      });
+    }
+    if (part.blend && part.blend !== 'normal') resolved.blend = part.blend;
+    if (part.clipChildren && part.children.length) resolved.clipChildren = true;
     const pin = pinOf.get(part.id);
     if (pin) resolved.pin = { at: pin.at, reached: pinReached.get(part.id) ?? false };
     if (part.kind === 'shape') {
@@ -351,7 +370,7 @@ function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: 
       resolved.image = part.image;
     }
     out.push(resolved);
-    for (const child of part.children) visit(child, world, opacity, visible, locked);
+    for (const child of part.children) visit(child, world, opacity, visible, locked, part.id);
   };
   visit(layer.root, IDENTITY, 1, true, false);
 

@@ -1088,3 +1088,21 @@ input[type='color'] {
   color: #f5b642;
   font-weight: 600;
 }
+
+/* Effects (phase 5b) */
+.effect {
+  margin: 6px 0;
+  padding: 4px 0 2px 8px;
+  border-left: 2px solid var(--accent);
+}
+
+.effect-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.effect-head button {
+  padding: 0 6px;
+}
