@@ -65,6 +65,16 @@ describe('Autosaver', () => {
     expect(calls).toEqual(['write Untitled', 'clear']);
   });
 
+  it('after a save, the next change is autosaved soon rather than a minute after the last autosave', async () => {
+    const { saver, advance } = setup();
+    const project = createProject();
+    await saver.tick({ project, assets, dirty: true, file: null });
+    advance(5_000);
+    await saver.tick({ project, assets, dirty: false, file: null });
+    advance(5_000);
+    expect(await saver.tick({ project: createProject(), assets, dirty: true, file: null })).toBe('wrote');
+  });
+
   it('force writes straight away (after restoring recovered work)', async () => {
     const { saver, advance } = setup();
     await saver.tick({ project: createProject(), assets, dirty: true, file: null });

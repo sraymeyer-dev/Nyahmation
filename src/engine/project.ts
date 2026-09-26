@@ -1,9 +1,9 @@
 import { translatePath } from './geometry';
 import { isContinuousChannel } from './tracks';
-import type { Layer, LayerKind, Part, PartKind, Project, Scene, Stepping, Track } from './types';
+import { CAMERA_ID, type Layer, type LayerKind, type Part, type PartKind, type Project, type Scene, type Stepping, type Track } from './types';
 
 /** Bump when the saved format changes, and add a migration from the old version. */
-export const PROJECT_VERSION = 3;
+export const PROJECT_VERSION = 4;
 
 export class ProjectFormatError extends Error {
   override name = 'ProjectFormatError';
@@ -84,6 +84,10 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     }));
     return { ...raw, scene, drawingSets };
   },
+  // v4: a camera (tracks on CAMERA_ID), and layers with a parallax depth or
+  // fixed to the camera. Nothing to convert; the number marks files that older
+  // versions can't show correctly.
+  3: (raw) => raw,
 };
 
 export function migrateProject(
@@ -154,6 +158,8 @@ export function validateProject(project: Project): void {
   scene.layers.forEach((layer: Layer) => {
     if (layer.kind !== 'character' && layer.kind !== 'background') fail(`layer ${layer.name} has an unknown kind`);
     if (layer.stepping !== undefined && !isStepping(layer.stepping)) fail(`layer ${layer.name} has invalid stepping`);
+    if (layer.depth !== undefined && !(Number.isFinite(layer.depth) && layer.depth >= 0)) fail(`layer ${layer.name} has an invalid depth`);
+    if (layer.follow !== undefined && typeof layer.follow?.partId !== 'string') fail(`layer ${layer.name} follows nothing`);
     checkPart(layer.root);
   });
 
@@ -162,7 +168,10 @@ export function validateProject(project: Project): void {
     const key = `${track.partId}/${track.channel}`;
     if (seen.has(key)) fail(`two tracks for ${key}`);
     seen.add(key);
-    if (!partIds.has(track.partId)) fail(`track for unknown part ${track.partId}`);
+    if (track.partId === CAMERA_ID) {
+      if (!['x', 'y', 'zoom', 'rotation'].includes(track.channel)) fail(`the camera has no ${track.channel} channel`);
+    } else if (!partIds.has(track.partId)) fail(`track for unknown part ${track.partId}`);
+    if (track.partId !== CAMERA_ID && track.channel === 'zoom') fail(`only the camera zooms (${key})`);
     let lastFrame = -1;
     for (const pose of track.poses) {
       if (!Number.isInteger(pose.frame) || pose.frame <= lastFrame) {

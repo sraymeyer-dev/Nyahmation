@@ -5,7 +5,7 @@ import { removeClip, select } from '../editor/actions';
 import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint } from '../editor/animate';
 import { store, useEditor, type MarkRef } from '../editor/store';
 import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings';
-import type { AudioClip, DrawingSet, Part } from '../../../engine/types';
+import { CAMERA_ID, type AudioClip, type DrawingSet, type Part } from '../../../engine/types';
 import { clipPeaks, playbackClock, playFrom, scrubAt, stopPlayback } from '../audio/audioEngine';
 import { activeSwitch, enterDrawing } from '../editor/lipsync';
 import { playbackStats, resetPlaybackStats } from '../render/perf';
@@ -29,10 +29,14 @@ interface Row {
   depth: number;
   layerKind?: 'character' | 'background';
   switchPart?: boolean;
+  camera?: boolean;
 }
 
 function buildRows(project: Project, collapsed: ReadonlySet<string>): Row[] {
-  const rows: Row[] = [{ row: 'scene', id: '', name: 'Scene', depth: 0 }];
+  const rows: Row[] = [
+    { row: 'scene', id: '', name: 'Scene', depth: 0 },
+    { row: 'part', id: CAMERA_ID, name: 'Camera', depth: 0, camera: true },
+  ];
   for (const layer of project.scene.layers.slice().reverse()) {
     rows.push({ row: 'layer', id: layer.id, name: layer.name, depth: 0, layerKind: layer.kind });
     if (collapsed.has(layer.id)) continue;
@@ -62,10 +66,12 @@ export function Timeline() {
   const onion = useEditor((s) => s.onion);
   const { zoom, marks } = useEditor((s) => s.timeline);
   const selection = useEditor((s) => s.selection);
+  const cameraSelected = useEditor((s) => s.cameraSelected);
   const audioScrub = useEditor((s) => s.audioScrub);
   const selectedClip = useEditor((s) => s.selectedClip);
   const lipSyncStep = useEditor((s) => s.lipSyncStep);
   const viewOnOnes = useEditor((s) => s.viewOnOnes);
+  const cameraView = useEditor((s) => s.cameraView);
   useEditor((s) => s.audioVersion); // redraw waveforms once sound is decoded
   const active = useMemo(() => activeSwitch({ ...store.getState(), project, selection }), [project, selection]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
@@ -195,7 +201,8 @@ export function Timeline() {
   };
 
   const selectRow = (r: Row) => {
-    if (r.row === 'part') select([r.id]);
+    if (r.camera) store.set({ selection: [], points: [], cameraSelected: true });
+    else if (r.row === 'part') select([r.id]);
     else if (r.row === 'layer') {
       const layer = project.scene.layers.find((l) => l.id === r.id);
       if (layer) select([layer.root.id]);
@@ -251,6 +258,10 @@ export function Timeline() {
         <label className="check" title="Show faint copies of nearby frames">
           <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
           Onion skin
+        </label>
+        <label className="check" title="Show the picture as the camera sees it (as it will be exported). Off: the stage, with the camera's frame on it.">
+          <input type="checkbox" checked={cameraView} onChange={(e) => store.set({ cameraView: e.target.checked })} />
+          Camera view
         </label>
         {stepped && (
           <label className="check" title="Preview every frame smoothly, even for characters animated on twos or threes. Export still uses twos and threes.">
@@ -311,9 +322,13 @@ export function Timeline() {
           {rows.map((r) => {
             const frames = rowFrames(project, r.row, r.id);
             const pins = r.row === 'part' ? pinIntervals(project, r.id) : [];
-            const active = r.row === 'part' ? selectedParts.has(r.id) : r.row === 'layer' && project.scene.layers.some((l) => l.id === r.id && selectedParts.has(l.root.id));
+            const active = r.camera
+              ? cameraSelected
+              : r.row === 'part'
+                ? selectedParts.has(r.id)
+                : r.row === 'layer' && project.scene.layers.some((l) => l.id === r.id && selectedParts.has(l.root.id));
             return (
-              <div key={`${r.row}:${r.id}`} className={`tl-row tl-${r.row} ${active ? 'active' : ''}`} data-testid={`tl-${r.row}`}>
+              <div key={`${r.row}:${r.id}`} className={`tl-row tl-${r.camera ? 'camera' : r.row} ${active ? 'active' : ''}`} data-testid={`tl-${r.camera ? 'camera' : r.row}`}>
                 <div className="tl-name" style={{ paddingLeft: 6 + r.depth * 12 }} onClick={() => selectRow(r)} title={r.name}>
                   {r.row === 'layer' && (
                     <button

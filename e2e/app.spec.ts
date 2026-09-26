@@ -580,6 +580,88 @@ test('a .nyah file opened from Finder opens in the app', async () => {
   expect((await state()).names).toContain('Mouth');
 });
 
+test('the camera zooms and pans on the timeline, and only changes what you see', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  const partPoses = () => page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks.filter((t: any) => t.partId !== 'camera')));
+  const posesBefore = await partPoses();
+  const headBefore = await debug<Pt>('framePartScreen', 'Head');
+  const handBefore = await debug<Pt>('framePartScreen', 'Hand (back)');
+
+  // Camera tool, frame 24: zoom to 200% from Properties.
+  await page.keyboard.press('c');
+  await goToFrame(23);
+  const zoom = page.getByLabel('Camera zoom');
+  await zoom.fill('200');
+  await zoom.press('Enter');
+  // Frame 1 keeps the whole scene (the first pose also records where it started).
+  await expect(page.getByTestId('tl-camera').locator('.tl-mark')).toHaveCount(2);
+  const cam = () => page.evaluate(() => (window as any).__nyah.camera());
+  expect((await cam()).zoom).toBeCloseTo(2);
+
+  // Through the camera, the character looks twice as big...
+  const head = await debug<Pt>('framePartScreen', 'Head');
+  const hand = await debug<Pt>('framePartScreen', 'Hand (back)');
+  const spread = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
+  expect(spread(head, hand) / spread(headBefore, handBefore)).toBeGreaterThan(1.6);
+  // ...but on the stage nothing moved: the characters' poses are untouched.
+  expect(await partPoses()).toBe(posesBefore);
+
+  // Drag with the Camera tool: the picture follows the mouse, so the camera looks further left.
+  const before = await cam();
+  await drag([600, 300], [700, 300]);
+  const after = await cam();
+  expect(after.x).toBeLessThan(before.x - 20);
+  await page.screenshot({ path: 'test-results/camera-view.png' });
+
+  // Off: the stage, with the camera's frame drawn on it.
+  await page.getByLabel('Camera view').first().uncheck();
+  await page.waitForTimeout(50);
+  await page.screenshot({ path: 'test-results/camera-stage.png' });
+  await page.getByLabel('Camera view').first().check();
+});
+
+test('a layer fixed to the camera follows a part, keeping its size', async () => {
+  // Draw a name tag above Pip's head on a new layer (Build mode).
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await menu('newBackgroundLayer');
+  await page.keyboard.press('m');
+  const head = (await debug<Pt>('partScreen', 'Head'))!;
+  await drag([head.x - 30, head.y - 120], [head.x + 30, head.y - 90]);
+  const tagName = (await state()).selection.length ? await page.evaluate(() => {
+    const s = (window as any).__nyah.store.getState();
+    return (window as any).__nyah.nameOf(s.selection[0]);
+  }) : '';
+  expect(tagName).toMatch(/^Rectangle/);
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await page.getByTestId('layer-row').filter({ hasText: 'Background' }).first().click();
+  await page.getByLabel('Fixed to camera').check();
+  await page.getByLabel('Follows part').selectOption({ label: 'Head' });
+
+  // Animate: the camera zooms (from the previous test) and Pip walks right.
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  const tagAt = (f: number) =>
+    page.evaluate(([n, frame]) => {
+      const nyah = (window as any).__nyah;
+      nyah.store.set({ frame });
+      const headPart = nyah.part('Head');
+      return { tag: nyah.frameMiddleScreen(n), head: nyah.framePartScreen('Head', headPart.joint.pivot), size: nyah.frameScreenScale(n) };
+    }, [tagName, f] as const);
+  const a = await tagAt(0);
+  const b = await tagAt(23);
+  // The head moved on screen (the camera zoomed in 200%), and the tag moved with it,
+  // staying above the bigger head: twice as far from the neck...
+  expect(Math.hypot(b.head.x - a.head.x, b.head.y - a.head.y)).toBeGreaterThan(20);
+  expect(b.tag.x - b.head.x).toBeCloseTo(2 * (a.tag.x - a.head.x), 0);
+  expect(b.tag.y - b.head.y).toBeCloseTo(2 * (a.tag.y - a.head.y), 0);
+  // ...but at the same size on screen.
+  expect(b.size).toBeCloseTo(a.size, 3);
+  await page.screenshot({ path: 'test-results/camera-follow.png' });
+});
+
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {
   await page.evaluate(() => {
     window.confirm = () => true;

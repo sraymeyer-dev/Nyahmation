@@ -36,6 +36,8 @@ export class Autosaver {
         await this.deps.recovery.clear();
         this.hasFile = false;
         this.written = null;
+        // The next unsaved change starts a new stretch: autosave it soon.
+        this.lastWrite = -Infinity;
         return 'cleared' as const;
       });
     }

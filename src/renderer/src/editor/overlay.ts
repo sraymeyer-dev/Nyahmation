@@ -1,7 +1,8 @@
 import type { ResolvedScene } from '../../../engine/evaluate';
-import { applyToPoint, multiply, type Mat2D } from '../../../engine/math';
+import { applyToPoint, invert, multiply, type Mat2D } from '../../../engine/math';
 import type { Vec2 } from '../../../engine/types';
 import { compoundPath2D } from '../render/paths';
+import { screenScale, stageToScreen } from './screen';
 import type { EditorState } from './store';
 import { ACCENT } from './tools/common';
 import type { OverlayContext } from './tools/types';
@@ -10,31 +11,64 @@ import type { OverlayContext } from './tools/types';
 // outside the scene, the grid, selection outlines and joints.
 
 export function makeOverlayContext(ctx: CanvasRenderingContext2D, s: EditorState, resolved: ResolvedScene): OverlayContext {
-  const { zoom, panX, panY } = s.view;
-  const view: Mat2D = [zoom, 0, 0, zoom, panX, panY];
+  const view = stageToScreen(s);
   return {
     ctx,
     s,
     resolved,
-    toScreen: (p: Vec2) => ({ x: p.x * zoom + panX, y: p.y * zoom + panY }),
+    toScreen: (p: Vec2) => applyToPoint(view, p),
     toScreenMatrix: (world: Mat2D) => multiply(view, world),
   };
 }
 
+/**
+ * Dims everything outside the picture: the scene, or in Animate mode what the
+ * camera sees (a turned, zoomed frame on the stage when not looking through it).
+ */
 export function drawOutsideScene(o: OverlayContext, width: number, height: number): void {
-  const { ctx, s } = o;
-  const a = o.toScreen({ x: 0, y: 0 });
-  const b = o.toScreen({ x: s.project.scene.width, y: s.project.scene.height });
+  const { ctx, s, resolved } = o;
+  const { width: W, height: H } = s.project.scene;
+  const toStage = invert(resolved.cameraMatrix);
+  const corners = [
+    { x: 0, y: 0 },
+    { x: W, y: 0 },
+    { x: W, y: H },
+    { x: 0, y: H },
+  ].map((c) => o.toScreen(applyToPoint(toStage, c)));
+  const axisAligned = Math.abs(corners[0]!.y - corners[1]!.y) < 0.01 && Math.abs(corners[0]!.x - corners[3]!.x) < 0.01;
+  const frame = () => {
+    if (axisAligned) {
+      const [a, , b] = corners as [Vec2, Vec2, Vec2, Vec2];
+      ctx.rect(Math.round(a.x) - 0.5, Math.round(a.y) - 0.5, Math.round(b.x - a.x) + 1, Math.round(b.y - a.y) + 1);
+      return;
+    }
+    corners.forEach((c, i) => (i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y)));
+    ctx.closePath();
+  };
   ctx.save();
   ctx.fillStyle = 'rgba(20, 21, 24, 0.55)';
   ctx.beginPath();
   ctx.rect(0, 0, width, height);
-  ctx.rect(a.x, a.y, b.x - a.x, b.y - a.y);
+  frame();
   ctx.fill('evenodd');
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(Math.round(a.x) - 0.5, Math.round(a.y) - 0.5, Math.round(b.x - a.x) + 1, Math.round(b.y - a.y) + 1);
+  const camera = s.mode === 'animate' && !s.cameraView && !axisAlignedDefault(resolved);
+  ctx.strokeStyle = camera ? 'rgba(245, 182, 66, 0.9)' : 'rgba(255, 255, 255, 0.25)';
+  ctx.lineWidth = camera ? 1.5 : 1;
+  ctx.beginPath();
+  frame();
+  ctx.stroke();
+  if (camera) {
+    ctx.fillStyle = 'rgba(245, 182, 66, 0.9)';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText('Camera', corners[0]!.x + 4, corners[0]!.y - 5);
+  }
   ctx.restore();
+}
+
+/** The camera shows exactly the scene (no pan, zoom or turn). */
+function axisAlignedDefault(resolved: ResolvedScene): boolean {
+  const m = resolved.cameraMatrix;
+  return Math.abs(m[0] - 1) < 1e-9 && Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9 && Math.abs(m[3] - 1) < 1e-9 && Math.abs(m[4]) < 1e-6 && Math.abs(m[5]) < 1e-6;
 }
 
 export function drawGrid(o: OverlayContext): void {
@@ -42,7 +76,7 @@ export function drawGrid(o: OverlayContext): void {
   const { width: W, height: H } = s.project.scene;
   let step = s.grid.size;
   // Skip lines when they'd be closer than 6 px apart.
-  while (step * s.view.zoom < 6) step *= 2;
+  while (step * screenScale(s) < 6) step *= 2;
   ctx.save();
   ctx.strokeStyle = 'rgba(79, 140, 255, 0.18)';
   ctx.lineWidth = 1;

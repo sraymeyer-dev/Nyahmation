@@ -1,7 +1,7 @@
 import { frameAccess, restAccess, type TransformAccess } from '../../../engine/access';
 import { locatePart, walkParts } from '../../../engine/edit';
 import { deletePoses, poseFrames, retimePoses, setPoseEase, type RetimeTarget } from '../../../engine/retime';
-import type { Ease, Project, Track } from '../../../engine/types';
+import { CAMERA_ID, type Ease, type Project, type Track } from '../../../engine/types';
 import { store, type EditorState, type MarkRef } from './store';
 
 // Animate-mode helpers: how tools read and write transforms, and what the
@@ -14,11 +14,11 @@ export function editAccess(s: EditorState, project: Project = s.project): Transf
   return s.mode === 'animate' ? frameAccess(project, s.frame) : restAccess(project);
 }
 
-/** The parts a timeline row stands for. */
+/** The parts a timeline row stands for. The scene row includes the camera (CAMERA_ID); the Camera row is a part row. */
 export function rowParts(project: Project, row: MarkRef['row'], id: string): Set<string> {
   if (row === 'part') return new Set([id]);
   const layers = row === 'scene' ? project.scene.layers : project.scene.layers.filter((l) => l.id === id);
-  const ids = new Set<string>();
+  const ids = new Set<string>(row === 'scene' ? [CAMERA_ID] : []);
   for (const layer of layers) for (const p of walkParts(layer.root)) ids.add(p.id);
   return ids;
 }

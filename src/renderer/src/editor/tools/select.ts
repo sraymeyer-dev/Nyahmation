@@ -8,7 +8,7 @@ import { resolvedScene, select } from '../actions';
 import { editAccess } from '../animate';
 import { boundsIntersect, hitTopPart, resolvedBounds } from '../hitTest';
 import { store, type EditorState } from '../store';
-import { sceneToScreen } from '../view';
+import { toScreen as stageToScreenPoint } from '../screen';
 import { ACCENT, dist, drawHandle, drawMarquee, GRAB_PX, invalidate, pixel, snap } from './common';
 import type { OverlayContext, Tool } from './types';
 
@@ -76,7 +76,7 @@ export function selectionFrame(s: EditorState): Frame | null {
 }
 
 function rotateHandleScreen(s: EditorState, f: Frame): Vec2 {
-  const toScreen = (p: Vec2) => sceneToScreen(s.view, applyToPoint(f.world, p));
+  const toScreen = (p: Vec2) => stageToScreenPoint(s, applyToPoint(f.world, p));
   const top = toScreen({ x: (f.box.minX + f.box.maxX) / 2, y: f.box.minY });
   const center = toScreen({ x: (f.box.minX + f.box.maxX) / 2, y: (f.box.minY + f.box.maxY) / 2 });
   const d = dist(top, center) || 1;
@@ -136,7 +136,7 @@ export const selectTool: Tool = {
         return;
       }
       for (const h of frame.handles) {
-        if (local && dist(p.screen, sceneToScreen(s.view, applyToPoint(frame.world, h.point))) <= GRAB_PX) {
+        if (local && dist(p.screen, stageToScreenPoint(s, applyToPoint(frame.world, h.point))) <= GRAB_PX) {
           const anchor = frame.handles.find((x) => x.id === OPPOSITE[h.id])!.point;
           store.beginGesture();
           drag = {

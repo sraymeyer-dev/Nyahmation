@@ -9,7 +9,7 @@ import type { LibraryEntry, RecoveryEntry } from '../../../preload/api';
 // step is simply an earlier project object; unchanged parts are shared
 // between steps, which keeps history cheap (docs/DESIGN.md D-31).
 
-export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pin' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
+export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pin' | 'camera' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
 export type Mode = 'build' | 'animate';
 /** Preview resolution (docs/DESIGN.md N9): full, half or quarter. Export is always full. */
 export type PreviewQuality = 1 | 0.5 | 0.25;
@@ -82,6 +82,10 @@ export interface EditorState {
   previewQuality: PreviewQuality;
   /** Preview characters on ones even if they animate on twos or threes (ST6). Export is unaffected. */
   viewOnOnes: boolean;
+  /** Animate mode: look through the camera, as the video will be (docs/DESIGN.md CAM3). Otherwise the stage is shown with the camera's frame on it. */
+  cameraView: boolean;
+  /** The camera is selected (its timeline row, or the Camera tool): Properties shows it. */
+  cameraSelected: boolean;
   /** Autosaved work from a session that didn't close normally, offered back (F3). */
   recoveries: readonly RecoveryEntry[];
 }
@@ -141,6 +145,8 @@ function initialState(): EditorState {
     library: { dir: '', items: [], loaded: false },
     previewQuality: savedQuality(),
     viewOnOnes: false,
+    cameraView: true,
+    cameraSelected: false,
     recoveries: [],
   };
 }

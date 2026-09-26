@@ -4,7 +4,7 @@ import type { Channel, ChannelValue, Ease, Pose, Project, Track } from './types'
 // Immutable helpers for editing poses. They return new arrays/objects and keep
 // the invariants the evaluator relies on: poses sorted by frame, one per frame.
 
-export const CONTINUOUS_CHANNELS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity'] as const;
+export const CONTINUOUS_CHANNELS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity', 'zoom'] as const;
 export const DISCRETE_CHANNELS = ['drawing', 'visible', 'drawOrder', 'pin'] as const;
 
 export function isContinuousChannel(channel: Channel): channel is (typeof CONTINUOUS_CHANNELS)[number] {

@@ -112,6 +112,20 @@ export interface Layer {
   root: Part;
   /** Overrides the scene's stepping for this layer. */
   stepping?: Stepping;
+  /**
+   * How the layer moves when the camera moves (docs/DESIGN.md BG4). 1 (the
+   * default) is the stage itself; below 1 is further away and moves less (a
+   * distant hill); above 1 is foreground and moves more. 0 is fixed to the
+   * camera: it stays put on screen, the same size, whatever the camera does.
+   */
+  depth?: number;
+  /**
+   * Only for a layer fixed to the camera (depth 0): it rides along with this
+   * part (a name tag or speech bubble following a head), keeping its size and
+   * angle on screen. It sits where it was drawn relative to the part's joint
+   * in the rest pose (docs/DESIGN.md CAM6).
+   */
+  follow?: { partId: string };
 }
 
 // ---- Animation ---------------------------------------------------------------
@@ -123,7 +137,7 @@ export interface EaseCurve {
 }
 export type Ease = EasePreset | EaseCurve;
 
-export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity';
+export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity' | 'zoom';
 export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin';
 
 /**
@@ -157,7 +171,26 @@ export interface Pose<T> {
   ease?: Ease;
 }
 
+/**
+ * The camera's tracks use this in place of a part id, with the channels x, y
+ * (the stage point at the centre of the picture), zoom and rotation
+ * (docs/DESIGN.md §9.3).
+ */
+export const CAMERA_ID = 'camera';
+
+/** What the camera sees on one frame. */
+export interface CameraState {
+  /** Stage point shown at the centre of the picture. */
+  x: number;
+  y: number;
+  /** 2 shows everything twice as big. */
+  zoom: number;
+  /** Degrees, clockwise: the picture turns the other way. */
+  rotation: number;
+}
+
 export interface Track<C extends Channel = Channel> {
+  /** A part id, or CAMERA_ID. */
   partId: string;
   channel: C;
   /** Sorted by frame, at most one pose per frame. */

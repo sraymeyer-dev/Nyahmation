@@ -1,3 +1,4 @@
+import { maxZoomForDepth } from '../../../engine/camera';
 import { locatePart, restWorldMatrix, walkParts } from '../../../engine/edit';
 import { evaluateScene } from '../../../engine/evaluate';
 import type { Project } from '../../../engine/types';
@@ -5,7 +6,7 @@ import { readImageInfo } from '../../../io/imageInfo';
 import type { ExportFormat } from '../../../preload/api';
 import { encodeWav } from '../../../io/wav';
 import { mixdown } from '../audio/audioEngine';
-import { renderScene } from '../render/canvasRenderer';
+import { pictureView, renderScene } from '../render/canvasRenderer';
 import { store } from './store';
 
 // Renders the scene frame by frame at full quality and hands each frame to
@@ -35,7 +36,8 @@ export function exportSize(sceneW: number, sceneH: number, height: number): { wi
 
 /**
  * PNGs that will be shown bigger than their own pixels in the video, so may
- * look soft (docs/DESIGN.md S6). Checked at each part's rest size.
+ * look soft (docs/DESIGN.md S6). Checked at each part's rest size, and the
+ * camera's closest zoom.
  */
 export function enlargedImages(project: Project, assets: ReadonlyMap<string, Uint8Array>, exportScale: number): string[] {
   const out: string[] = [];
@@ -45,13 +47,16 @@ export function enlargedImages(project: Project, assets: ReadonlyMap<string, Uin
   };
   const assetName = (id: string) => project.assets.find((a) => a.id === id)?.name ?? 'an image';
   for (const layer of project.scene.layers) {
+    // A camera zooming in enlarges everything it sees (less for distant layers).
+    const cameraZoom = maxZoomForDepth(project, layer.depth ?? 1);
+    const when = cameraZoom > 1.01 ? ' when the camera zooms in' : '';
     for (const part of walkParts(layer.root)) {
       const loc = locatePart(project, part.id);
       if (!loc) continue;
       const m = restWorldMatrix(loc);
-      const partScale = Math.max(Math.hypot(m[0], m[1]), Math.hypot(m[2], m[3])) * exportScale;
+      const partScale = Math.max(Math.hypot(m[0], m[1]), Math.hypot(m[2], m[3])) * exportScale * cameraZoom;
       if (part.kind === 'image' && part.image && partScale > 1.01) {
-        out.push(`${part.name} (${assetName(part.image.assetId)}) at ${Math.round(partScale * 100)}%`);
+        out.push(`${part.name} (${assetName(part.image.assetId)}) at ${Math.round(partScale * 100)}%${when}`);
       }
       if (part.kind !== 'switch') continue;
       const set = project.drawingSets.find((d) => d.id === part.drawingSetId);
@@ -61,7 +66,7 @@ export function enlargedImages(project: Project, assets: ReadonlyMap<string, Uin
           const info = pixels(item.assetId);
           if (!info) continue;
           const scale = partScale * Math.max(item.width / info.width, item.height / info.height);
-          if (scale > 1.01) out.push(`${part.name} ${drawing.key} (${assetName(item.assetId)}) at ${Math.round(scale * 100)}%`);
+          if (scale > 1.01) out.push(`${part.name} ${drawing.key} (${assetName(item.assetId)}) at ${Math.round(scale * 100)}%${when}`);
         }
       }
     }
@@ -135,7 +140,8 @@ export async function runExport(
       const frame = first + i;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, size.width, size.height);
-      renderScene(ctx, project, evaluateScene(project, frame), [size.scale, 0, 0, size.scale, 0, 0], (id) => images.get(id) ?? null, {
+      const resolved = evaluateScene(project, frame);
+      renderScene(ctx, project, resolved, pictureView(resolved, size.scale), (id) => images.get(id) ?? null, {
         background: !(settings.format === 'png' && settings.transparent),
       });
       let bytes: Uint8Array;

@@ -1082,3 +1082,9 @@ input[type='color'] {
 .playback-rate.slow {
   color: var(--warn);
 }
+
+/* The camera's row on the timeline */
+.tl-camera .tl-name {
+  color: #f5b642;
+  font-weight: 600;
+}

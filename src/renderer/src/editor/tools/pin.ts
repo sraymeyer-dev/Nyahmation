@@ -28,7 +28,10 @@ export const pinTool: Tool = {
       return;
     }
     const point = applyToPoint(invert(hit.world), p.scene);
-    store.commit(pinPart(s.project, hit.id, s.frame, point, p.scene), {
+    // Pins live in the layer's own space: the stage, unless the layer has a parallax depth.
+    const layer = resolved.layerMatrices.get(hit.layerId);
+    const at = layer ? applyToPoint(invert(layer), p.scene) : p.scene;
+    store.commit(pinPart(s.project, hit.id, s.frame, point, at), {
       status: `Pinned “${hit.name}” from frame ${s.frame + 1}. Click it again on a later frame to release it.`,
     });
   },

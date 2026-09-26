@@ -5,7 +5,8 @@ import { store } from '../editor/store';
 import { onInvalidate } from '../editor/tools/common';
 import { TOOLS } from '../editor/tools';
 import type { Tool, ToolPointer } from '../editor/tools/types';
-import { screenToScene, zoomAt } from '../editor/view';
+import { zoomAt } from '../editor/view';
+import { fromScreen } from '../editor/screen';
 import { getImage } from '../render/images';
 import { recordPlaybackDraw } from '../render/perf';
 import { renderPreview } from '../render/preview';
@@ -72,7 +73,7 @@ export function Viewport() {
       const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       return {
         screen,
-        scene: screenToScene(store.getState().view, screen),
+        scene: fromScreen(store.getState(), screen),
         shift: e.shiftKey,
         alt: e.altKey,
         mod: e.metaKey || e.ctrlKey,

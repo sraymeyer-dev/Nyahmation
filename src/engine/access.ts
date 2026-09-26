@@ -45,7 +45,8 @@ export function restAccess(project: Project): TransformAccess {
 
 /** Access to the pose shown on `frame` (after stepping and pins), writing poses on that frame. */
 export function frameAccess(project: Project, frame: number): TransformAccess {
-  const resolved = new Map<string, ResolvedPart>(evaluateScene(project, frame).parts.map((p) => [p.id, p]));
+  const scene = evaluateScene(project, frame);
+  const resolved = new Map<string, ResolvedPart>(scene.parts.map((p) => [p.id, p]));
   const parentOf = new Map<string, string>();
   for (const layer of project.scene.layers) {
     for (const p of walkParts(layer.root)) for (const c of p.children) parentOf.set(c.id, p.id);
@@ -54,7 +55,10 @@ export function frameAccess(project: Project, frame: number): TransformAccess {
     local: (id) => resolved.get(id)?.local,
     parentWorld: (id) => {
       const parent = parentOf.get(id);
-      return parent ? (resolved.get(parent)?.world ?? IDENTITY) : IDENTITY;
+      if (parent) return resolved.get(parent)?.world ?? IDENTITY;
+      // A layer root lives in its layer's space (moved by the camera for parallax layers).
+      const layerId = resolved.get(id)?.layerId;
+      return (layerId && scene.layerMatrices.get(layerId)) || IDENTITY;
     },
     world: (id) => resolved.get(id)?.world ?? IDENTITY,
     write: (target, changes) => recordPoses(target, frame, changes, (id) => resolved.get(id)?.local),
@@ -63,8 +67,11 @@ export function frameAccess(project: Project, frame: number): TransformAccess {
 
 const CHANNELS: readonly (keyof Transform & ContinuousChannel)[] = ['x', 'y', 'rotation', 'scaleX', 'scaleY'];
 
+/** The continuous channels a part has (zoom belongs to the camera). */
+export type PartChannel = Exclude<ContinuousChannel, 'zoom'>;
+
 /** A part's own (not inherited) value of a continuous channel on a frame, ignoring stepping and pins. */
-export function channelValueAt(project: Project, id: string, channel: ContinuousChannel, frame: number): number | undefined {
+export function channelValueAt(project: Project, id: string, channel: PartChannel, frame: number): number | undefined {
   const part = locatePart(project, id)?.part;
   if (!part) return undefined;
   const rest = channel === 'opacity' ? part.opacity : part.rest[channel];
@@ -73,7 +80,7 @@ export function channelValueAt(project: Project, id: string, channel: Continuous
 }
 
 /** Records one channel's value on a frame, with the starting-pose rule (A2a). */
-export function recordValue(project: Project, id: string, channel: ContinuousChannel, frame: number, value: number): Project {
+export function recordValue(project: Project, id: string, channel: PartChannel, frame: number, value: number): Project {
   const part = locatePart(project, id)?.part;
   if (!part) return project;
   const track = findTrack(project.scene.tracks, id, channel);

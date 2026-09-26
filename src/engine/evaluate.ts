@@ -1,10 +1,13 @@
-import { walkParts } from './edit';
+import { cameraAt, cameraForDepth, cameraMatrix, defaultCamera } from './camera';
+import { locatePart, restWorldMatrix, subtreeBounds, walkParts } from './edit';
+import { isEmptyBounds } from './geometry';
 import { chainFromAncestors, solveIk, type IkLink } from './ik';
 import { evaluateContinuous, evaluateDiscrete, evaluateDiscreteFrom } from './interpolate';
-import { applyToPoint, IDENTITY, localMatrix, multiply, type Mat2D } from './math';
+import { applyToPoint, IDENTITY, invert, localMatrix, multiply, type Mat2D } from './math';
 import { collectAnchors, steppedFrame } from './stepping';
 import { isContinuousChannel } from './tracks';
 import type {
+  CameraState,
   Channel,
   ImageRef,
   Layer,
@@ -27,7 +30,11 @@ export interface ResolvedPart {
   name: string;
   kind: PartKind;
   layerId: string;
-  /** Drawing coordinates → scene coordinates. */
+  /**
+   * Drawing coordinates → scene (stage) coordinates. For a parallax layer or
+   * one fixed to the camera, this is where the part effectively appears on
+   * the stage under this frame's camera (see ResolvedScene.layerMatrices).
+   */
   world: Mat2D;
   /** The animated local transform (useful for editing tools). */
   local: Transform;
@@ -46,6 +53,8 @@ export interface ResolvedPart {
   image?: ImageRef;
   /** Set while the part is pinned; `reached` is false if the limb can't reach the pin. */
   pin?: { at: Vec2; reached: boolean };
+  /** The joint point in the part's drawing coordinates. */
+  pivot: Vec2;
 }
 
 export interface ResolvedScene {
@@ -55,6 +64,15 @@ export interface ResolvedScene {
   background: string;
   /** In paint order: first is furthest back. */
   parts: ResolvedPart[];
+  camera: CameraState;
+  /** Stage → picture: what the camera shows (docs/DESIGN.md §9.3). Identity when the camera hasn't moved. */
+  cameraMatrix: Mat2D;
+  /**
+   * Layer space → stage, for layers the camera moves differently (parallax
+   * depth, fixed to the camera, following a part). Missing means identity.
+   * Poses and pins are stored in layer space.
+   */
+  layerMatrices: ReadonlyMap<string, Mat2D>;
 }
 
 type TrackIndex = Map<string, Map<Channel, Track>>;
@@ -85,12 +103,85 @@ export interface EvaluateOptions {
 export function evaluateScene(project: Project, frame: number, options: EvaluateOptions = {}): ResolvedScene {
   const { scene } = project;
   const tracks = indexTracks(scene.tracks);
-  const parts: ResolvedPart[] = [];
-  for (const layer of scene.layers) {
-    const stepping = options.onOnes ? 1 : (layer.stepping ?? scene.stepping);
-    parts.push(...evaluateLayer(layer, frame, stepping, tracks));
+  const byLayer = scene.layers.map((layer) => evaluateLayer(layer, frame, options.onOnes ? 1 : (layer.stepping ?? scene.stepping), tracks));
+
+  // The camera (on ones) and how it moves each layer.
+  const camera = cameraAt(project, frame);
+  const home = defaultCamera(scene);
+  const toPicture = cameraMatrix(camera, scene.width, scene.height);
+  const toStage = invert(toPicture);
+  const layerMatrices = new Map<string, Mat2D>();
+  const moveLayer = (i: number, pictureMatrix: Mat2D) => {
+    const m = multiply(toStage, pictureMatrix);
+    if (isIdentity(m)) return;
+    layerMatrices.set(scene.layers[i]!.id, m);
+    for (const part of byLayer[i]!) {
+      part.world = multiply(m, part.world);
+      if (part.pin) part.pin = { ...part.pin, at: applyToPoint(m, part.pin.at) };
+    }
+  };
+  const followers: number[] = [];
+  scene.layers.forEach((layer, i) => {
+    const depth = layer.depth ?? 1;
+    if (depth === 0 && layer.follow) followers.push(i);
+    else if (depth !== 1) moveLayer(i, cameraMatrix(cameraForDepth(camera, home, depth), scene.width, scene.height));
+  });
+  // Layers fixed to the camera that follow a part (docs/DESIGN.md CAM6): the
+  // layer keeps its size and angle on screen, and its middle keeps its place
+  // relative to the part's joint, that distance growing as the part is shown
+  // bigger (so a bubble above a head stays above it when the camera zooms in).
+  if (followers.length) {
+    const resolved = new Map(byLayer.flat().map((p) => [p.id, p]));
+    const followerIds = new Set(followers.map((i) => scene.layers[i]!.id));
+    for (const i of followers) {
+      const layer = scene.layers[i]!;
+      const target = resolved.get(layer.follow!.partId);
+      const loc = target && !followerIds.has(target.layerId) ? locatePart(project, target.id) : undefined;
+      if (!target || !loc) {
+        moveLayer(i, IDENTITY);
+        continue;
+      }
+      const restWorld = restWorldMatrix(loc);
+      const shown = multiply(toPicture, target.world);
+      const now = applyToPoint(shown, target.pivot);
+      const rest = applyToPoint(restWorld, target.pivot);
+      const k = Math.sqrt(Math.abs(det(shown)) / (Math.abs(det(restWorld)) || 1));
+      const middle = layerMiddle(project, layer);
+      // Where the layer's middle goes, and how far that is from where it was drawn.
+      const x = now.x + k * (middle.x - rest.x);
+      const y = now.y + k * (middle.y - rest.y);
+      moveLayer(i, [1, 0, 0, 1, x - middle.x, y - middle.y]);
+    }
   }
-  return { frame, width: scene.width, height: scene.height, background: scene.background, parts };
+
+  return {
+    frame,
+    width: scene.width,
+    height: scene.height,
+    background: scene.background,
+    parts: byLayer.flat(),
+    camera,
+    cameraMatrix: toPicture,
+    layerMatrices,
+  };
+}
+
+const det = (m: Mat2D) => m[0] * m[3] - m[1] * m[2];
+
+const middles = new WeakMap<Layer, Vec2>();
+/** The middle of a layer's artwork in the rest pose (its origin if it has none). */
+function layerMiddle(project: Project, layer: Layer): Vec2 {
+  let m = middles.get(layer);
+  if (!m) {
+    const b = subtreeBounds(project, layer.root, localMatrix(layer.root.rest, layer.root.joint.pivot));
+    m = isEmptyBounds(b) ? applyToPoint(localMatrix(layer.root.rest, layer.root.joint.pivot), layer.root.joint.pivot) : { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+    middles.set(layer, m);
+  }
+  return m;
+}
+
+function isIdentity(m: Mat2D): boolean {
+  return Math.abs(m[0] - 1) < 1e-12 && Math.abs(m[1]) < 1e-12 && Math.abs(m[2]) < 1e-12 && Math.abs(m[3] - 1) < 1e-12 && Math.abs(m[4]) < 1e-9 && Math.abs(m[5]) < 1e-9;
 }
 
 /** The scene with no animation applied: what Build mode shows (docs/DESIGN.md §9.0). */
@@ -194,6 +285,7 @@ function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: 
       visible,
       locked,
       drawOrder: disc(part, 'drawOrder', part.drawOrder),
+      pivot: part.joint.pivot,
     };
     const pin = pinOf.get(part.id);
     if (pin) resolved.pin = { at: pin.at, reached: pinReached.get(part.id) ?? false };

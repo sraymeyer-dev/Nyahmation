@@ -8,6 +8,7 @@ import type { Ease, Part, Project, Scene, ShapeStyle, Stepping, Transform } from
 import { store, useEditor } from '../editor/store';
 import { NumberField, PaintField, Row, Section } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
+import { CameraSection, LayerCameraSection } from './CameraProperties';
 
 // Shows and edits whatever is selected: the scene (nothing selected), a
 // layer, one part, or several parts at once (shared settings only).
@@ -142,6 +143,15 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
         </button>
       </Row>
     </Section>
+  );
+}
+
+function LayerSections({ loc }: { loc: PartLocation }) {
+  return (
+    <>
+      <LayerProperties loc={loc} />
+      <LayerCameraSection layer={loc.layer} />
+    </>
   );
 }
 
@@ -352,6 +362,7 @@ export function Properties() {
   const locs = selection.map((id) => locatePart(project, id)).filter((l): l is PartLocation => !!l);
   const layerRoot = locs.length === 1 && !locs[0]!.parent ? locs[0] : null;
   const clip = useEditor((s) => s.project.scene.audio.find((c) => c.id === s.selectedClip));
+  const camera = useEditor((s) => s.cameraSelected && s.mode === 'animate');
   return (
     <div className="properties" data-testid="properties">
       <div className="panel-header">
@@ -360,8 +371,9 @@ export function Properties() {
       <div className="properties-body">
         {clip && <AudioClipSection clip={clip} />}
         {mode === 'animate' && <PoseMarks />}
-        {locs.length === 0 && <SceneProperties project={project} />}
-        {layerRoot && <LayerProperties loc={layerRoot} />}
+        {camera && <CameraSection />}
+        {locs.length === 0 && !camera && <SceneProperties project={project} />}
+        {layerRoot && <LayerSections loc={layerRoot} />}
         {locs.length > 0 && !layerRoot && <PartProperties locs={locs.filter((l) => l.parent)} />}
       </div>
     </div>

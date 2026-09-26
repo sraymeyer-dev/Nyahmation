@@ -39,9 +39,16 @@ const get = () => store.getState();
 // ---- Derived data ----------------------------------------------------------
 
 const restCache = new WeakMap<Project, ResolvedScene>();
+let frameCache: { project: Project; frame: number; onOnes: boolean; resolved: ResolvedScene } | null = null;
 /** What the canvas shows: the rest pose in Build mode, the animation in Animate mode. */
 export function resolvedScene(s: EditorState): ResolvedScene {
-  if (s.mode === 'animate') return evaluateScene(s.project, s.frame, { onOnes: s.viewOnOnes });
+  if (s.mode === 'animate') {
+    const c = frameCache;
+    if (c && c.project === s.project && c.frame === s.frame && c.onOnes === s.viewOnOnes) return c.resolved;
+    const resolved = evaluateScene(s.project, s.frame, { onOnes: s.viewOnOnes });
+    frameCache = { project: s.project, frame: s.frame, onOnes: s.viewOnOnes, resolved };
+    return resolved;
+  }
   let r = restCache.get(s.project);
   if (!r) restCache.set(s.project, (r = evaluateRestPose(s.project)));
   return r;
@@ -97,11 +104,11 @@ export function select(ids: readonly string[], additive = false): void {
     selection = [...set];
   }
   const layerId = selection[0] ? locatePart(s.project, selection[0])?.layer.id : undefined;
-  store.set({ selection, points: [], selectedClip: ids.length ? null : s.selectedClip, activeLayerId: layerId ?? s.activeLayerId });
+  store.set({ selection, points: [], selectedClip: ids.length ? null : s.selectedClip, activeLayerId: layerId ?? s.activeLayerId, cameraSelected: false });
 }
 
 export function deselect(): void {
-  store.set({ selection: [], points: [] });
+  store.set({ selection: [], points: [], cameraSelected: false });
 }
 
 export function selectAll(): void {
@@ -118,7 +125,8 @@ export function selectParent(): void {
 }
 
 export function setTool(tool: ToolId): void {
-  store.set({ tool });
+  // The Camera tool shows the camera's settings.
+  store.set(tool === 'camera' ? { tool, selection: [], points: [], cameraSelected: true } : { tool });
 }
 
 /** Switches mode, picking a tool that works in the new mode. */
@@ -128,8 +136,8 @@ export function setMode(mode: 'build' | 'animate'): void {
   const buildOnly = ['points', 'joint', 'pen', 'rect', 'ellipse', 'polygon', 'star', 'line'];
   let tool = s.tool;
   if (mode === 'animate' && buildOnly.includes(tool)) tool = 'pose';
-  if (mode === 'build' && tool === 'pin') tool = 'select';
-  store.set({ mode, tool, playing: false, points: [] });
+  if (mode === 'build' && (tool === 'pin' || tool === 'camera')) tool = 'select';
+  store.set({ mode, tool, playing: false, points: [], cameraSelected: mode === 'animate' && s.cameraSelected });
 }
 
 // ---- Editing -------------------------------------------------------------------

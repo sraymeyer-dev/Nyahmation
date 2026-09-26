@@ -1,5 +1,5 @@
 import { evaluateScene, type ResolvedScene } from '../../../engine/evaluate';
-import type { Mat2D } from '../../../engine/math';
+import { IDENTITY, multiply, type Mat2D } from '../../../engine/math';
 import type { EditorState } from '../editor/store';
 import { renderScene, type ImageLookup } from './canvasRenderer';
 
@@ -9,7 +9,7 @@ import { renderScene, type ImageLookup } from './canvasRenderer';
 // for a slow graphics chip. Handles and outlines are drawn afterwards at full
 // sharpness by the viewport. Export never comes through here.
 
-type PreviewState = Pick<EditorState, 'project' | 'frame' | 'view' | 'mode' | 'onion' | 'playing' | 'previewQuality' | 'viewOnOnes'>;
+type PreviewState = Pick<EditorState, 'project' | 'frame' | 'view' | 'mode' | 'onion' | 'playing' | 'previewQuality' | 'viewOnOnes' | 'cameraView'>;
 
 let onionCanvas: OffscreenCanvas | null = null;
 let lowCanvas: OffscreenCanvas | null = null;
@@ -25,7 +25,7 @@ const context2d = (c: OffscreenCanvas) => c.getContext('2d') as unknown as Canva
  * Onion skinning (docs/DESIGN.md A8): earlier frames tinted red, later frames
  * tinted green, fading with distance.
  */
-function drawOnionSkins(ctx: CanvasRenderingContext2D, s: PreviewState, view: Mat2D, images: ImageLookup): void {
+function drawOnionSkins(ctx: CanvasRenderingContext2D, s: PreviewState, screen: Mat2D, images: ImageLookup): void {
   const { width, height } = ctx.canvas;
   onionCanvas = reuse(onionCanvas, width, height);
   const off = context2d(onionCanvas);
@@ -39,7 +39,9 @@ function drawOnionSkins(ctx: CanvasRenderingContext2D, s: PreviewState, view: Ma
     off.setTransform(1, 0, 0, 1, 0, 0);
     off.globalCompositeOperation = 'source-over';
     off.clearRect(0, 0, width, height);
-    renderScene(off, s.project, evaluateScene(s.project, skin.frame, { onOnes: s.viewOnOnes }), view, images, { clip: false, background: false });
+    // Through the camera, each skin is shown as that frame's picture showed it.
+    const resolved = evaluateScene(s.project, skin.frame, { onOnes: s.viewOnOnes });
+    renderScene(off, s.project, resolved, multiply(screen, lens(s, resolved)), images, { clip: false, background: false });
     off.setTransform(1, 0, 0, 1, 0, 0);
     off.globalCompositeOperation = 'source-in';
     off.fillStyle = skin.color;
@@ -52,6 +54,9 @@ function drawOnionSkins(ctx: CanvasRenderingContext2D, s: PreviewState, view: Ma
   }
 }
 
+/** The camera, when the canvas looks through it (see editor/screen.ts). */
+const lens = (s: PreviewState, resolved: ResolvedScene): Mat2D => (s.mode === 'animate' && s.cameraView ? resolved.cameraMatrix : IDENTITY);
+
 /**
  * Draws the scene into `ctx` (a full-size canvas, already cleared to the
  * workspace colour). `dpr` is the screen's pixel density.
@@ -60,7 +65,8 @@ export function renderPreview(ctx: CanvasRenderingContext2D, s: PreviewState, re
   const q = s.previewQuality;
   const k = dpr * q;
   const { zoom, panX, panY } = s.view;
-  const view: Mat2D = [zoom * k, 0, 0, zoom * k, panX * k, panY * k];
+  const screen: Mat2D = [zoom * k, 0, 0, zoom * k, panX * k, panY * k];
+  const view = multiply(screen, lens(s, resolved));
 
   let target = ctx;
   let low: OffscreenCanvas | null = null;
@@ -74,10 +80,8 @@ export function renderPreview(ctx: CanvasRenderingContext2D, s: PreviewState, re
   const onion = s.mode === 'animate' && s.onion.enabled && !s.playing;
   if (onion) {
     // Scene background, then faint tinted copies of nearby frames, then this frame on top.
-    target.setTransform(...view);
-    target.fillStyle = s.project.scene.background;
-    target.fillRect(0, 0, s.project.scene.width, s.project.scene.height);
-    drawOnionSkins(target, s, view, images);
+    renderScene(target, s.project, { ...resolved, parts: [] }, view, images, { clip: false });
+    drawOnionSkins(target, s, screen, images);
   }
   renderScene(target, s.project, resolved, view, images, { clip: false, background: !onion });
 

@@ -1,4 +1,4 @@
-import { multiply, type Mat2D } from '../../../engine/math';
+import { invert, multiply, type Mat2D } from '../../../engine/math';
 import type { ResolvedScene } from '../../../engine/evaluate';
 import { findDrawing } from '../../../engine/drawingItems';
 import type { DrawingItem, Project, ShapeStyle, VectorPath } from '../../../engine/types';
@@ -35,7 +35,11 @@ export function drawItems(ctx: CanvasRenderingContext2D, items: readonly Drawing
   }
 }
 
-/** `view` maps scene coordinates to canvas pixels. */
+/**
+ * `view` maps stage coordinates to canvas pixels. For export it includes the
+ * camera (see pictureView); the editor may look at the stage without it. The
+ * background fills, and `clip` clips to, what the camera sees.
+ */
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   project: Project,
@@ -45,7 +49,8 @@ export function renderScene(
   options: { clip?: boolean; background?: boolean } = {},
 ): void {
   ctx.save();
-  ctx.setTransform(...view);
+  // The picture's rectangle, wherever the camera has put it on the stage.
+  ctx.setTransform(...multiply(view, invert(scene.cameraMatrix)));
   if (options.background !== false) {
     ctx.fillStyle = scene.background;
     ctx.fillRect(0, 0, scene.width, scene.height);
@@ -71,4 +76,9 @@ export function renderScene(
     }
   }
   ctx.restore();
+}
+
+/** Stage → canvas pixels for a picture `scale` times the scene size, through the camera. */
+export function pictureView(scene: ResolvedScene, scale: number): Mat2D {
+  return multiply([scale, 0, 0, scale, 0, 0], scene.cameraMatrix);
 }
