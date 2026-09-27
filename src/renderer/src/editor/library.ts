@@ -10,6 +10,7 @@ import {
   itemFromParts,
   packLibraryItem,
   unpackLibraryItem,
+  updateLayerFromLibrary,
   type LibraryItem,
 } from '../../../io/libraryItem';
 import { getImage } from '../render/images';
@@ -85,7 +86,7 @@ export async function addFromLibrary(entry: LibraryEntry): Promise<void> {
     if (item.doc.layer) {
       const active = activeLayer(s);
       const index = active ? s.project.scene.layers.indexOf(active) + 1 : undefined;
-      const result = insertLibraryItem(s.project, s.assets, item, { layerIndex: index });
+      const result = insertLibraryItem(s.project, s.assets, item, { layerIndex: index, source: { relPath: entry.relPath, savedAt: entry.modified } });
       store.commit(result.project, { assets: result.assets, selection: result.partIds, points: [], activeLayerId: result.layerId, status: `Added “${entry.name}”.` });
     } else {
       const target = containerForNewPart(s);
@@ -95,6 +96,31 @@ export async function addFromLibrary(entry: LibraryEntry): Promise<void> {
     }
   } catch (err) {
     store.set({ notice: { title: `Couldn't add “${entry.name}”`, lines: [(err as Error).message] } });
+  }
+}
+
+/**
+ * Replaces a layer's drawings and rig with the library's current version of
+ * the item it came from, keeping its animation (docs/DESIGN.md L5).
+ */
+export async function updateFromLibrary(layerId: string): Promise<void> {
+  const api = window.nyah;
+  const s = get();
+  const layer = s.project.scene.layers.find((l) => l.id === layerId);
+  if (!api || !layer?.source) return;
+  if (!window.confirm(`Replace “${layer.name}”'s drawings and rig with the version in the library? Its animation is kept. You can undo this.`)) return;
+  try {
+    const list = await api.library.list();
+    const entry = list.items.find((e) => e.relPath === layer.source!.relPath);
+    if (!entry) throw new Error(`“${layer.source.relPath}” isn't in the library any more (was it renamed or moved?).`);
+    const item = unpackLibraryItem(await api.library.read(entry.relPath));
+    const r = updateLayerFromLibrary(get().project, get().assets, layerId, item, entry.modified);
+    store.commit(r.project, {
+      assets: r.assets,
+      status: `Updated “${layer.name}” from the library: ${r.kept} parts kept their animation, ${r.added} new, ${r.removed} removed.`,
+    });
+  } catch (err) {
+    store.set({ notice: { title: `Couldn't update “${layer.name}”`, lines: [(err as Error).message] } });
   }
 }
 

@@ -15,10 +15,20 @@ import ffmpegPath from 'ffmpeg-static';
 // FFmpeg reads as a second input; for PNG frames it is saved next to them as
 // soundtrack.wav.
 
-type Format = 'mp4' | 'mov' | 'png';
+type Format = 'mp4' | 'hevc' | 'mov' | 'webm' | 'png';
+
+/** The file each video format is saved as. */
+const EXTENSIONS: Record<Exclude<Format, 'png'>, { ext: string; name: string }> = {
+  mp4: { ext: 'mp4', name: 'MP4 video' },
+  hevc: { ext: 'mp4', name: 'MP4 video (H.265)' },
+  mov: { ext: 'mov', name: 'QuickTime movie (ProRes 4444)' },
+  webm: { ext: 'webm', name: 'WebM video' },
+};
 
 interface Session {
   format: Format;
+  /** WebM: keep see-through areas. */
+  transparent?: boolean;
   path: string;
   width: number;
   height: number;
@@ -79,22 +89,71 @@ function movArgs(s: Session, fps: number, soundtrack: string | null): string[] {
   ];
 }
 
+/** MP4 with H.265 (E4): about half the size of H.264 at the same quality. Tagged so Apple devices play it. */
+function hevcArgs(s: Session, fps: number, soundtrack: string | null): string[] {
+  return [
+    '-y',
+    '-f', 'rawvideo',
+    '-pix_fmt', 'rgba',
+    '-s', `${s.width}x${s.height}`,
+    '-r', String(fps),
+    '-i', '-',
+    ...(soundtrack ? ['-i', soundtrack, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '192k'] : ['-an']),
+    '-c:v', 'libx265',
+    '-preset', 'medium',
+    '-crf', '22',
+    '-tag:v', 'hvc1',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    s.path,
+  ];
+}
+
+/** WebM with VP9 and Opus (E4): for the web, optionally see-through. */
+function webmArgs(s: Session, fps: number, soundtrack: string | null): string[] {
+  return [
+    '-y',
+    '-f', 'rawvideo',
+    '-pix_fmt', 'rgba',
+    '-s', `${s.width}x${s.height}`,
+    '-r', String(fps),
+    '-i', '-',
+    ...(soundtrack ? ['-i', soundtrack, '-map', '0:v', '-map', '1:a', '-c:a', 'libopus', '-b:a', '128k'] : ['-an']),
+    '-c:v', 'libvpx-vp9',
+    '-b:v', '0',
+    '-crf', '30',
+    '-deadline', 'good',
+    '-cpu-used', '4',
+    '-row-mt', '1',
+    '-pix_fmt', s.transparent ? 'yuva420p' : 'yuv420p',
+    ...(s.transparent ? ['-auto-alt-ref', '0'] : []),
+    s.path,
+  ];
+}
+
+const ARGS: Record<Exclude<Format, 'png'>, (s: Session, fps: number, soundtrack: string | null) => string[]> = {
+  mp4: mp4Args,
+  hevc: hevcArgs,
+  mov: movArgs,
+  webm: webmArgs,
+};
+
 async function cleanUp(s: Session): Promise<void> {
   if (s.tempDir) await rm(s.tempDir, { recursive: true, force: true }).catch(() => undefined);
 }
 
-type BeginOptions = { format: Format; path: string; width: number; height: number; fps: number; audio?: unknown };
+type BeginOptions = { format: Format; path: string; width: number; height: number; fps: number; audio?: unknown; transparent?: unknown };
 
 export function registerExportHandlers(): void {
   ipcMain.handle('export:choose', async (event, format: unknown, suggestedName: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const name = typeof suggestedName === 'string' && suggestedName ? suggestedName : 'Untitled';
-    if (format === 'mp4' || format === 'mov') {
-      const filter = format === 'mp4' ? { name: 'MP4 video', extensions: ['mp4'] } : { name: 'QuickTime movie (ProRes 4444)', extensions: ['mov'] };
-      const options = { defaultPath: `${name}.${format}`, filters: [filter] };
+    if (format !== 'png' && typeof format === 'string' && format in EXTENSIONS) {
+      const { ext, name: kind } = EXTENSIONS[format as keyof typeof EXTENSIONS];
+      const options = { defaultPath: `${name}.${ext}`, filters: [{ name: kind, extensions: [ext] }] };
       const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
       if (r.canceled || !r.filePath) return null;
-      return r.filePath.toLowerCase().endsWith(`.${format}`) ? r.filePath : `${r.filePath}.${format}`;
+      return r.filePath.toLowerCase().endsWith(`.${ext}`) ? r.filePath : `${r.filePath}.${ext}`;
     }
     const options = {
       title: 'Choose a folder for the PNG frames',
@@ -106,11 +165,11 @@ export function registerExportHandlers(): void {
 
   ipcMain.handle('export:begin', async (_event, opts: BeginOptions) => {
     const { format, path, width, height, fps, audio } = opts;
-    if ((format !== 'mp4' && format !== 'mov' && format !== 'png') || typeof path !== 'string' || !(width > 0 && height > 0 && fps > 0)) {
+    if (!['mp4', 'hevc', 'mov', 'webm', 'png'].includes(format) || typeof path !== 'string' || !(width > 0 && height > 0 && fps > 0)) {
       throw new Error('Invalid export settings.');
     }
     if (audio !== undefined && !(audio instanceof Uint8Array)) throw new Error('Invalid export settings.');
-    const session: Session = { format, path, width, height, stderr: '' };
+    const session: Session = { format, path, width, height, stderr: '', transparent: opts.transparent === true };
     if (format === 'png') {
       await mkdir(path, { recursive: true });
       if (audio) await writeFile(join(path, 'soundtrack.wav'), audio);
@@ -123,7 +182,7 @@ export function registerExportHandlers(): void {
         soundtrack = join(session.tempDir, 'soundtrack.wav');
         await writeFile(soundtrack, audio);
       }
-      const ff = spawn(bin, format === 'mov' ? movArgs(session, fps, soundtrack) : mp4Args(session, fps, soundtrack));
+      const ff = spawn(bin, ARGS[format as keyof typeof ARGS](session, fps, soundtrack));
       session.ffmpeg = ff;
       ff.stderr.on('data', (d: Buffer) => {
         session.stderr = (session.stderr + d.toString()).slice(-4000);

@@ -105,6 +105,18 @@ export type Effect =
       softness: number;
     }
   | { id: string; kind: 'glow'; color: string; opacity: number; size: number; /** 1 is normal; up to 4 is stronger. */ strength: number }
+  | {
+      id: string;
+      /** A soft oval on the ground under the part (FX5): it shrinks and fades as the part rises. */
+      kind: 'contact';
+      color: string;
+      opacity: number;
+      /** Where the ground is: a height on the stage (y, in stage pixels). */
+      ground: number;
+      /** Width as a share of the part's width (1 = as wide). */
+      width: number;
+      softness: number;
+    }
   | { id: string; kind: 'blur'; amount: number }
   | { id: string; kind: 'haze'; color: string; /** 0 none .. 1 all haze colour. */ amount: number };
 
@@ -114,6 +126,7 @@ export type EffectKind = Effect['kind'];
 export const EFFECT_SETTINGS = {
   shadow: ['opacity', 'angle', 'distance', 'softness'],
   glow: ['opacity', 'size', 'strength'],
+  contact: ['opacity', 'ground', 'width', 'softness'],
   blur: ['amount'],
   haze: ['amount'],
 } as const satisfies Record<EffectKind, readonly string[]>;
@@ -205,6 +218,21 @@ export interface Layer {
    * the last one ended (a walk moving forward) instead of jumping back.
    */
   cycle?: { from: number; to: number; travel: boolean };
+  /**
+   * The library item this layer was added from (docs/DESIGN.md L5), so it
+   * can be updated to a newer version while keeping its animation. `parts`
+   * and `sets` map the item's ids to this project's.
+   */
+  source?: LayerSource;
+}
+
+export interface LayerSource {
+  /** The item's file, inside the library folder. */
+  relPath: string;
+  /** When the item's file had been saved (ms since 1970), when added or last updated. */
+  savedAt: number;
+  parts: Record<string, string>;
+  sets: Record<string, string>;
 }
 
 // ---- Animation ---------------------------------------------------------------

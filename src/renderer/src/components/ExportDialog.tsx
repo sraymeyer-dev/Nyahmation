@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { enlargedImages, exportSize, runExport, type ExportProgress, type ExportSettings } from '../editor/exporter';
+import { canBeSeeThrough, enlargedImages, exportSize, runExport, type ExportProgress, type ExportSettings } from '../editor/exporter';
 import { store, useEditor } from '../editor/store';
 
 // File → Export Video… (docs/DESIGN.md §11).
@@ -57,7 +57,9 @@ export function ExportDialog() {
         <label className="row">
           <span className="row-label">Format</span>
           <select aria-label="Export format" value={settings.format} disabled={busy} onChange={(e) => setSettings({ ...settings, format: e.target.value as ExportSettings['format'] })}>
-            <option value="mp4">MP4 video (H.264)</option>
+            <option value="mp4">MP4 video (H.264, plays everywhere)</option>
+            <option value="hevc">MP4 video (H.265, smaller files)</option>
+            <option value="webm">WebM video (VP9, for the web)</option>
             <option value="mov">MOV (ProRes 4444, for video editors)</option>
             <option value="png">PNG image sequence</option>
           </select>
@@ -87,7 +89,7 @@ export function ExportDialog() {
             )}
           </select>
         </label>
-        {settings.format !== 'mp4' && (
+        {canBeSeeThrough(settings.format) && (
           <label className="row">
             <span className="row-label">Background</span>
             <span className="row-control">

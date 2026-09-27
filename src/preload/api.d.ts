@@ -90,14 +90,14 @@ export interface LipSyncApi {
   onProgress(listener: (value: number) => void): () => void;
 }
 
-export type ExportFormat = 'mp4' | 'mov' | 'png';
+export type ExportFormat = 'mp4' | 'hevc' | 'mov' | 'webm' | 'png';
 
 export interface ExportApi {
-  /** Asks where to save: a .mp4 or .mov file, or a folder for PNG frames. Null if cancelled. */
+  /** Asks where to save: a .mp4, .mov or .webm file, or a folder for PNG frames. Null if cancelled. */
   choose(format: ExportFormat, suggestedName: string): Promise<string | null>;
   /** `audio`: the mixed soundtrack as WAV bytes, if the scene has sound. */
-  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number; audio?: Uint8Array }): Promise<number>;
-  /** MP4 and MOV: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
+  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number; audio?: Uint8Array; transparent?: boolean }): Promise<number>;
+  /** Video formats: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
   frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
   end(session: number): Promise<{ path: string }>;
   cancel(session: number): Promise<void>;

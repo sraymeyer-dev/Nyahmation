@@ -39,6 +39,12 @@ const SETTINGS: Record<EffectKind, Setting[]> = {
     { key: 'size', label: 'Size', min: 0, step: 2, suffix: 'px' },
     { key: 'strength', label: 'Strength', min: 0, max: 4, step: 0.5, suffix: '(1 = normal, up to 4)' },
   ],
+  contact: [
+    { key: 'opacity', label: 'Opacity', min: 0, max: 100, step: 5, suffix: '%', percent: true },
+    { key: 'ground', label: 'Ground', step: 5, suffix: 'px from the top' },
+    { key: 'width', label: 'Width', min: 0, max: 300, step: 10, suffix: '% of the part', percent: true },
+    { key: 'softness', label: 'Softness', min: 0, step: 2, suffix: 'px' },
+  ],
   blur: [{ key: 'amount', label: 'Amount', min: 0, step: 1, suffix: 'px' }],
   haze: [{ key: 'amount', label: 'Amount', min: 0, max: 100, step: 5, suffix: '%', percent: true }],
 };

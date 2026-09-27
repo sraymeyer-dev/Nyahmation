@@ -7,6 +7,7 @@ import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
 import { store, useEditor } from '../editor/store';
+import { updateFromLibrary } from '../editor/library';
 import { NumberField, PaintField, Row, Section, toHex } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
@@ -289,10 +290,33 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
   );
 }
 
+/** Where a layer came from in the library, and updating it to the library's version (L5). */
+function LibrarySource({ layer }: { layer: Layer }) {
+  const items = useEditor((s) => s.library.items);
+  const src = layer.source;
+  if (!src) return null;
+  const entry = items.find((e) => e.relPath === src.relPath);
+  const newer = entry && entry.modified > src.savedAt + 1000;
+  return (
+    <Section title="Library">
+      <p className="hint" data-testid="library-source">
+        From the library: {src.relPath.replace(/\.nyahitem$/i, '')}
+        {newer ? ' — the library has a newer version.' : '.'}
+      </p>
+      <Row label="">
+        <button onClick={() => void updateFromLibrary(layer.id)} title="Bring in the library's drawings and rig. The animation is kept.">
+          Update from library
+        </button>
+      </Row>
+    </Section>
+  );
+}
+
 function LayerSections({ loc }: { loc: PartLocation }) {
   return (
     <>
       <LayerProperties loc={loc} />
+      <LibrarySource layer={loc.layer} />
       <LayerCameraSection layer={loc.layer} />
       <EffectsSection part={loc.layer.root} title="Layer effects" />
     </>

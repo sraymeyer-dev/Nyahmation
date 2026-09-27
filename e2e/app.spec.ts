@@ -313,6 +313,17 @@ test('saves a character to the library and adds a copy', async () => {
   await expect(page.getByTestId('layer-row').first()).toContainText('Pip the puppet');
   await page.getByRole('tab', { name: 'Library' }).click();
   await page.screenshot({ path: 'test-results/library.png' });
+
+  // The added layer remembers the library item, and can be updated from it (L5).
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await page.getByTestId('layer-row').first().click();
+  await expect(page.getByTestId('library-source')).toContainText('From the library: Pip the puppet');
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await page.getByRole('button', { name: 'Update from library' }).click();
+  await expect(page.getByText(/Updated “Pip the puppet” from the library: \d+ parts kept their animation, 0 new, 0 removed\./)).toBeVisible();
+  await page.getByRole('tab', { name: 'Library' }).click();
 });
 
 // ---- Phase 3: animating ------------------------------------------------------
@@ -583,6 +594,24 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   const info = spawnSync(ffmpeg, ['-hide_banner', '-i', mov], { encoding: 'utf8' }).stderr;
   expect(info).toMatch(/prores.*4444/);
   expect(info).toContain('yuva444p'); // with its see-through channel
+
+  // WebM (VP9 + Opus, see-through) and MP4 with H.265 (E4).
+  const webm = join(dir, 'clip.webm');
+  const hevc = join(dir, 'clip-h265.mp4');
+  for (const [format, file, codecs] of [
+    ['webm', webm, ['Video: vp9', 'Audio: opus']],
+    ['hevc', hevc, ['Video: hevc', 'Audio: aac']],
+  ] as const) {
+    await app.evaluate(({ dialog }, f) => {
+      dialog.showSaveDialog = (async () => ({ canceled: false, filePath: f })) as typeof dialog.showSaveDialog;
+    }, file);
+    await dialogBox.getByLabel('Export format').selectOption(format);
+    await dialogBox.getByRole('button', { name: 'Export again…' }).click();
+    await expect(dialogBox.getByText(`Saved to ${file}`)).toBeVisible({ timeout: 90_000 });
+    expect(await streams(file)).toEqual(expect.arrayContaining([...codecs]));
+  }
+  // The WebM keeps its see-through channel.
+  expect(spawnSync(ffmpeg, ['-hide_banner', '-c:v', 'libvpx-vp9', '-i', webm], { encoding: 'utf8' }).stderr).toContain('yuva420p');
   await dialogBox.getByRole('button', { name: 'Close' }).click();
 });
 
@@ -1237,6 +1266,29 @@ test('colour swatches and the eyedropper', async () => {
   // Option/Alt-click removes a swatch.
   await page.getByLabel('Swatch #ffff00').click({ modifiers: ['Alt'] });
   await expect(page.getByLabel('Swatch #ffff00')).toHaveCount(0);
+});
+
+test('a contact shadow sits on the ground under a group, and shrinks as it rises', async () => {
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await outlineRow('Squares').click();
+  expect(near(await stagePixel(275, 306), [255, 255, 255])).toBe(true);
+  await page.getByLabel('Add effect').selectOption('contact');
+  await expect(page.getByTestId('effect-contact')).toBeVisible();
+  // The ground starts at the squares' lowest point (300): a soft dark oval just under them.
+  expect(await page.getByLabel('Contact shadow ground').inputValue()).toBe('300');
+  const under = await stagePixel(275, 305);
+  expect(under[0]!).toBeLessThan(235);
+  // Lift the squares 150 px (in Animate mode): the oval stays on the ground, fainter and smaller.
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await goToFrame(5);
+  await page.getByLabel('Y', { exact: true }).fill('-150');
+  await page.getByLabel('Y', { exact: true }).press('Enter');
+  const lifted = await stagePixel(275, 305);
+  expect(lifted[0]!).toBeGreaterThan(under[0]! + 10);
+  expect(lifted[0]!).toBeLessThan(255);
+  await page.screenshot({ path: 'test-results/contact-shadow.png' });
 });
 
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {

@@ -18,9 +18,12 @@ export interface ExportSettings {
   /** Output height in pixels; width follows the scene's shape. */
   height: number;
   range: 'all' | 'loop';
-  /** PNG and MOV: leave the background see-through. */
+  /** PNG, MOV and WebM: leave the background see-through. */
   transparent: boolean;
 }
+
+/** Formats that can keep see-through areas. */
+export const canBeSeeThrough = (format: ExportFormat) => format === 'png' || format === 'mov' || format === 'webm';
 
 export interface ExportProgress {
   done: number;
@@ -128,7 +131,8 @@ export async function runExport(
 
   const images = await decodeImages();
   const audio = await soundtrack(first, last);
-  const session = await api.export.begin({ format: settings.format, path, width: size.width, height: size.height, fps, audio });
+  const seeThrough = settings.transparent && canBeSeeThrough(settings.format);
+  const session = await api.export.begin({ format: settings.format, path, width: size.width, height: size.height, fps, audio, transparent: seeThrough });
   const canvas = new OffscreenCanvas(size.width, size.height);
   const raw = settings.format !== 'png'; // MP4 and MOV take raw pixels
   const ctx = canvas.getContext('2d', { willReadFrequently: raw }) as unknown as CanvasRenderingContext2D;
@@ -143,7 +147,7 @@ export async function runExport(
       ctx.clearRect(0, 0, size.width, size.height);
       const resolved = evaluateScene(project, frame);
       renderScene(ctx, project, resolved, pictureView(resolved, size.scale), (id) => images.get(id) ?? null, {
-        background: !(settings.format !== 'mp4' && settings.transparent),
+        background: !seeThrough,
       });
       let bytes: Uint8Array;
       if (raw) {

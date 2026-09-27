@@ -186,6 +186,8 @@ export function validateProject(project: Project): void {
     const c = layer.cycle;
     if (c !== undefined && !(Number.isInteger(c?.from) && Number.isInteger(c?.to) && c.from >= 0 && c.to > c.from && typeof c.travel === 'boolean')) fail(`layer ${layer.name} has an invalid cycle`);
     layerRoots.add(layer.root.id);
+    const src = layer.source;
+    if (src !== undefined && !(typeof src?.relPath === 'string' && Number.isFinite(src.savedAt) && isObject(src.parts) && isObject(src.sets))) fail(`layer ${layer.name} has a damaged library link`);
     checkPart(layer.root);
   });
 

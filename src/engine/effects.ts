@@ -1,4 +1,5 @@
-import { locatePart, updatePart } from './edit';
+import { locatePart, restWorldMatrix, subtreeBounds, updatePart } from './edit';
+import { isEmptyBounds } from './geometry';
 import { evaluateContinuous } from './interpolate';
 import { effectChannel, findTrack, setPartPose } from './tracks';
 import { EFFECT_SETTINGS, type Effect, type EffectKind, type Part, type Project } from './types';
@@ -9,13 +10,16 @@ import { EFFECT_SETTINGS, type Effect, type EffectKind, type Part, type Project 
 export const EFFECT_NAMES: Record<EffectKind, string> = {
   shadow: 'Drop shadow',
   glow: 'Outer glow',
+  contact: 'Contact shadow',
   blur: 'Blur',
   haze: 'Haze',
 };
 
-/** A new effect with settings that look reasonable on a 1080p character. */
-export function createEffect(kind: EffectKind, id: string, background = '#ffffff'): Effect {
+/** A new effect with settings that look reasonable on a 1080p character. `ground` is where the part's feet are. */
+export function createEffect(kind: EffectKind, id: string, background = '#ffffff', ground = 1000): Effect {
   switch (kind) {
+    case 'contact':
+      return { id, kind, color: '#000000', opacity: 0.35, ground: Math.round(ground), width: 0.9, softness: 12 };
     case 'shadow':
       return { id, kind, color: '#000000', opacity: 0.45, angle: 60, distance: 14, softness: 10 };
     case 'glow':
@@ -42,7 +46,11 @@ export function isAnimatableSetting(effect: Effect, setting: string): boolean {
 export function addEffect(project: Project, partId: string, kind: EffectKind): { project: Project; effectId: string | null } {
   const part = locatePart(project, partId)?.part;
   if (!part) return { project, effectId: null };
-  const effect = createEffect(kind, nextEffectId(part), project.scene.sky?.bottom ?? project.scene.background);
+  // A contact shadow starts on the ground where the part's lowest point is now.
+  const loc = locatePart(project, partId)!;
+  const b = subtreeBounds(project, part, restWorldMatrix(loc));
+  const ground = isEmptyBounds(b) ? project.scene.height * 0.9 : b.maxY;
+  const effect = createEffect(kind, nextEffectId(part), project.scene.sky?.bottom ?? project.scene.background, ground);
   return { project: updatePart(project, partId, (p) => ({ ...p, effects: [...(p.effects ?? []), effect] })), effectId: effect.id };
 }
 

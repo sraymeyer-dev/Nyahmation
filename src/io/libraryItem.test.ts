@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { insertPart, locatePart, restWorldMatrix, walkParts } from '../engine/edit';
 import { rectPath } from '../engine/geometry';
 import { createLayer, createPart, createProject } from '../engine/project';
-import type { Project } from '../engine/types';
-import { insertLibraryItem, itemFromLayer, itemFromParts, packLibraryItem, readLibraryMeta, unpackLibraryItem } from './libraryItem';
+import type { Part, Project } from '../engine/types';
+import { insertLibraryItem, itemFromLayer, itemFromParts, packLibraryItem, readLibraryMeta, unpackLibraryItem, updateLayerFromLibrary } from './libraryItem';
 
 function sample() {
   const photo = createPart({ name: 'Photo', kind: 'image', image: { assetId: 'img1', width: 10, height: 10 } });
@@ -126,5 +126,62 @@ describe('library items', () => {
   it('rejects files that are not library items', () => {
     expect(() => readLibraryMeta(new Uint8Array([1, 2, 3]))).toThrow(/damaged/);
     expect(() => unpackLibraryItem(new Uint8Array([1, 2, 3]))).toThrow(/damaged/);
+  });
+});
+
+describe('updating a layer from the library (L5)', () => {
+  function libraryVersion(extra: Part[] = []) {
+    const hand = createPart({ name: 'Hand', kind: 'shape', paths: [rectPath(0, 0, 5, 5)] });
+    const arm = createPart({ name: 'Arm', kind: 'shape', paths: [rectPath(0, 0, 10, 40)], children: [hand] });
+    const layer = createLayer('character', 'Pip', [arm, ...extra]);
+    const project = createProject({ layers: [layer] });
+    return { item: itemFromLayer(project, new Map(), layer.id, 'Pip'), arm, hand };
+  }
+
+  it('remembers where a layer came from, and keeps that through copies', () => {
+    const { item, arm } = libraryVersion();
+    const r = insertLibraryItem(createProject(), new Map(), item, { source: { relPath: 'Pip.nyahitem', savedAt: 100 } });
+    const layer = r.project.scene.layers[0]!;
+    expect(layer.source?.relPath).toBe('Pip.nyahitem');
+    const armHere = layer.source!.parts[arm.id]!;
+    expect(locatePart(r.project, armHere)?.part.name).toBe('Arm');
+    // A copy of the layer (copy and paste) still links to the library, through its own ids.
+    const copied = insertLibraryItem(r.project, new Map(), itemFromLayer(r.project, new Map(), layer.id, 'Pip'));
+    const copy = copied.project.scene.layers[1]!;
+    expect(copy.source?.relPath).toBe('Pip.nyahitem');
+    expect(copy.source!.parts[arm.id]).not.toBe(armHere);
+    expect(locatePart(copied.project, copy.source!.parts[arm.id]!)?.layer.id).toBe(copy.id);
+  });
+
+  it('brings in the new drawings and parts, keeping the animation of parts that are still there', () => {
+    const v1 = libraryVersion();
+    let r = insertLibraryItem(createProject(), new Map(), v1.item, { source: { relPath: 'Pip.nyahitem', savedAt: 100 } });
+    let project = r.project;
+    const layer = project.scene.layers[0]!;
+    const armId = layer.source!.parts[v1.arm.id]!;
+    const handId = layer.source!.parts[v1.hand.id]!;
+    project = { ...project, scene: { ...project.scene, tracks: [{ partId: armId, channel: 'rotation', poses: [{ frame: 0, value: 0 }, { frame: 10, value: 45 }] }, { partId: handId, channel: 'rotation', poses: [{ frame: 0, value: 5 }] }] } };
+    // Move the character in this project: that stays.
+    project = { ...project, scene: { ...project.scene, layers: project.scene.layers.map((l) => ({ ...l, root: { ...l.root, rest: { ...l.root.rest, x: 300 } } })) } };
+
+    // Version 2 in the library: the arm is wider, the hand is gone, a hat is new. Same ids as version 1.
+    const hat = createPart({ name: 'Hat', kind: 'shape', paths: [rectPath(0, 0, 30, 10)] });
+    const v2doc = structuredClone(v1.item.doc);
+    const arm2 = v2doc.layer!.root.children[0]!;
+    arm2.paths = [rectPath(0, 0, 20, 40)];
+    arm2.children = [];
+    v2doc.layer!.root.children.push(hat);
+    const u = updateLayerFromLibrary(project, new Map(), layer.id, { doc: v2doc, assets: new Map() }, 200);
+    expect(u).toMatchObject({ kept: 2, added: 1, removed: 1 }); // root and arm kept, hat added, hand removed
+    const after = u.project.scene.layers[0]!;
+    const armAfter = locatePart(u.project, armId)!.part;
+    expect(armAfter.paths![0]!.points[1]!.anchor.x).toBe(20);
+    expect(u.project.scene.tracks.map((t) => t.partId)).toEqual([armId]); // the arm's poses stay; the hand's go
+    expect(after.root.rest.x).toBe(300);
+    expect(after.root.children.map((c) => c.name)).toEqual(['Arm', 'Hat']);
+    expect(after.source!.savedAt).toBe(200);
+    // Updating again keeps the same ids.
+    const again = updateLayerFromLibrary(u.project, new Map(), layer.id, { doc: v2doc, assets: new Map() }, 300);
+    expect(again).toMatchObject({ kept: 3, added: 0, removed: 0 });
   });
 });

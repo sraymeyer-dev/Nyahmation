@@ -4,6 +4,15 @@ import { useEffect, useState, type ReactNode } from 'react';
 // they lose focus; arrow keys step by 1 (Shift: 10).
 
 export function Row({ label, children }: { label: string; children: ReactNode }) {
+  // Without a label, a <label> would give the buttons inside it an empty name.
+  if (!label) {
+    return (
+      <div className="row">
+        <span className="row-label" />
+        <span className="row-control">{children}</span>
+      </div>
+    );
+  }
   return (
     <label className="row">
       <span className="row-label">{label}</span>

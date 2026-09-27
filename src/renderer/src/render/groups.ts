@@ -1,7 +1,7 @@
 import type { ResolvedPart } from '../../../engine/evaluate';
 import { drawingItemsBounds, findDrawing } from '../../../engine/drawingItems';
 import { EMPTY_BOUNDS, isEmptyBounds, pathsBounds, unionBounds, type Bounds } from '../../../engine/geometry';
-import { applyToPoint, DEG_TO_RAD, IDENTITY, multiply, type Mat2D } from '../../../engine/math';
+import { applyToPoint, DEG_TO_RAD, IDENTITY, invert, multiply, type Mat2D } from '../../../engine/math';
 import type { Effect, Project } from '../../../engine/types';
 import { compositeFor, drawPart, type ImageLookup } from './primitives';
 
@@ -135,9 +135,42 @@ function effectReach(e: Effect): number {
       return Math.max(0, e.size) * 1.5;
     case 'blur':
       return Math.max(0, e.amount) * 1.5;
+    case 'contact':
+      return Math.max(0, e.softness) * 1.5; // the oval itself is added to the bounds separately
     case 'haze':
       return 0;
   }
+}
+
+/** A contact shadow's oval, in canvas pixels. */
+interface Oval {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  color: string;
+  opacity: number;
+  blur: number;
+}
+
+/**
+ * Contact shadows (docs/DESIGN.md FX5): an oval on the ground under the middle
+ * of the artwork `art` (canvas pixels). The higher the lowest point is above
+ * the ground, the smaller and fainter the oval, as with a jump.
+ */
+function contactOvals(effects: readonly Effect[], art: Bounds, m: Mat2D, k: number): Oval[] {
+  const out: Oval[] = [];
+  for (const e of effects) {
+    if (e.kind !== 'contact' || e.opacity <= 0 || e.width <= 0) continue;
+    const foot = applyToPoint(invert(m), { x: (art.minX + art.maxX) / 2, y: art.maxY });
+    const g = applyToPoint(m, { x: foot.x, y: e.ground });
+    const lift = Math.max(0, (e.ground - foot.y) * k);
+    const height = Math.max(1, art.maxY - art.minY);
+    const shrink = Math.min(1, Math.max(0.25, 1 - lift / (1.5 * height)));
+    const rx = ((art.maxX - art.minX) / 2) * e.width * shrink;
+    out.push({ cx: g.x, cy: g.y, rx, ry: Math.max(2 * k, rx * 0.18), color: e.color, opacity: Math.min(1, e.opacity) * shrink, blur: (Math.max(0, e.softness) * k) / 2 });
+  }
+  return out;
 }
 
 const scaleOf = (m: Mat2D) => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
@@ -215,6 +248,9 @@ function drawUnit(target: Ctx2D, unit: ResolvedPart, members: readonly ResolvedP
   let b = EMPTY_BOUNDS;
   for (const p of members) if (p.visible && p.opacity > 0) b = unionBounds(b, deviceBounds(env.project, p, m));
   if (isEmptyBounds(b)) return;
+  // Contact shadows can lie below the artwork (a jump): make room for them.
+  const ovals = env.options.effects && unit.effects ? contactOvals(unit.effects, b, m, k) : [];
+  for (const o of ovals) b = unionBounds(b, { minX: o.cx - o.rx, maxX: o.cx + o.rx, minY: o.cy - o.ry, maxY: o.cy + o.ry });
   const pad = Math.ceil(reach * k) + 2;
   const x = Math.max(0, Math.floor(b.minX) - pad);
   const y = Math.max(0, Math.floor(b.minY) - pad);
@@ -268,7 +304,7 @@ function drawUnit(target: Ctx2D, unit: ResolvedPart, members: readonly ResolvedP
   // 2. Effects.
   let result = content;
   const effects = env.options.effects ? (unit.effects ?? []) : [];
-  if (effects.length) result = applyEffects(content, effects, w, h, k);
+  if (effects.length) result = applyEffects(content, effects, w, h, k, ovals.map((o) => ({ ...o, cx: o.cx - x, cy: o.cy - y })));
 
   // 3. Keep it for next time, and place it.
   if (cache) {
@@ -308,7 +344,7 @@ function composite(target: Ctx2D, src: OffscreenCanvas, unit: ResolvedPart, w: n
  * finished picture (the caller releases it if it isn't `content`).
  * `k` is canvas pixels per stage pixel.
  */
-function applyEffects(content: OffscreenCanvas, effects: readonly Effect[], w: number, h: number, k: number): OffscreenCanvas {
+function applyEffects(content: OffscreenCanvas, effects: readonly Effect[], w: number, h: number, k: number, ovals: readonly Oval[] = []): OffscreenCanvas {
   const c = context(content);
   // Haze: fade the artwork toward a colour (distant scenery, BG6).
   for (const e of effects) {
@@ -335,11 +371,20 @@ function applyEffects(content: OffscreenCanvas, effects: readonly Effect[], w: n
   }
 
   const behind = effects.filter((e) => (e.kind === 'shadow' || e.kind === 'glow') && e.opacity > 0);
-  if (!behind.length) return picture;
+  if (!behind.length && !ovals.length) return picture;
 
-  // Shadows and glows: a tinted, blurred copy of the silhouette behind the picture.
   const out = acquire(w, h);
   const o = context(out);
+  // Contact shadows first, furthest back: soft ovals on the ground.
+  for (const oval of ovals) {
+    o.filter = oval.blur > 0.1 ? `blur(${oval.blur}px)` : 'none';
+    o.globalAlpha = oval.opacity;
+    o.fillStyle = oval.color;
+    o.beginPath();
+    o.ellipse(oval.cx, oval.cy, Math.max(0.5, oval.rx), Math.max(0.5, oval.ry), 0, 0, Math.PI * 2);
+    o.fill();
+  }
+  // Shadows and glows: a tinted, blurred copy of the silhouette behind the picture.
   const silhouette = acquire(w, h);
   const s = context(silhouette);
   for (const e of behind) {
