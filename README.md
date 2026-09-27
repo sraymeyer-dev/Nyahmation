@@ -2,7 +2,7 @@
 
 A desktop studio for making character-animated videos: draw or import a vector character, rig its parts at joints, pose it on the frames that matter, and Nyahmation fills in every frame between. Lip sync uses mouth shapes from a named library. The output is video.
 
-The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
+The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md). The illustrated user manual is [docs/manual/Nyahmation-User-Manual.pdf](docs/manual/Nyahmation-User-Manual.pdf).
 
 ## Status
 
@@ -187,6 +187,10 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 npm run check     # type-check + unit tests
 npm run test:e2e  # builds the app and drives it with Playwright (on Linux, run under xvfb-run)
 ```
+
+## The user manual
+
+`docs/manual/manual.html` is the manual's text; `npm run manual` takes fresh screenshots of the app (on Linux, run it under `xvfb-run`) and prints `docs/manual/Nyahmation-User-Manual.pdf`. After editing only the text, `node scripts/manual.mjs` reprints it with the existing screenshots.
 
 ## Building an installer
 

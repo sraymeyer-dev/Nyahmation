@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:e2e": "node scripts/setup.mjs && electron-vite build && playwright test",
     "check": "npm run typecheck && npm run test",
+    "manual": "node scripts/setup.mjs && electron-vite build && playwright test -c docs/manual/playwright.config.ts && node scripts/manual.mjs",
     "dist:mac": "node scripts/setup.mjs && electron-vite build && electron-builder --mac && open release",
     "dist:win": "node scripts/setup.mjs && electron-vite build && electron-builder --win"
   },
