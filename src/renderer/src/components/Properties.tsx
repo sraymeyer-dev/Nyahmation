@@ -4,7 +4,8 @@ import { applyToPoint } from '../../../engine/math';
 import { poseEaseAt } from '../../../engine/retime';
 import { deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
-import type { Ease, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
+import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
+import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
 import { store, useEditor } from '../editor/store';
 import { NumberField, PaintField, Row, Section } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
@@ -120,9 +121,60 @@ function SceneProperties({ project }: { project: Project }) {
   );
 }
 
+/** An animation cycle on a layer (docs/DESIGN.md CY1–CY4). Frames are shown from 1. */
+function CycleRows({ layer }: { layer: Layer }) {
+  const loop = useEditor((s) => s.loop);
+  const cycle = layer.cycle;
+  const update = (next: Layer['cycle'] | null, key?: string) =>
+    store.commit(
+      updateLayer(store.getState().project, layer.id, (l) => {
+        const { cycle: _c, ...rest } = l;
+        return next ? { ...rest, cycle: next } : rest;
+      }),
+      {},
+      key,
+    );
+  return (
+    <>
+      <Row label="Cycle">
+        <label className="check" title="Repeat part of the animation for the rest of the scene: a walk, a flapping flag, a blink.">
+          <input
+            type="checkbox"
+            aria-label="Repeat as a cycle"
+            checked={!!cycle}
+            onChange={(e) => update(e.target.checked ? { from: loop?.in ?? 0, to: loop && loop.out > loop.in ? loop.out : 24, travel: false } : null)}
+          />
+          Repeat frames
+        </label>
+      </Row>
+      {cycle && (
+        <>
+          <Row label="From">
+            <NumberField label="Cycle from frame" value={cycle.from + 1} digits={0} min={1} onCommit={(v) => update({ ...cycle, from: Math.min(Math.round(v) - 1, cycle.to - 1) }, 'cycleFrom')} />
+          </Row>
+          <Row label="To">
+            <NumberField label="Cycle to frame" value={cycle.to + 1} digits={0} min={2} onCommit={(v) => update({ ...cycle, to: Math.max(Math.round(v) - 1, cycle.from + 1) }, 'cycleTo')} />
+          </Row>
+          <Row label="Moves">
+            <label className="check">
+              <input type="checkbox" aria-label="Cycle keeps moving" checked={cycle.travel} onChange={(e) => update({ ...cycle, travel: e.target.checked })} />
+              Keep moving (each repeat starts where the last ended)
+            </label>
+          </Row>
+          <p className="hint">
+            After frame {cycle.to + 1}, frames {cycle.from + 1}–{cycle.to + 1} play again and again. Pose frame {cycle.to + 1} like frame {cycle.from + 1} (moved along, for a walk). Lip sync isn't repeated.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 function LayerProperties({ loc }: { loc: PartLocation }) {
   const layer = loc.layer;
   const project = useEditor((s) => s.project);
+  const mode = useEditor((s) => s.mode);
+  const frame = useEditor((s) => s.frame);
   return (
     <Section title="Layer">
       <Row label="Name">
@@ -143,6 +195,22 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
           <option value="background">Background</option>
         </select>
       </Row>
+      {mode === 'animate' ? (
+        <>
+          <Row label="Animate on">
+            <select
+              aria-label="Layer stepping"
+              value={layerSteppingAt(project, layer, frame)}
+              onChange={(e) => store.commit(recordStepping(project, layer, frame, Number(e.target.value) as Stepping), { status: `${layer.name} is on ${['', 'ones', 'twos', 'threes'][Number(e.target.value)]} from frame ${frame + 1}.` })}
+            >
+              <option value={1}>Ones</option>
+              <option value={2}>Twos</option>
+              <option value={3}>Threes</option>
+            </select>
+          </Row>
+          <p className="hint">From frame {frame + 1} on: ones for fast action, twos or threes for a hand-drawn feel. Changes show as marks on the layer's row.</p>
+        </>
+      ) : (
       <Row label="Animate on">
         <select
           aria-label="Layer stepping"
@@ -161,6 +229,8 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
           <option value={3}>Threes</option>
         </select>
       </Row>
+      )}
+      <CycleRows layer={layer} />
       <Row label="Rig">
         <button onClick={() => store.commit(autoChainRoots(project, layer.id), { status: 'Chain roots set where limbs branch off (shoulders, hips, neck).' })}>
           Mark branch joints as chain roots

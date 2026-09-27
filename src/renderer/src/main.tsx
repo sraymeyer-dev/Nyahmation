@@ -80,6 +80,9 @@ function findPart(name: string) {
     const layer = s.project.scene.layers.find((l) => l.name === layerName);
     return layer ? (evaluateScene(s.project, s.frame).repeats.get(layer.id)?.length ?? 0) : 0;
   },
+  partById(id: string) {
+    return locatePart(store.getState().project, id)?.part ?? null;
+  },
   nameOf(id: string) {
     return locatePart(store.getState().project, id)?.part.name ?? null;
   },

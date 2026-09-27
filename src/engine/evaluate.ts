@@ -118,7 +118,8 @@ export interface EvaluateOptions {
 export function evaluateScene(project: Project, frame: number, options: EvaluateOptions = {}): ResolvedScene {
   const { scene } = project;
   const tracks = indexTracks(scene.tracks);
-  const byLayer = scene.layers.map((layer) => evaluateLayer(layer, frame, options.onOnes ? 1 : (layer.stepping ?? scene.stepping), tracks));
+  const mouthSets = new Set(project.drawingSets.filter((d) => d.vocabulary === 'mouth').map((d) => d.id));
+  const byLayer = scene.layers.map((layer) => evaluateLayer(layer, frame, layer.stepping ?? scene.stepping, options.onOnes === true, tracks, mouthSets));
 
   // The camera (on ones) and how it moves each layer.
   const camera = cameraAt(project, frame);
@@ -249,27 +250,55 @@ export function evaluateRestPose(project: Project): ResolvedScene {
   return evaluateScene({ ...project, scene: { ...project.scene, tracks: [] } }, 0);
 }
 
-function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: TrackIndex): ResolvedPart[] {
+function evaluateLayer(
+  layer: Layer,
+  frame: number,
+  baseStepping: Stepping,
+  onOnes: boolean,
+  tracks: TrackIndex,
+  mouthSets: ReadonlySet<string>,
+): ResolvedPart[] {
+  // Cycles (CY1): after the cycle's last frame, the animation repeats from
+  // its first. `laps` counts the repeats, for cycles that travel (CY2).
+  let cycleFrame = frame;
+  let laps = 0;
+  const cycle = layer.cycle;
+  if (cycle && cycle.to > cycle.from && frame > cycle.to) {
+    const period = cycle.to - cycle.from;
+    laps = Math.floor((frame - cycle.from) / period);
+    cycleFrame = frame - laps * period;
+  }
+
+  // Ones, twos or threes, which can change over time on the layer's root (ST7).
+  const steppingTrack = tracks.get(layer.root.id)?.get('stepping');
+  const stepping: Stepping = onOnes
+    ? 1
+    : steppingTrack
+      ? evaluateDiscreteFrom(steppingTrack.poses as Pose<Stepping>[], cycleFrame, baseStepping)
+      : baseStepping;
+
   // Motion is sampled at the stepped frame; discrete channels (mouths,
   // visibility, draw order, pins) always use the real frame, so they stay on ones.
-  let motionFrame = frame;
+  let motionFrame = cycleFrame;
   if (stepping !== 1) {
-    const poseLists: Pose<unknown>[][] = [];
+    const poseLists: Pose<unknown>[][] = steppingTrack ? [steppingTrack.poses] : [];
     for (const part of walkParts(layer.root)) {
       for (const track of tracks.get(part.id)?.values() ?? []) {
         if (isContinuousChannel(track.channel)) poseLists.push(track.poses);
       }
     }
-    motionFrame = steppedFrame(frame, stepping, collectAnchors(poseLists));
+    motionFrame = steppedFrame(cycleFrame, stepping, collectAnchors(poseLists));
   }
 
   const cont = (part: Part, channel: Channel, rest: number): number => {
     const track = tracks.get(part.id)?.get(channel);
     return track ? evaluateContinuous(track.poses as Pose<number>[], motionFrame, rest) : rest;
   };
+  // Lip sync follows the dialogue, never the cycle (CY3).
+  const isLipSync = (part: Part, channel: Channel) => channel === 'drawing' && !!part.drawingSetId && mouthSets.has(part.drawingSetId);
   const disc = <T>(part: Part, channel: Channel, rest: T): T => {
     const track = tracks.get(part.id)?.get(channel);
-    return track ? evaluateDiscrete(track.poses as Pose<T>[], frame, rest) : rest;
+    return track ? evaluateDiscrete(track.poses as Pose<T>[], isLipSync(part, channel) ? frame : cycleFrame, rest) : rest;
   };
 
   // 1. Every part's animated local transform.
@@ -286,11 +315,26 @@ function evaluateLayer(layer: Layer, frame: number, stepping: Stepping, tracks: 
     });
     ancestorsOf.set(part.id, ancestors);
     const pinTrack = tracks.get(part.id)?.get('pin');
-    const pin = pinTrack ? evaluateDiscreteFrom(pinTrack.poses as Pose<PinValue | null>[], frame, null) : null;
+    const pin = pinTrack ? evaluateDiscreteFrom(pinTrack.poses as Pose<PinValue | null>[], cycleFrame, null) : null;
     if (pin && ancestors.length > 0) pinned.push({ part, pin });
     for (const child of part.children) gather(child, [...ancestors, part]);
   };
   gather(layer.root, []);
+
+  // A travelling cycle (CY2): each repeat starts where the last one ended, so
+  // the root, and anything pinned to the stage, moves on by the distance one
+  // cycle covers.
+  if (laps > 0 && cycle!.travel) {
+    const at = (channel: 'x' | 'y', f: number) => {
+      const track = tracks.get(layer.root.id)?.get(channel);
+      return track ? evaluateContinuous(track.poses as Pose<number>[], f, layer.root.rest[channel]) : layer.root.rest[channel];
+    };
+    const dx = laps * (at('x', cycle!.to) - at('x', cycle!.from));
+    const dy = laps * (at('y', cycle!.to) - at('y', cycle!.from));
+    const root = locals.get(layer.root.id)!;
+    locals.set(layer.root.id, { ...root, x: root.x + dx, y: root.y + dy });
+    for (const p of pinned) p.pin = { ...p.pin, at: { x: p.pin.at.x + dx, y: p.pin.at.y + dy } };
+  }
 
   // 2. Pins: re-solve each pinned part's chain so its pinned point stays put
   // (docs/DESIGN.md P4). Two passes let pins that share joints settle.

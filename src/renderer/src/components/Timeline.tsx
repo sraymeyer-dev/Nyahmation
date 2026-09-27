@@ -31,6 +31,10 @@ interface Row {
   layerKind?: 'character' | 'background';
   switchPart?: boolean;
   camera?: boolean;
+  /** The layer a layer or part row belongs to. */
+  layerId?: string;
+  /** A mouth using a lip-sync set: follows the dialogue, never a cycle. */
+  mouth?: boolean;
 }
 
 function buildRows(project: Project, collapsed: ReadonlySet<string>): Row[] {
@@ -39,11 +43,12 @@ function buildRows(project: Project, collapsed: ReadonlySet<string>): Row[] {
     { row: 'part', id: CAMERA_ID, name: 'Camera', depth: 0, camera: true },
   ];
   for (const layer of project.scene.layers.slice().reverse()) {
-    rows.push({ row: 'layer', id: layer.id, name: layer.name, depth: 0, layerKind: layer.kind });
+    rows.push({ row: 'layer', id: layer.id, name: layer.name, depth: 0, layerKind: layer.kind, layerId: layer.id });
     if (collapsed.has(layer.id)) continue;
     const visit = (p: typeof layer.root, depth: number) => {
       for (const c of p.children) {
-        rows.push({ row: 'part', id: c.id, name: c.name, depth, switchPart: c.kind === 'switch' });
+        const mouth = c.kind === 'switch' && project.drawingSets.some((d) => d.id === c.drawingSetId && d.vocabulary === 'mouth');
+        rows.push({ row: 'part', id: c.id, name: c.name, depth, switchPart: c.kind === 'switch', layerId: layer.id, mouth });
         visit(c, depth + 1);
       }
     };
@@ -356,6 +361,20 @@ export function Timeline() {
                 </div>
                 <div className="tl-lane" style={{ width: laneWidth }} onPointerDown={scrub}>
                   {loop && <div className="tl-loop" style={{ left: loop.in * zoom, width: (loop.out - loop.in + 1) * zoom }} />}
+                  {r.row === 'layer' &&
+                    (() => {
+                      const c = project.scene.layers.find((l) => l.id === r.id)?.cycle;
+                      if (!c || c.to >= duration - 1) return null;
+                      return (
+                        <>
+                          <div className="tl-cycle-range" style={{ left: c.from * zoom, width: (c.to - c.from + 1) * zoom }} title={`Cycle: frames ${c.from + 1}–${c.to + 1}`} />
+                          <div className="tl-cycle" data-testid="tl-cycle" style={{ left: (c.to + 1) * zoom, width: (duration - c.to - 1) * zoom }}>
+                            ↻ repeats {c.from + 1}–{c.to + 1}
+                            {c.travel ? ', moving on' : ''}
+                          </div>
+                        </>
+                      );
+                    })()}
                   {r.switchPart &&
                     drawingBlocks(project, r.id).map((b) => (
                       <div
@@ -380,12 +399,15 @@ export function Timeline() {
                   {frames.map((f) => {
                     const mark: MarkRef = { row: r.row, id: r.id, frame: f };
                     const selected = marks.some((m) => sameMark(m, mark));
+                    // Poses after a cycle's end don't play: the cycle repeats instead (CY4). Lip sync still does.
+                    const cycle = r.layerId ? project.scene.layers.find((l) => l.id === r.layerId)?.cycle : undefined;
+                    const unused = !!cycle && f > cycle.to && !r.mouth;
                     return (
                       <div
                         key={f}
-                        className={`tl-mark ${selected ? 'selected' : ''}`}
+                        className={`tl-mark ${selected ? 'selected' : ''} ${unused ? 'unused' : ''}`}
                         style={{ left: f * zoom + zoom / 2 }}
-                        title={`Frame ${f + 1}`}
+                        title={unused ? `Frame ${f + 1}: not used while the layer repeats frames ${cycle!.from + 1}–${cycle!.to + 1}` : `Frame ${f + 1}`}
                         data-frame={f}
                         onPointerDown={(e) => markDown(e, mark)}
                       />

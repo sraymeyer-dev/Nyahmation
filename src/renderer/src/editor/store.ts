@@ -267,6 +267,11 @@ export class EditorStore {
       frame: 0,
       playing: false,
       notice: null,
+      // The loop range and selected marks belong to the old project.
+      loop: null,
+      timeline: { ...this.state.timeline, marks: [] },
+      selectedClip: null,
+      cameraSelected: false,
     });
   }
 }

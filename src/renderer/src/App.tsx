@@ -9,7 +9,7 @@ import { measurePreviewSpeed } from './editor/measure';
 import { startAutosave } from './editor/recovery';
 import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
-import { deleteSelectedMarks, jumpToPose, setFrame, setLoopPoint } from './editor/animate';
+import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
 import { ExportDialog } from './components/ExportDialog';
 import { Notice } from './components/Notice';
@@ -73,7 +73,11 @@ const MENU: Record<MenuCommand, () => void> = {
   cut: () => editText('cut') || clipboard.cut(),
   copy: () => editText('copy') || clipboard.copy(),
   paste: () => editText('paste') || clipboard.paste(),
+  mirrorPose: () => mirrorSelected('mirror'),
+  swapSides: () => mirrorSelected('swap'),
 };
+
+let menuCommandsHandled = 0;
 
 const TOOL_KEYS = {
   build: new Map<string, ToolId>(toolsFor('build').map((t) => [t.key.toLowerCase(), t.id])),
@@ -217,7 +221,12 @@ export function App() {
 
   useEffect(() => {
     window.addEventListener('keydown', onKeyDown);
-    const unsubscribeMenu = window.nyah?.onMenuCommand((cmd) => MENU[cmd]?.());
+    const unsubscribeMenu = window.nyah?.onMenuCommand((cmd) => {
+      MENU[cmd]?.();
+      // Counted so tests can wait until a command has been handled.
+      menuCommandsHandled++;
+      (window as unknown as { __nyahMenuCount: number }).__nyahMenuCount = menuCommandsHandled;
+    });
 
     // Finish in-progress drawing when the tool or mode changes, and keep the
     // window title and unsaved-changes prompt up to date.

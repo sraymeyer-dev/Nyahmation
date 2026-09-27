@@ -111,7 +111,9 @@ export type MenuCommand =
   | 'measurePreview'
   | 'cut'
   | 'copy'
-  | 'paste';
+  | 'paste'
+  | 'mirrorPose'
+  | 'swapSides';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */

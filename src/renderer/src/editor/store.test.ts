@@ -58,3 +58,13 @@ describe('EditorStore history', () => {
     expect(store.getState().dirty).toBe(false);
   });
 });
+
+describe('EditorStore loading', () => {
+  it('forgets the old project’s loop range and selected marks', () => {
+    const store = new EditorStore();
+    store.set({ loop: { in: 3, out: 9 }, timeline: { zoom: 14, marks: [{ row: 'scene', id: '', frame: 3 }] } });
+    store.load(createProject(), new Map(), null);
+    expect(store.getState().loop).toBeNull();
+    expect(store.getState().timeline.marks).toEqual([]);
+  });
+});

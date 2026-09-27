@@ -1,5 +1,6 @@
 import { frameAccess, restAccess, type TransformAccess } from '../../../engine/access';
-import { locatePart, walkParts } from '../../../engine/edit';
+import { locatePart, topLevelSelection, walkParts } from '../../../engine/edit';
+import { mirrorPose, type MirrorMode } from '../../../engine/mirror';
 import { deletePoses, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from '../../../engine/retime';
 import { CAMERA_ID, type Ease, type Project, type Track } from '../../../engine/types';
 import { store, type EditorState, type MarkRef } from './store';
@@ -106,6 +107,36 @@ export function stretchLoop(length: number): void {
     status: moved
       ? `Retimed frames ${s.loop.in + 1}–${s.loop.out + 1} of ${scope} to ${n} frames (${loop.in + 1}–${loop.out + 1}); later poses moved along.`
       : `No poses of ${scope} to retime in that range.`,
+  });
+}
+
+/**
+ * Mirrors the selected parts' pose on this frame, or swaps its sides
+ * (docs/DESIGN.md MR1–MR4). With nothing selected, the active character.
+ */
+export function mirrorSelected(mode: MirrorMode): void {
+  const s = get();
+  if (s.mode !== 'animate') {
+    store.set({ status: 'Mirroring works on a pose: switch to Animate mode.' });
+    return;
+  }
+  let roots = topLevelSelection(s.project, s.selection, { includeLayerRoots: true });
+  if (!roots.length) {
+    const layer = s.project.scene.layers.find((l) => l.id === s.activeLayerId && l.kind === 'character') ?? s.project.scene.layers.find((l) => l.kind === 'character');
+    if (layer) roots = [layer.root.id];
+  }
+  if (!roots.length) {
+    store.set({ status: 'Select a character (or some of its parts) to mirror.' });
+    return;
+  }
+  const r = mirrorPose(s.project, roots, s.frame, mode);
+  const what = mode === 'mirror' ? 'Mirrored' : 'Swapped the sides of';
+  store.commit(r.project, {
+    status: r.changed
+      ? `${what} the pose on frame ${s.frame + 1} (${r.changed} part${r.changed === 1 ? '' : 's'} changed, ${r.pairs} left/right pair${r.pairs === 1 ? '' : 's'}).`
+      : r.pairs || mode === 'mirror'
+        ? 'The pose is already symmetrical.'
+        : 'No left/right (or front/back) parts found. Name them like “Arm (left)” and “Arm (right)”, or “Leg L” and “Leg R”.',
   });
 }
 

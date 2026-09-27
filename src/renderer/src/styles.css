@@ -1187,3 +1187,31 @@ input[type='color'] {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* Animation cycles on the timeline (CY4) */
+.tl-cycle-range {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border: 1px dashed rgba(245, 182, 66, 0.7);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tl-cycle {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  padding-left: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(45deg, rgba(245, 182, 66, 0.16) 0 6px, rgba(245, 182, 66, 0.06) 6px 12px);
+  color: #f5b642;
+  font-size: 10px;
+  line-height: 16px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tl-mark.unused {
+  opacity: 0.3;
+}

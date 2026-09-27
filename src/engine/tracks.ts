@@ -5,7 +5,7 @@ import type { Channel, ChannelValue, ContinuousChannel, Ease, EffectChannel, Pos
 // the invariants the evaluator relies on: poses sorted by frame, one per frame.
 
 export const CONTINUOUS_CHANNELS = ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity', 'zoom'] as const;
-export const DISCRETE_CHANNELS = ['drawing', 'visible', 'drawOrder', 'pin'] as const;
+export const DISCRETE_CHANNELS = ['drawing', 'visible', 'drawOrder', 'pin', 'stepping'] as const;
 
 export function isContinuousChannel(channel: Channel): channel is ContinuousChannel {
   return (CONTINUOUS_CHANNELS as readonly Channel[]).includes(channel) || isEffectChannel(channel);

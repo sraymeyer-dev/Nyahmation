@@ -198,6 +198,13 @@ export interface Layer {
    * (a treadmill of scenery, the view from a car window).
    */
   scroll?: { speed: number; repeat: boolean };
+  /**
+   * An animation cycle (docs/DESIGN.md CY1–CY4): after frame `to`, the
+   * layer's animation repeats from `from` (frame `to` counts as `from` again,
+   * so pose both the same). With `travel`, each repeat carries on from where
+   * the last one ended (a walk moving forward) instead of jumping back.
+   */
+  cycle?: { from: number; to: number; travel: boolean };
 }
 
 // ---- Animation ---------------------------------------------------------------
@@ -212,7 +219,8 @@ export type Ease = EasePreset | EaseCurve;
 /** An animated effect setting: `fx:<effect id>:<setting>` (FX3). */
 export type EffectChannel = `fx:${string}:${string}`;
 export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity' | 'zoom' | EffectChannel;
-export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin';
+/** 'stepping' lives on a layer's root: ones, twos or threes from that frame on (ST7). */
+export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin' | 'stepping';
 
 /**
  * A pin (docs/DESIGN.md §6.3): from its frame on, `point` (in the part's

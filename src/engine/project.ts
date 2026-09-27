@@ -156,6 +156,7 @@ export function validateProject(project: Project): void {
 
   const partIds = new Set<string>();
   const effectsOf = new Map<string, Effect[]>();
+  const layerRoots = new Set<string>();
   const checkPart = (part: Part) => {
     if (!isObject(part) || typeof part.id !== 'string') fail('a part has no id');
     if (partIds.has(part.id)) fail(`part id ${part.id} is used twice`);
@@ -181,6 +182,9 @@ export function validateProject(project: Project): void {
     if (layer.depth !== undefined && !(Number.isFinite(layer.depth) && layer.depth >= 0)) fail(`layer ${layer.name} has an invalid depth`);
     if (layer.follow !== undefined && typeof layer.follow?.partId !== 'string') fail(`layer ${layer.name} follows nothing`);
     if (layer.scroll !== undefined && !(Number.isFinite(layer.scroll?.speed) && typeof layer.scroll?.repeat === 'boolean')) fail(`layer ${layer.name} has invalid scrolling`);
+    const c = layer.cycle;
+    if (c !== undefined && !(Number.isInteger(c?.from) && Number.isInteger(c?.to) && c.from >= 0 && c.to > c.from && typeof c.travel === 'boolean')) fail(`layer ${layer.name} has an invalid cycle`);
+    layerRoots.add(layer.root.id);
     checkPart(layer.root);
   });
 
@@ -193,6 +197,10 @@ export function validateProject(project: Project): void {
       if (!['x', 'y', 'zoom', 'rotation'].includes(track.channel)) fail(`the camera has no ${track.channel} channel`);
     } else if (!partIds.has(track.partId)) fail(`track for unknown part ${track.partId}`);
     if (track.partId !== CAMERA_ID && track.channel === 'zoom') fail(`only the camera zooms (${key})`);
+    if (track.channel === 'stepping') {
+      if (!layerRoots.has(track.partId)) fail(`stepping changes belong on a layer (${key})`);
+      if (!track.poses.every((p) => isStepping(p.value))) fail(`stepping on ${key} must be 1, 2 or 3`);
+    }
     const fx = parseEffectChannel(track.channel);
     if (track.channel.startsWith('fx:')) {
       const effect = fx && effectsOf.get(track.partId)?.find((e) => e.id === fx.effectId);

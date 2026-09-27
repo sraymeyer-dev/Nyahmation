@@ -54,8 +54,11 @@ async function pathPointCount(name: string): Promise<number> {
   }, name);
 }
 
+/** Sends a menu command and waits until the page has handled it. */
 async function menu(command: string) {
+  const before = await page.evaluate(() => (window as any).__nyahMenuCount ?? 0);
   await app.evaluate(({ BrowserWindow }, cmd) => BrowserWindow.getAllWindows()[0]!.webContents.send('menu:command', cmd), command);
+  await page.waitForFunction((n) => ((window as any).__nyahMenuCount ?? 0) > n, before);
 }
 
 /** Canvas-relative mouse helpers. */
@@ -1079,6 +1082,78 @@ test('a custom easing curve, and stretching a range of poses', async () => {
   expect(await lastPose()).toBe(before + 10);
   await expect(stretch).toHaveValue('21');
   expect(await page.evaluate(() => (window as any).__nyah.store.getState().loop)).toEqual({ in: 10, out: 30 });
+});
+
+test('mirrors a pose, and swaps sides for a walk', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await goToFrame(20);
+  const ids = await page.evaluate(() => {
+    const nyah = (window as any).__nyah;
+    const id = (n: string) => nyah.part(n).id;
+    return { pip: nyah.store.getState().project.scene.layers.find((l: any) => l.name === 'Pip').root.id, front: id('Upper arm (front)'), back: id('Upper arm (back)') };
+  });
+  const rest = (id: string) => page.evaluate((i) => (window as any).__nyah.partById(i).rest.rotation, id);
+  const rot = (id: string) => page.evaluate(([i]) => (window as any).__nyah.channelValue(i, 'rotation', 20), [id] as const);
+  const before = { front: await rot(ids.front), back: await rot(ids.back) };
+  await page.evaluate((i) => (window as any).__nyah.store.set({ selection: [i] }), ids.pip);
+
+  await menu('mirrorPose');
+  await expect(page.getByText(/Mirrored the pose on frame 21/)).toBeVisible();
+  // The front arm takes the back arm's pose, turned the other way (measured from rest).
+  expect(await rot(ids.front)).toBeCloseTo((await rest(ids.front)) - (before.back - (await rest(ids.back))));
+  // Mirroring again gives the pose back.
+  await menu('mirrorPose');
+  expect(await rot(ids.front)).toBeCloseTo(before.front);
+
+  await menu('swapSides');
+  await expect(page.getByText(/Swapped the sides of the pose on frame 21/)).toBeVisible();
+  expect(await rot(ids.front)).toBeCloseTo((await rest(ids.front)) + (before.back - (await rest(ids.back))));
+});
+
+test('a layer can repeat as a cycle, and change its stepping over time', async () => {
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
+  await page.getByLabel('Repeat as a cycle').check();
+  await page.getByLabel('Cycle from frame').fill('1');
+  await page.getByLabel('Cycle from frame').press('Enter');
+  await page.getByLabel('Cycle to frame').fill('25');
+  await page.getByLabel('Cycle to frame').press('Enter');
+  await page.getByLabel('Cycle to frame').press('Escape'); // leave the field, so arrow keys step frames
+  await expect(page.getByTestId('tl-cycle')).toContainText('repeats 1–25');
+  const hand = (f: number) =>
+    page.evaluate((frame) => {
+      const nyah = (window as any).__nyah;
+      nyah.store.set({ frame });
+      return nyah.framePartScreen('Hand');
+    }, f);
+  // Frame 31 plays frame 7 again.
+  const a = await hand(6);
+  const b = await hand(30);
+  expect(b.x).toBeCloseTo(a.x, 1);
+  expect(b.y).toBeCloseTo(a.y, 1);
+  await page.screenshot({ path: 'test-results/cycle.png' });
+
+  // From frame 41, Pip is on twos: a mark on the layer row, and frames 42 and 43 show the same step.
+  await goToFrame(40);
+  await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
+  await page.getByLabel('Layer stepping').selectOption('2');
+  await expect(page.getByText('Pip is on twos from frame 41.')).toBeVisible();
+  const steppingPoses = await page.evaluate(() => {
+    const s = (window as any).__nyah.store.getState();
+    const root = s.project.scene.layers.find((l: any) => l.name === 'Pip').root.id;
+    return s.project.scene.tracks.find((t: any) => t.partId === root && t.channel === 'stepping').poses.map((p: any) => [p.frame, p.value]);
+  });
+  expect(steppingPoses).toEqual([
+    [0, 1],
+    [40, 2],
+  ]);
+  await expect(page.getByTestId('tl-layer').filter({ hasText: 'Pip' }).locator('.tl-mark[data-frame="40"]')).toHaveCount(1);
 });
 
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {
