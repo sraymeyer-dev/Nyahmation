@@ -543,6 +543,9 @@ function DrawingPalette({ part, set, step }: { part: Part; set: DrawingSet; step
             <option value={2}>2 frames</option>
           </select>
           <span className="hint">· Backspace steps back</span>
+          <button className="primary" onMouseDown={(e) => e.preventDefault()} onClick={() => store.set({ lipSyncDialogFor: part.id })} title="Fill in the mouth shapes from the dialogue automatically">
+            Auto lip sync…
+          </button>
         </>
       )}
     </div>

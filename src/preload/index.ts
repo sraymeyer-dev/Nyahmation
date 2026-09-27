@@ -33,6 +33,16 @@ const api: NyahApi = {
     end: (session) => ipcRenderer.invoke('export:end', session),
     cancel: (session) => ipcRenderer.invoke('export:cancel', session),
   },
+  lipSync: {
+    available: () => ipcRenderer.invoke('lipsync:available'),
+    run: (wav, options) => ipcRenderer.invoke('lipsync:run', wav, options),
+    cancel: () => ipcRenderer.invoke('lipsync:cancel'),
+    onProgress: (listener) => {
+      const handler = (_event: IpcRendererEvent, value: number) => listener(value);
+      ipcRenderer.on('lipsync:progress', handler);
+      return () => ipcRenderer.removeListener('lipsync:progress', handler);
+    },
+  },
   recovery: {
     write: (bytes, meta) => ipcRenderer.invoke('recovery:write', bytes, meta),
     clear: () => ipcRenderer.invoke('recovery:clear'),

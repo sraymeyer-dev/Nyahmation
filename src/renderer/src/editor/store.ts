@@ -86,6 +86,8 @@ export interface EditorState {
   cameraView: boolean;
   /** The camera is selected (its timeline row, or the Camera tool): Properties shows it. */
   cameraSelected: boolean;
+  /** The mouth the Auto lip sync dialog is open for (LS7), or null. */
+  lipSyncDialogFor: string | null;
   /** Autosaved work from a session that didn't close normally, offered back (F3). */
   recoveries: readonly RecoveryEntry[];
 }
@@ -147,6 +149,7 @@ function initialState(): EditorState {
     viewOnOnes: false,
     cameraView: true,
     cameraSelected: false,
+    lipSyncDialogFor: null,
     recoveries: [],
   };
 }

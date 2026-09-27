@@ -1215,3 +1215,22 @@ input[type='color'] {
 .tl-mark.unused {
   opacity: 0.3;
 }
+
+/* Auto lip sync dialog (LS7) */
+.modal .column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.modal textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+}

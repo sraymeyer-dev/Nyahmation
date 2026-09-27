@@ -516,6 +516,29 @@ test('lip sync: typing mouth letters on the Mouth row sets shapes and moves on',
   await page.keyboard.press('Escape');
 });
 
+test('auto lip sync fills in mouth shapes from the dialogue', async () => {
+  test.skip(!existsSync(join(__dirname, '..', 'vendor', 'rhubarb')), 'Rhubarb Lip Sync is not installed (npm run setup)');
+  await row('Mouth').locator('.tl-name').click();
+  await page.getByRole('button', { name: 'Auto lip sync…' }).click();
+  const dialogBox = page.getByTestId('lipsync-dialog');
+  await expect(dialogBox).toContainText('Auto lip sync for “Mouth”');
+  await expect(dialogBox.getByLabel('Dialogue sound')).toHaveValue(/.+/);
+  // While the dialog is open, typing goes to it, not to the mouth.
+  await dialogBox.getByLabel('Dialogue words').fill('Hello there.');
+  await dialogBox.getByRole('button', { name: 'Start' }).click();
+  await expect(dialogBox).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.getByText(/Lip sync for “line”: \d+ mouth change/)).toBeVisible();
+  const clip = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[0]);
+  const poses = await drawingPoses('Mouth');
+  const inside = poses.filter(([f]) => f >= clip.startFrame && f < clip.startFrame + Math.ceil(clip.duration * 24));
+  expect(inside.length).toBeGreaterThan(0);
+  // One undo takes it all away again.
+  await menu('undo');
+  expect(await drawingPoses('Mouth')).not.toEqual(poses);
+  await menu('redo');
+  await page.keyboard.press('Escape');
+});
+
 test('exports a PNG sequence and an MP4 of the loop range', async () => {
   await goToFrame(0);
   await page.keyboard.press('i');

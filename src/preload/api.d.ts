@@ -63,6 +63,33 @@ export interface RecoveryApi {
   discard(id: string): Promise<void>;
 }
 
+/** A mouth shape starting and ending at times in seconds, from automatic lip sync (LS7). */
+export interface LipSyncCue {
+  start: number;
+  end: number;
+  /** A–H or X. */
+  shape: string;
+}
+
+export interface LipSyncOptions {
+  /** The words spoken: helps the analysis a lot. */
+  script?: string;
+  /** 'english' (default, uses speech recognition) or 'phonetic' (any language, a little less exact). */
+  recognizer?: 'english' | 'phonetic';
+  /** Which of the extra shapes G, H and X the mouth set has. */
+  extendedShapes?: string;
+}
+
+export interface LipSyncApi {
+  /** Whether Rhubarb Lip Sync is installed. */
+  available(): Promise<boolean>;
+  /** Analyses dialogue (WAV bytes) into mouth cues. Rejects with a readable message, or "Cancelled.". */
+  run(wav: Uint8Array, options: LipSyncOptions): Promise<LipSyncCue[]>;
+  cancel(): Promise<void>;
+  /** Progress from 0 to 1 while running. Returns an unsubscribe function. */
+  onProgress(listener: (value: number) => void): () => void;
+}
+
 export type ExportFormat = 'mp4' | 'mov' | 'png';
 
 export interface ExportApi {
@@ -138,6 +165,7 @@ export interface NyahApi {
   library: LibraryApi;
   export: ExportApi;
   recovery: RecoveryApi;
+  lipSync: LipSyncApi;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }

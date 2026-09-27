@@ -5,6 +5,7 @@ import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
 import { buildMenu } from './menu';
 import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
+import { registerLipSyncHandlers } from './lipsync';
 
 // The main process only touches the file system. Everything about the
 // project's contents (packing, validation) happens in the renderer, so it
@@ -205,6 +206,7 @@ void app.whenReady().then(() => {
   registerLibraryHandlers();
   registerExportHandlers();
   registerRecoveryHandlers();
+  registerLipSyncHandlers();
   buildMenu();
   createWindow();
   app.on('activate', () => {

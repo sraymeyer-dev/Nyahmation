@@ -12,6 +12,7 @@ import { store, useEditor, type EditorState, type ToolId } from './editor/store'
 import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
 import { ExportDialog } from './components/ExportDialog';
+import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
 import { RecoveryPrompt } from './components/RecoveryPrompt';
 import { Sidebar } from './components/Sidebar';
@@ -109,7 +110,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.exportOpen) return;
+  if (s.exportOpen || s.lipSyncDialogFor) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (lipSyncKey(e, s)) {
       e.preventDefault();
@@ -262,6 +263,7 @@ export function App() {
         </div>
         <Sidebar />
         <ExportDialog />
+        <LipSyncDialog />
       </div>
     </div>
   );
