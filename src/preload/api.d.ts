@@ -33,8 +33,12 @@ export interface LibraryEntry {
 export interface LibraryApi {
   list(): Promise<{ dir: string; items: LibraryEntry[] }>;
   read(relPath: string): Promise<Uint8Array>;
-  /** Saves a new item in the top of the library folder; returns its path (a number is added if the name is taken). */
-  save(name: string, bytes: Uint8Array): Promise<string>;
+  /**
+   * Saves a new item in the top of the library folder; returns its path (a
+   * number is added if the name is taken). With `replace`, overwrites that
+   * item instead (a new version of it).
+   */
+  save(name: string, bytes: Uint8Array, replace?: string): Promise<string>;
   /** Moves an item to the Trash / Recycle Bin. */
   remove(relPath: string): Promise<void>;
   /** Opens the library folder in Finder / Explorer. */

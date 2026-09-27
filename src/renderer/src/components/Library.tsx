@@ -20,16 +20,18 @@ function thumbnailUrl(entry: LibraryEntry): string | null {
   return url;
 }
 
-function SaveForm({ defaultName, label, onDone }: { defaultName: string; label: string; onDone: () => void }) {
+function SaveForm({ defaultName, label, replaces, onDone }: { defaultName: string; label: string; replaces?: string; onDone: () => void }) {
   const [name, setName] = useState(defaultName);
   const [tags, setTags] = useState('');
   const [busy, setBusy] = useState(false);
+  const [replace, setReplace] = useState(!!replaces);
   const submit = async () => {
     if (!name.trim()) return;
     setBusy(true);
     const ok = await saveSelectionToLibrary(
       name.trim(),
       tags.split(',').map((t) => t.trim()).filter(Boolean),
+      replace,
     );
     setBusy(false);
     if (ok) onDone();
@@ -45,6 +47,12 @@ function SaveForm({ defaultName, label, onDone }: { defaultName: string; label: 
       <p className="hint">Saving: {label}</p>
       <input aria-label="Library item name" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="Name" />
       <input aria-label="Tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, separated by commas" />
+      {replaces && (
+        <label className="check" title="Other projects using this character can then Update from library and keep their animation.">
+          <input type="checkbox" aria-label="Replace the library version" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+          Save as a new version of “{defaultName}” (replaces it)
+        </label>
+      )}
       <div className="buttons">
         <button type="submit" className="primary" disabled={busy || !name.trim()}>
           Save
@@ -74,7 +82,7 @@ export function Library() {
     return library.items.filter((i) => [i.name, i.folder, ...i.tags].some((t) => t.toLowerCase().includes(q)));
   }, [library.items, query]);
 
-  const info = candidate ? JSON.parse(candidate) as { label: string; defaultName: string } : null;
+  const info = candidate ? JSON.parse(candidate) as { label: string; defaultName: string; replaces?: string } : null;
   let lastFolder: string | null = null;
 
   return (
@@ -85,7 +93,7 @@ export function Library() {
         <button onClick={revealLibrary} disabled={!hasApi} title={library.dir}>Folder</button>
       </div>
       {saving && info ? (
-        <SaveForm key={info.defaultName} defaultName={info.defaultName} label={info.label} onDone={() => setSaving(false)} />
+        <SaveForm key={info.defaultName} defaultName={info.defaultName} label={info.label} replaces={info.replaces} onDone={() => setSaving(false)} />
       ) : (
         <div className="save-row">
           <button className="save-button" disabled={!info || !hasApi} onClick={() => setSaving(true)}>

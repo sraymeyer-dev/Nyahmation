@@ -323,7 +323,14 @@ test('saves a character to the library and adds a copy', async () => {
   });
   await page.getByRole('button', { name: 'Update from library' }).click();
   await expect(page.getByText(/Updated “Pip the puppet” from the library: \d+ parts kept their animation, 0 new, 0 removed\./)).toBeVisible();
+  // Saving it again offers to replace the item as a new version, rather than adding a copy.
   await page.getByRole('tab', { name: 'Library' }).click();
+  await page.getByRole('button', { name: 'Save to library…' }).click();
+  await expect(page.getByLabel('Replace the library version')).toBeChecked();
+  await expect(page.getByLabel('Library item name')).toHaveValue('Pip the puppet');
+  await page.locator('.save-form').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText(/Saved a new version of “Pip the puppet”/)).toBeVisible();
+  await expect(page.getByTestId('library-item')).toHaveCount(1);
 });
 
 // ---- Phase 3: animating ------------------------------------------------------

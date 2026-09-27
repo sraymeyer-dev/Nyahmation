@@ -22,7 +22,7 @@ const api: NyahApi = {
   library: {
     list: () => ipcRenderer.invoke('library:list'),
     read: (relPath) => ipcRenderer.invoke('library:read', relPath),
-    save: (name, bytes) => ipcRenderer.invoke('library:save', name, bytes),
+    save: (name, bytes, replace) => ipcRenderer.invoke('library:save', name, bytes, replace),
     remove: (relPath) => ipcRenderer.invoke('library:remove', relPath),
     reveal: () => ipcRenderer.invoke('library:reveal'),
   },

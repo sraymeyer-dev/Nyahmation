@@ -3,7 +3,7 @@ import { insertPart, locatePart, restWorldMatrix, walkParts } from '../engine/ed
 import { rectPath } from '../engine/geometry';
 import { createLayer, createPart, createProject } from '../engine/project';
 import type { Part, Project } from '../engine/types';
-import { insertLibraryItem, itemFromLayer, itemFromParts, packLibraryItem, readLibraryMeta, unpackLibraryItem, updateLayerFromLibrary } from './libraryItem';
+import { insertLibraryItem, itemFromLayer, itemFromParts, packLibraryItem, readLibraryMeta, unpackLibraryItem, updateLayerFromLibrary, withLibraryIds } from './libraryItem';
 
 function sample() {
   const photo = createPart({ name: 'Photo', kind: 'image', image: { assetId: 'img1', width: 10, height: 10 } });
@@ -183,5 +183,33 @@ describe('updating a layer from the library (L5)', () => {
     // Updating again keeps the same ids.
     const again = updateLayerFromLibrary(u.project, new Map(), layer.id, { doc: v2doc, assets: new Map() }, 300);
     expect(again).toMatchObject({ kept: 3, added: 0, removed: 0 });
+  });
+});
+
+describe('saving a new version of a library item (L5)', () => {
+  it('keeps the library’s ids, so other projects linked to it keep their animation', () => {
+    // Project A adds the character from the library and improves it.
+    const arm = createPart({ name: 'Arm', kind: 'shape', paths: [rectPath(0, 0, 10, 40)] });
+    const lib = createProject({ layers: [createLayer('character', 'Pip', [arm])] });
+    const v1 = itemFromLayer(lib, new Map(), lib.scene.layers[0]!.id, 'Pip');
+    const a = insertLibraryItem(createProject(), new Map(), v1, { source: { relPath: 'Pip.nyahitem', savedAt: 1 } });
+    const layerA = a.project.scene.layers[0]!;
+    const hat = createPart({ name: 'Hat', kind: 'shape', paths: [rectPath(0, 0, 5, 5)] });
+    const improved = { ...a.project, scene: { ...a.project.scene, layers: [{ ...layerA, root: { ...layerA.root, children: [...layerA.root.children, hat] } }] } };
+    const v2 = withLibraryIds(itemFromLayer(improved, new Map(), layerA.id, 'Pip'), layerA.source!);
+    // Same ids as version 1 for the parts it had; the new hat keeps its own.
+    expect(v2.doc.layer!.root.id).toBe(v1.doc.layer!.root.id);
+    expect(v2.doc.layer!.root.children[0]!.id).toBe(arm.id);
+    expect(v2.doc.layer!.root.children[1]!.id).toBe(hat.id);
+    expect(v2.doc.layer!.source).toBeUndefined();
+
+    // Project B, which added version 1 and animated the arm, updates to version 2.
+    const b = insertLibraryItem(createProject(), new Map(), v1, { source: { relPath: 'Pip.nyahitem', savedAt: 1 } });
+    const layerB = b.project.scene.layers[0]!;
+    const armB = layerB.source!.parts[arm.id]!;
+    const animated = { ...b.project, scene: { ...b.project.scene, tracks: [{ partId: armB, channel: 'rotation' as const, poses: [{ frame: 0, value: 0 }, { frame: 9, value: 30 }] }] } };
+    const u = updateLayerFromLibrary(animated, new Map(), layerB.id, v2, 2);
+    expect(u).toMatchObject({ added: 1, removed: 0 });
+    expect(u.project.scene.tracks[0]!.partId).toBe(armB);
   });
 });

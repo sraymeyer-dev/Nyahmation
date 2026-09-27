@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { insertPartAtScene, locatePart, referencedAssetIds, restWorldMatrix, topLevelSelection, walkParts } from '../engine/edit';
 import type { Mat2D } from '../engine/math';
 import { createId, createLayer, createProject, ProjectFormatError, validateProject } from '../engine/project';
-import type { AssetRef, DrawingSet, Layer, LayerKind, Part, Project } from '../engine/types';
+import type { AssetRef, DrawingSet, Layer, LayerKind, LayerSource, Part, Project } from '../engine/types';
 
 // Library items (docs/DESIGN.md §7): reusable characters, backgrounds and
 // shapes saved as files in the library folder. A `.nyahitem` file is a zip:
@@ -155,6 +155,33 @@ export function unpackLibraryItem(bytes: Uint8Array): LibraryItem {
 }
 
 // ---- Updating from the library (L5) -------------------------------------------------
+
+/**
+ * For saving a new version of a library item over the old one: the layer's
+ * parts and drawing sets get back the ids they have in the library, so every
+ * project linked to the item can still update and keep its animation. Parts
+ * and sets added since keep this project's ids.
+ */
+export function withLibraryIds(item: LibraryItem, source: LayerSource): LibraryItem {
+  const layer = item.doc.layer;
+  if (!layer) return item;
+  const partBack = new Map(Object.entries(source.parts).map(([lib, here]) => [here, lib]));
+  const setBack = new Map(Object.entries(source.sets).map(([lib, here]) => [here, lib]));
+  const back = (p: Part): Part => {
+    const next: Part = { ...p, id: partBack.get(p.id) ?? p.id, children: p.children.map(back) };
+    if (p.drawingSetId) next.drawingSetId = setBack.get(p.drawingSetId) ?? p.drawingSetId;
+    return next;
+  };
+  const { source: _link, ...plain } = layer;
+  return {
+    ...item,
+    doc: {
+      ...item.doc,
+      layer: { ...plain, root: back(layer.root) },
+      drawingSets: item.doc.drawingSets.map((s) => ({ ...s, id: setBack.get(s.id) ?? s.id })),
+    },
+  };
+}
 
 /**
  * Replaces a layer's drawings and rig with a newer version of the library
