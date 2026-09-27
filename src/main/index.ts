@@ -75,6 +75,12 @@ app.on('second-instance', (_event, argv) => {
   if (path) pendingPaths.push(path);
 }
 
+ipcMain.on('edit:text', (event, command: unknown) => {
+  if (command === 'cut') event.sender.cut();
+  else if (command === 'copy') event.sender.copy();
+  else if (command === 'paste') event.sender.paste();
+});
+
 ipcMain.on('project:ready', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;

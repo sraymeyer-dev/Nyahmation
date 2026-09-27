@@ -11,6 +11,8 @@ import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
 import { GradientFields } from './GradientFields';
 import { EffectsSection } from './EffectsSection';
+import { CurveEditor, type Bezier } from './CurveEditor';
+import { EASE_PRESET_CURVES } from '../../../engine/easing';
 
 // Shows and edits whatever is selected: the scene (nothing selected), a
 // layer, one part, or several parts at once (shared settings only).
@@ -358,20 +360,27 @@ function PoseMarks() {
   if (!marks.length) return null;
   const ease = poseEaseAt(project, markTargets(project, marks));
   const value = typeof ease === 'string' ? ease : ease ? 'custom' : 'smooth';
+  // A custom curve starts from the chosen preset's shape (or a gentle ease).
+  const curve: Bezier = ease && typeof ease === 'object' ? [...ease.bezier] : ease && ease in EASE_PRESET_CURVES ? [...EASE_PRESET_CURVES[ease as keyof typeof EASE_PRESET_CURVES]] : [0.42, 0, 0.58, 1];
   const frames = [...new Set(marks.map((m) => m.frame + 1))].sort((a, b) => a - b);
   return (
     <Section title={marks.length === 1 ? `Pose · frame ${frames[0]}` : `${marks.length} poses`}>
       <Row label="Motion out">
-        <select aria-label="Pose easing" value={value} onChange={(e) => setSelectedMarksEase(e.target.value as Ease)}>
+        <select
+          aria-label="Pose easing"
+          value={value}
+          onChange={(e) => setSelectedMarksEase(e.target.value === 'custom' ? { bezier: curve } : (e.target.value as Ease))}
+        >
           <option value="smooth">Smooth (flows through)</option>
           <option value="easeInOut">Ease in and out</option>
           <option value="easeIn">Ease in (start slow)</option>
           <option value="easeOut">Ease out (end slow)</option>
           <option value="linear">Linear (steady)</option>
           <option value="hold">Hold (jump at the next pose)</option>
-          {value === 'custom' && <option value="custom" disabled>Custom curve</option>}
+          <option value="custom">Custom curve…</option>
         </select>
       </Row>
+      {value === 'custom' && <CurveEditor value={curve} onChange={(bezier, key) => setSelectedMarksEase({ bezier }, key)} />}
       <p className="hint">How the motion travels from this pose to the next one. Drag the mark to retime it (Shift: move everything after it too; Option or Ctrl: copy it).</p>
       <Row label="">
         <button onClick={deleteSelectedMarks}>Delete pose{marks.length > 1 ? 's' : ''}</button>

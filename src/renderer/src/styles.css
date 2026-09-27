@@ -719,12 +719,12 @@ input[type='color'] {
 
 .timeline-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .timeline-bar .label,
@@ -1105,4 +1105,85 @@ input[type='color'] {
 
 .effect-head button {
   padding: 0 6px;
+}
+
+/* Easing curve editor (A10) */
+.curve-editor {
+  margin: 6px 0;
+}
+
+.curve-editor svg {
+  display: block;
+  touch-action: none;
+}
+
+.curve-box {
+  fill: var(--panel-2);
+  stroke: var(--border);
+}
+
+.curve-label {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.curve-arm {
+  stroke: var(--muted);
+  stroke-dasharray: 3 3;
+}
+
+.curve-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.curve-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.curve-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.curve-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Lip-sync block edges (LS4): drag to move when a shape starts */
+.tl-block-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+.tl-block-edge:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* "Stretch to N frames" on the timeline bar (A6) */
+.timeline-bar .number-field {
+  flex-shrink: 0;
+}
+
+.timeline-bar .number-field input {
+  width: 44px;
+}
+
+.curve-fields .curve-field-label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
 }

@@ -7,6 +7,7 @@ import * as library from './editor/library';
 import * as lipsync from './editor/lipsync';
 import { measurePreviewSpeed } from './editor/measure';
 import { startAutosave } from './editor/recovery';
+import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
 import { deleteSelectedMarks, jumpToPose, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
@@ -27,6 +28,13 @@ const isTyping = (t: EventTarget | null) =>
 function textCommand(command: 'undo' | 'redo' | 'selectAll'): boolean {
   if (!isTyping(document.activeElement)) return false;
   document.execCommand(command);
+  return true;
+}
+
+/** Cut/Copy/Paste act on text while typing in a field. */
+function editText(command: 'cut' | 'copy' | 'paste'): boolean {
+  if (!isTyping(document.activeElement)) return false;
+  window.nyah?.editText(command);
   return true;
 }
 
@@ -62,6 +70,9 @@ const MENU: Record<MenuCommand, () => void> = {
   export: () => store.set({ exportOpen: true }),
   makeSwitchLayer: lipsync.makeSwitchLayerFromSelection,
   measurePreview: () => void measurePreviewSpeed(),
+  cut: () => editText('cut') || clipboard.cut(),
+  copy: () => editText('copy') || clipboard.copy(),
+  paste: () => editText('paste') || clipboard.paste(),
 };
 
 const TOOL_KEYS = {

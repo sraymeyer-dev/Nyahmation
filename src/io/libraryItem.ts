@@ -189,16 +189,19 @@ export function insertLibraryItem(
   project: Project,
   projectAssets: ReadonlyMap<string, Uint8Array>,
   item: LibraryItem,
-  target: { layerIndex?: number; containerId?: string } = {},
+  target: { layerIndex?: number; containerId?: string; reuseExisting?: boolean } = {},
 ): InsertedItem {
   const { doc } = item;
   const maps: IdMaps = { parts: new Map(), sets: new Map(), assets: new Map() };
-  for (const a of doc.assets) maps.assets.set(a.id, createId());
-  for (const s of doc.drawingSets) maps.sets.set(s.id, createId());
+  // Pasting within a project: drawing sets and images it already has are shared, not copied.
+  const hasSet = (id: string) => target.reuseExisting && project.drawingSets.some((s) => s.id === id);
+  const hasAsset = (id: string) => target.reuseExisting && project.assets.some((a) => a.id === id) && projectAssets.has(id);
+  for (const a of doc.assets) maps.assets.set(a.id, hasAsset(a.id) ? a.id : createId());
+  for (const s of doc.drawingSets) maps.sets.set(s.id, hasSet(s.id) ? s.id : createId());
 
   const assets = new Map(projectAssets);
-  for (const [oldId, newId] of maps.assets) assets.set(newId, item.assets.get(oldId)!);
-  const drawingSets = doc.drawingSets.map((s) => ({
+  for (const [oldId, newId] of maps.assets) if (oldId !== newId) assets.set(newId, item.assets.get(oldId)!);
+  const drawingSets = doc.drawingSets.filter((s) => maps.sets.get(s.id) !== s.id).map((s) => ({
     ...s,
     id: maps.sets.get(s.id)!,
     drawings: s.drawings.map((d) => ({
@@ -209,7 +212,7 @@ export function insertLibraryItem(
   let next: Project = {
     ...project,
     drawingSets: [...project.drawingSets, ...drawingSets],
-    assets: [...project.assets, ...doc.assets.map((a) => ({ ...a, id: maps.assets.get(a.id)! }))],
+    assets: [...project.assets, ...doc.assets.filter((a) => maps.assets.get(a.id) !== a.id).map((a) => ({ ...a, id: maps.assets.get(a.id)! }))],
   };
 
   if (doc.layer) {

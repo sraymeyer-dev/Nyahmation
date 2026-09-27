@@ -169,3 +169,41 @@ export function poseFrames(project: Project, partIds: ReadonlySet<string>, exclu
   for (const t of project.scene.tracks) if (partIds.has(t.partId) && !exclude?.(t)) for (const p of t.poses) frames.add(p.frame);
   return [...frames].sort((a, b) => a - b);
 }
+
+/**
+ * Stretches or squashes the timing of a range of frames (docs/DESIGN.md A6):
+ * poses from `from` to `to` are spread over `length` frames starting at
+ * `from`, and every later pose moves by the difference, so the rest of the
+ * timing is kept. When squashing, poses that land on the same frame keep
+ * the later one. `inScope` picks the tracks (e.g. leaving lip sync alone).
+ */
+export function stretchPoses(
+  project: Project,
+  from: number,
+  to: number,
+  length: number,
+  inScope: (track: Track) => boolean = () => true,
+): { project: Project; moved: number } {
+  const oldLength = to - from + 1;
+  const newLength = Math.max(1, Math.round(length));
+  if (from < 0 || to < from || newLength === oldLength) return { project, moved: 0 };
+  const map = (f: number) => {
+    if (f < from) return f;
+    if (f > to) return f + newLength - oldLength;
+    return oldLength === 1 ? from : from + Math.round(((f - from) * (newLength - 1)) / (oldLength - 1));
+  };
+  const replaced = new Map<Track, Track>();
+  let moved = 0;
+  for (const track of project.scene.tracks) {
+    if (!inScope(track) || !track.poses.some((p) => p.frame >= from)) continue;
+    const byFrame = new Map<number, Pose<unknown>>();
+    for (const pose of track.poses) {
+      const frame = map(pose.frame);
+      if (frame !== pose.frame) moved++;
+      byFrame.set(frame, { ...pose, frame }); // later poses win
+    }
+    const poses = [...byFrame.values()].sort((a, b) => a.frame - b.frame);
+    replaced.set(track, { ...track, poses } as Track);
+  }
+  return { project: withTracks(project, replaced), moved };
+}

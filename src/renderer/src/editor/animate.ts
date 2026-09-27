@@ -1,6 +1,6 @@
 import { frameAccess, restAccess, type TransformAccess } from '../../../engine/access';
 import { locatePart, walkParts } from '../../../engine/edit';
-import { deletePoses, poseFrames, retimePoses, setPoseEase, type RetimeTarget } from '../../../engine/retime';
+import { deletePoses, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from '../../../engine/retime';
 import { CAMERA_ID, type Ease, type Project, type Track } from '../../../engine/types';
 import { store, type EditorState, type MarkRef } from './store';
 
@@ -61,9 +61,9 @@ export function deleteSelectedMarks(): void {
   store.commit(project, { timeline: { ...s.timeline, marks: [] } });
 }
 
-export function setSelectedMarksEase(ease: Ease): void {
+export function setSelectedMarksEase(ease: Ease, coalesce = 'ease'): void {
   const s = get();
-  store.commit(setPoseEase(s.project, markTargets(s.project, s.timeline.marks), ease), {}, 'ease');
+  store.commit(setPoseEase(s.project, markTargets(s.project, s.timeline.marks), ease), {}, coalesce);
 }
 
 export function setFrame(frame: number): void {
@@ -78,6 +78,35 @@ export function jumpToPose(direction: 1 | -1): void {
   const frames = poseFrames(s.project, ids);
   const target = direction > 0 ? frames.find((f) => f > s.frame) : [...frames].reverse().find((f) => f < s.frame);
   if (target !== undefined) setFrame(target);
+}
+
+/**
+ * Stretches or squashes the loop range to `length` frames (docs/DESIGN.md A6).
+ * With parts selected, only their animation (and their children's); with
+ * nothing selected, the whole scene and the camera. Lip sync only changes
+ * when the mouth itself is selected, so it stays matched to the dialogue.
+ */
+export function stretchLoop(length: number): void {
+  const s = get();
+  if (!s.loop) return;
+  const parts = new Set<string>();
+  for (const id of s.selection) {
+    const loc = locatePart(s.project, id);
+    if (loc) for (const p of walkParts(loc.part)) parts.add(p.id);
+  }
+  const selectedMouth = new Set(s.selection);
+  const isLipSync = lipSyncTrack(s.project);
+  const inScope = (t: Track) => (parts.size === 0 || parts.has(t.partId)) && (!isLipSync(t) || selectedMouth.has(t.partId));
+  const { project, moved } = stretchPoses(s.project, s.loop.in, s.loop.out, length, inScope);
+  const n = Math.max(1, Math.round(length));
+  const loop = { in: s.loop.in, out: s.loop.in + n - 1 };
+  const scope = parts.size ? 'the selected parts' : 'the scene';
+  store.commit(project, {
+    loop,
+    status: moved
+      ? `Retimed frames ${s.loop.in + 1}–${s.loop.out + 1} of ${scope} to ${n} frames (${loop.in + 1}–${loop.out + 1}); later poses moved along.`
+      : `No poses of ${scope} to retime in that range.`,
+  });
 }
 
 export function setLoopPoint(which: 'in' | 'out'): void {

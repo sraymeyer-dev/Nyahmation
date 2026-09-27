@@ -8,6 +8,7 @@ import { applyToPoint } from '../../engine/math';
 import { store } from './editor/store';
 import { zoomToFit } from './editor/actions';
 import { parseProject } from '../../engine/project';
+import { channelValueAt } from '../../engine/access';
 import { groupStats } from './render/groups';
 import { toScreen } from './editor/screen';
 import './styles.css';
@@ -45,6 +46,23 @@ function findPart(name: string) {
   },
   part(name: string) {
     return findPart(name)?.part ?? null;
+  },
+  /** Screen position of the first selected part's origin, in the rest pose. */
+  selectedScreen() {
+    const s = store.getState();
+    const loc = s.selection[0] ? locatePart(s.project, s.selection[0]) : undefined;
+    return loc ? toScreen(s, applyToPoint(restWorldMatrix(loc), { x: 0, y: 0 })) : null;
+  },
+  /** A part's own value of a channel on a frame (its poses, ignoring stepping and pins). */
+  channelValue(id: string, channel: 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity', frame: number) {
+    return channelValueAt(store.getState().project, id, channel, frame);
+  },
+  /** Names of a layer's parts in paint order (back to front) on a frame; the rest pose in Build mode. */
+  paintOrder(layerName: string, frame: number) {
+    const s = store.getState();
+    const layer = s.project.scene.layers.find((l) => l.name === layerName);
+    const scene = s.mode === 'animate' ? evaluateScene(s.project, frame) : evaluateScene({ ...s.project, scene: { ...s.project.scene, tracks: [] } }, 0);
+    return scene.parts.filter((p) => p.layerId === layer?.id && p.id !== layer?.root.id).map((p) => p.name);
   },
   /** Opens a project from its JSON (tests). */
   loadProjectJson(json: unknown) {

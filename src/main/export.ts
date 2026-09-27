@@ -7,15 +7,15 @@ import ffmpegPath from 'ffmpeg-static';
 
 // Video export (docs/DESIGN.md §11). The renderer draws every frame at full
 // quality and sends it here, one at a time; this side either pipes raw
-// pixels into FFmpeg (MP4) or writes PNG files. Nothing is ever dropped:
+// pixels into FFmpeg (MP4, or MOV with ProRes 4444) or writes PNG files. Nothing is ever dropped:
 // each frame waits until the previous one has been written.
 //
 // The soundtrack arrives already mixed, as a WAV file's bytes (the renderer
-// mixes it with Web Audio, E5). For MP4 it goes into a temporary file that
+// mixes it with Web Audio, E5). For MP4 and MOV it goes into a temporary file that
 // FFmpeg reads as a second input; for PNG frames it is saved next to them as
 // soundtrack.wav.
 
-type Format = 'mp4' | 'png';
+type Format = 'mp4' | 'mov' | 'png';
 
 interface Session {
   format: Format;
@@ -56,6 +56,29 @@ function mp4Args(s: Session, fps: number, soundtrack: string | null): string[] {
   ];
 }
 
+/**
+ * MOV with Apple ProRes 4444 (docs/DESIGN.md E3): high quality, and it keeps
+ * see-through areas, for layering characters over footage in a video editor.
+ * The sound is uncompressed PCM, as editors prefer.
+ */
+function movArgs(s: Session, fps: number, soundtrack: string | null): string[] {
+  return [
+    '-y',
+    '-f', 'rawvideo',
+    '-pix_fmt', 'rgba',
+    '-s', `${s.width}x${s.height}`,
+    '-r', String(fps),
+    '-i', '-',
+    ...(soundtrack ? ['-i', soundtrack, '-map', '0:v', '-map', '1:a', '-c:a', 'pcm_s16le'] : ['-an']),
+    '-c:v', 'prores_ks',
+    '-profile:v', '4444',
+    '-pix_fmt', 'yuva444p10le',
+    '-alpha_bits', '16',
+    '-vendor', 'apl0',
+    s.path,
+  ];
+}
+
 async function cleanUp(s: Session): Promise<void> {
   if (s.tempDir) await rm(s.tempDir, { recursive: true, force: true }).catch(() => undefined);
 }
@@ -66,11 +89,12 @@ export function registerExportHandlers(): void {
   ipcMain.handle('export:choose', async (event, format: unknown, suggestedName: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const name = typeof suggestedName === 'string' && suggestedName ? suggestedName : 'Untitled';
-    if (format === 'mp4') {
-      const options = { defaultPath: `${name}.mp4`, filters: [{ name: 'MP4 video', extensions: ['mp4'] }] };
+    if (format === 'mp4' || format === 'mov') {
+      const filter = format === 'mp4' ? { name: 'MP4 video', extensions: ['mp4'] } : { name: 'QuickTime movie (ProRes 4444)', extensions: ['mov'] };
+      const options = { defaultPath: `${name}.${format}`, filters: [filter] };
       const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
       if (r.canceled || !r.filePath) return null;
-      return r.filePath.toLowerCase().endsWith('.mp4') ? r.filePath : `${r.filePath}.mp4`;
+      return r.filePath.toLowerCase().endsWith(`.${format}`) ? r.filePath : `${r.filePath}.${format}`;
     }
     const options = {
       title: 'Choose a folder for the PNG frames',
@@ -82,7 +106,7 @@ export function registerExportHandlers(): void {
 
   ipcMain.handle('export:begin', async (_event, opts: BeginOptions) => {
     const { format, path, width, height, fps, audio } = opts;
-    if ((format !== 'mp4' && format !== 'png') || typeof path !== 'string' || !(width > 0 && height > 0 && fps > 0)) {
+    if ((format !== 'mp4' && format !== 'mov' && format !== 'png') || typeof path !== 'string' || !(width > 0 && height > 0 && fps > 0)) {
       throw new Error('Invalid export settings.');
     }
     if (audio !== undefined && !(audio instanceof Uint8Array)) throw new Error('Invalid export settings.');
@@ -99,7 +123,7 @@ export function registerExportHandlers(): void {
         soundtrack = join(session.tempDir, 'soundtrack.wav');
         await writeFile(soundtrack, audio);
       }
-      const ff = spawn(bin, mp4Args(session, fps, soundtrack));
+      const ff = spawn(bin, format === 'mov' ? movArgs(session, fps, soundtrack) : mp4Args(session, fps, soundtrack));
       session.ffmpeg = ff;
       ff.stderr.on('data', (d: Buffer) => {
         session.stderr = (session.stderr + d.toString()).slice(-4000);

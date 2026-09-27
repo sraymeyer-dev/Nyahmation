@@ -207,12 +207,12 @@ export function reparentPart(project: Project, id: string, newParentId: string, 
 }
 
 /** Keeps only ids that aren't inside another selected part, in tree order. */
-export function topLevelSelection(project: Project, ids: Iterable<string>): string[] {
+export function topLevelSelection(project: Project, ids: Iterable<string>, options: { includeLayerRoots?: boolean } = {}): string[] {
   const set = new Set(ids);
   const result: string[] = [];
   for (const layer of project.scene.layers) {
     const visit = (p: Part, insideSelected: boolean) => {
-      const selected = set.has(p.id) && p !== layer.root;
+      const selected = set.has(p.id) && (options.includeLayerRoots || p !== layer.root);
       if (selected && !insideSelected) result.push(p.id);
       for (const c of p.children) visit(c, insideSelected || selected);
     };

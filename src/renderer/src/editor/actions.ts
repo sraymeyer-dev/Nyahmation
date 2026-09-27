@@ -18,6 +18,7 @@ import {
   walkParts,
   type ArrangeHow,
 } from '../../../engine/edit';
+import { arrangeOnFrame } from '../../../engine/drawOrder';
 import { evaluateRestPose, evaluateScene, type ResolvedScene } from '../../../engine/evaluate';
 import { invert } from '../../../engine/math';
 import { deletePoints, movePoints } from '../../../engine/pathEdit';
@@ -200,7 +201,19 @@ export function combine(): void {
 
 export function arrange(how: ArrangeHow): void {
   const s = get();
-  store.commit(arrangeParts(s.project, s.selection, how));
+  if (s.mode !== 'animate') {
+    store.commit(arrangeParts(s.project, s.selection, how));
+    return;
+  }
+  // Animate mode: a draw-order swap from this frame on (docs/DESIGN.md R9).
+  const { project, moved } = arrangeOnFrame(s.project, s.frame, s.selection, how);
+  if (!moved.length) {
+    store.set({ status: s.selection.length ? 'Already there.' : 'Select a part to move in front or behind.' });
+    return;
+  }
+  const names = moved.map((id) => locatePart(project, id)?.part.name).filter(Boolean);
+  const where = { forward: 'forward', backward: 'backward', front: 'to the front', back: 'to the back' }[how];
+  store.commit(project, { status: `${names.join(', ')} ${names.length === 1 ? 'moves' : 'move'} ${where} from frame ${s.frame + 1}.` });
 }
 
 export function nudge(dx: number, dy: number): void {

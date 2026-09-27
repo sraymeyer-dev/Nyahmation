@@ -58,6 +58,7 @@ export function ExportDialog() {
           <span className="row-label">Format</span>
           <select aria-label="Export format" value={settings.format} disabled={busy} onChange={(e) => setSettings({ ...settings, format: e.target.value as ExportSettings['format'] })}>
             <option value="mp4">MP4 video (H.264)</option>
+            <option value="mov">MOV (ProRes 4444, for video editors)</option>
             <option value="png">PNG image sequence</option>
           </select>
         </label>
@@ -86,7 +87,7 @@ export function ExportDialog() {
             )}
           </select>
         </label>
-        {settings.format === 'png' && (
+        {settings.format !== 'mp4' && (
           <label className="row">
             <span className="row-label">Background</span>
             <span className="row-control">
@@ -101,8 +102,8 @@ export function ExportDialog() {
         <p className="hint" data-testid="export-sound">
           {sounds === 0
             ? 'No sound.'
-            : settings.format === 'mp4'
-              ? `Includes the sound (${sounds} clip${sounds === 1 ? '' : 's'}, mixed).`
+            : settings.format !== 'png'
+              ? `Includes the sound (${sounds} clip${sounds === 1 ? '' : 's'}, mixed${settings.format === 'mov' ? ', uncompressed' : ''}).`
               : 'The sound is saved next to the frames as soundtrack.wav.'}
         </p>
         {enlarged.length > 0 && (

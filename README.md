@@ -14,7 +14,8 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 4.5 (hardening):** done. Autosave with crash recovery, a preview quality setting for slower computers, a speed check, and "View on ones".
 - **Phase 5a (stage):** done. A camera you pose on the timeline, layers fixed to the camera (which can follow a character, like a speech bubble), parallax depth, scrolling and repeating scenery, gradient fills and a gradient sky.
 - **Phase 5b (look):** done. Drop shadows, glows, blur and haze on parts or whole layers (animatable), blend modes, and clipping (pupils that stay inside the eye).
-- Next: phase 5c (draw-order swaps, easing editor, ProRes). See the roadmap in the design document.
+- **Phase 5c (craft):** done. Copy and paste of parts and poses, arms that swing behind the body, a custom easing curve, stretching or squashing a section of animation, and ProRes 4444 export for video editors.
+- Next: phase 6 (automatic lip sync, mirrored poses, animation cycles). See the roadmap in the design document.
 
 ## Running it on a Mac (step by step)
 
@@ -105,7 +106,7 @@ The app has two modes (top bar). **Build** is for drawing and arranging. **Anima
 | Rectangle, Ellipse, Polygon, Star, Line | M, L, Y, S, \ | Drag out a shape. Shift keeps it square (or the line at 45°); Alt draws from the centre. |
 | Hand | H | Drag to pan. Space-drag or the middle mouse button pans with any tool. |
 
-Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
+Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Cut / Copy / Paste Cmd+X / C / V, Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
 
 **Animating (Animate mode):**
 - Go to a frame (click the timeline, or ← / →), then pose with the **Pose** tool (K) or the **Select** tool (V). Every change is recorded as a pose on that frame; Nyahmation fills in the frames between poses. The first time you change a part, its starting position is kept on frame 1 automatically.
@@ -115,9 +116,13 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - **Option-drag** (Mac) or **Ctrl-drag** copies the pose to another frame: a hold.
   - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold.
   - Mouth sounds only move from the mouth's own row, so lip sync stays matched to the dialogue.
+- **Copy a pose:** select parts (or a whole character) and **Copy** (Cmd+C). Go to another frame, or select another character with the same part names, and **Paste**: the pose is recorded there.
+- **Arm behind the body:** select the arm and choose **Send Backward** (Cmd+[) or **Send to Back**: from this frame on it's drawn behind. Bring it forward again on a later frame.
+- **Custom easing:** click a ◆, then **Motion out → Custom curve…**. Drag the two handles, or pick a preset such as Overshoot (a little bounce into the pose) or Anticipate (a small wind-up first).
+- **Stretch or squash timing:** set a loop range with **I** and **O**, then type a new length in **Stretch to … frames**. The poses in the range spread out or squeeze together, and everything after moves along. With parts selected, only they are retimed. Lip sync stays put unless you selected the mouth.
 - **Pin tool** (P): click a foot to pin it to the floor from this frame; click it again on a later frame to release it. The leg bends to keep the foot planted while the body moves.
 - **Playback:** Space plays and pauses. Shift+← / → jumps between poses. **I** and **O** set a loop range. **Onion skin** shows nearby frames in red (before) and green (after).
-- **Export** (Cmd+E, or the button on the timeline): MP4 video or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range. The sound goes into the MP4; a PNG export saves it next to the frames as `soundtrack.wav`. If a PNG drawing will be enlarged (and look soft), the Export window says which.
+- **Export** (Cmd+E, or the button on the timeline): MP4 video, a MOV (ProRes 4444, for video editors like DaVinci Resolve or Final Cut, optionally see-through) or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range. The sound goes into the MP4; a PNG export saves it next to the frames as `soundtrack.wav`. If a PNG drawing will be enlarged (and look soft), the Export window says which.
 
 **The camera (Animate mode):**
 - Press **C** for the **Camera** tool. Drag to pan, Shift-drag to turn, Option-drag (Alt on Windows) up or down to zoom. Each change is a camera pose on the current frame, and the camera glides between poses like a character does. The **Camera** row on the timeline shows its poses; drag them to retime.
@@ -143,7 +148,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 2. **Make the mouth** (Build mode). Draw each mouth shape, or import them, and **name each one after its shape**: `A` (M, B, P), `B` (K, S, T, EE), `C` (EH, AE), `D` (AA), `E` (AO, ER), `F` (OO, W), `G` (F, V), `H` (L) and `X` (rest). Names like `rest`, `MBP`, `FV` or `mouth_D` work too. A mouth can be several shapes grouped together (lips, teeth, tongue).
 3. Select all the shapes and choose **Object → Make Switch Layer** (Shift+Cmd+M). They become one **Mouth** layer that shows one shape at a time. Put it inside the head in the Layers panel so it moves with the head, and use the Joints tool to place it. PNG mouths: select the Mouth, then **Add drawings from files…** in Properties; files named `A.png`, `D.png` and so on land on the right letter.
 4. **Lip sync** (Animate mode): click the **Mouth** row on the timeline, go to where the line starts, and **type the letter** for each sound as you hear it. **Sound while scrubbing** plays each frame as you step. After each letter the playhead moves on one frame (or two, from the menu above the timeline), so you only type where the mouth changes; a shape holds until the next one. **Backspace** steps back and clears. You can also click the thumbnails.
-5. Coloured blocks on the Mouth row show which shape is on. Drag a ◆ on that row to nudge a change; Shift-drag moves a whole phrase. Lip sync often reads better a frame or two before the sound.
+5. Coloured blocks on the Mouth row show which shape is on. Drag a ◆ (or a block's left edge) on that row to nudge a change; Shift-drag moves a whole phrase. Lip sync often reads better a frame or two before the sound.
 6. Other switch layers (eyes, hands) work the same way with any names; press 1–9 or click a thumbnail to switch drawings.
 
 While a switch layer is selected in Animate mode, the mouth letters take priority over tool shortcuts (so H sets the H mouth rather than picking the Hand tool). Press Escape to deselect it and get the tool keys back.
@@ -162,6 +167,8 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 **View on ones:** for characters animated on twos or threes, tick **View on ones** on the timeline to see every in-between while you check the motion. It only changes the preview; the export still uses twos and threes.
 
 **Library tab:** select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them.
+
+**Copy and paste (Build mode):** select shapes, groups or a whole layer and **Copy** (Cmd+C) or **Cut** (Cmd+X), then **Paste** (Cmd+V). Copies go into the selected group or the active layer, each a little down and to the right so you can see them. A copied mouth keeps sharing its mouth shapes. You can paste into another project too: open it and paste.
 
 **Layers panel:** layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
 

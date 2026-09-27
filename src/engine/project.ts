@@ -204,6 +204,7 @@ export function validateProject(project: Project): void {
         fail(`poses on ${key} must be on increasing whole frames`);
       }
       lastFrame = pose.frame;
+      if (pose.ease !== undefined && !validEase(pose.ease)) fail(`pose on ${key} at frame ${pose.frame} has an unknown easing`);
       if (isContinuousChannel(track.channel) && !Number.isFinite(pose.value)) {
         fail(`pose on ${key} at frame ${pose.frame} is not a number`);
       }
@@ -223,6 +224,13 @@ function validEffect(e: unknown): e is Effect {
   const settings = EFFECT_SETTINGS[e.kind as Effect['kind']] as readonly string[];
   if (!settings.every((k) => Number.isFinite(e[k]))) return false;
   return e.kind === 'blur' || typeof e.color === 'string';
+}
+
+const EASE_PRESETS = ['smooth', 'linear', 'hold', 'easeIn', 'easeOut', 'easeInOut'];
+
+function validEase(e: unknown): boolean {
+  if (typeof e === 'string') return EASE_PRESETS.includes(e);
+  return isObject(e) && Array.isArray(e.bezier) && e.bezier.length === 4 && e.bezier.every((n: unknown) => Number.isFinite(n));
 }
 
 function validGradient(g: unknown): boolean {

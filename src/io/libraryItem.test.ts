@@ -38,6 +38,21 @@ function sample() {
 }
 
 describe('library items', () => {
+  it('pasting within a project shares its drawing sets and images instead of copying them', () => {
+    const { project, assets, arm } = sample();
+    const mouth = project.scene.layers[1]!.root.children.find((p) => p.name === 'Mouth')!;
+    const item = itemFromParts(project, assets, [mouth.id, arm.id], 'Copy');
+    const container = project.scene.layers[1]!.root.id;
+    const shared = insertLibraryItem(project, assets, item, { containerId: container, reuseExisting: true });
+    expect(shared.project.drawingSets).toHaveLength(project.drawingSets.length);
+    expect(shared.project.assets).toHaveLength(project.assets.length);
+    const pasted = locatePart(shared.project, shared.partIds.find((id) => locatePart(shared.project, id)!.part.name === 'Mouth')!)!.part;
+    expect(pasted.drawingSetId).toBe('set1');
+    // From the library (not a paste), everything is copied.
+    const copied = insertLibraryItem(project, assets, item, { containerId: container });
+    expect(copied.project.drawingSets).toHaveLength(project.drawingSets.length + 1);
+  });
+
   it('a background keeps its depth and scrolling, but not a link to a part in another project', () => {
     const { project, assets, other, arm } = sample();
     const styled: Project = {

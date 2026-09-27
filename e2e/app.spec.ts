@@ -496,6 +496,20 @@ test('lip sync: typing mouth letters on the Mouth row sets shapes and moves on',
   await page.keyboard.press('1');
   expect(await drawingPoses('Mouth')).toEqual(expect.arrayContaining([[52, 'X']]));
   await page.screenshot({ path: 'test-results/lipsync.png' });
+
+  // Drag the X block's left edge 2 frames later: X now starts on frame 54, and D holds longer (LS4).
+  const edge = row('Mouth').locator('.tl-block.key-X [data-testid="block-edge"]').last();
+  await edge.scrollIntoViewIfNeeded();
+  const box = (await edge.boundingBox())!;
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().timeline.zoom);
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 2 + zoom, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.move(box.x + 2 + zoom * 2 + 1, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.up();
+  poses = await drawingPoses('Mouth');
+  expect(poses).toEqual(expect.arrayContaining([[50, 'C'], [51, 'D'], [54, 'X']]));
+  expect(poses.some(([f]) => f === 52)).toBe(false);
   await page.keyboard.press('Escape');
 });
 
@@ -527,6 +541,22 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   // The video has the sound in it, and the PNG folder has it as a WAV.
   expect(await streams(mp4)).toEqual(expect.arrayContaining(['Video: h264', 'Audio: aac']));
   expect(existsSync(join(pngDir, 'soundtrack.wav'))).toBe(true);
+
+  // MOV with ProRes 4444, see-through, for video editors (E3).
+  const mov = join(dir, 'clip.mov');
+  await app.evaluate(({ dialog }, file) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
+  }, mov);
+  await dialogBox.getByLabel('Export format').selectOption('mov');
+  await dialogBox.getByRole('checkbox').check();
+  await expect(dialogBox.getByTestId('export-sound')).toContainText('uncompressed');
+  await dialogBox.getByRole('button', { name: 'Export again…' }).click();
+  await expect(dialogBox.getByText(`Saved to ${mov}`)).toBeVisible({ timeout: 60_000 });
+  expect(await streams(mov)).toEqual(expect.arrayContaining(['Video: prores', 'Audio: pcm_s16le']));
+  const ffmpeg = (await import('ffmpeg-static')).default as unknown as string;
+  const info = spawnSync(ffmpeg, ['-hide_banner', '-i', mov], { encoding: 'utf8' }).stderr;
+  expect(info).toMatch(/prores.*4444/);
+  expect(info).toContain('yuva444p'); // with its see-through channel
   await dialogBox.getByRole('button', { name: 'Close' }).click();
 });
 
@@ -882,6 +912,173 @@ test('groups that look the same as last frame are reused, not redrawn', async ()
   }
   const after = await stats();
   expect(after.reused - before.reused).toBeGreaterThanOrEqual(4);
+});
+
+test('copies, cuts and pastes parts in Build mode', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  const count = (name: string) => state().then((s) => s.names.filter((n) => n === name).length);
+  const selectedAt = () => page.evaluate(() => (window as any).__nyah.selectedScreen());
+
+  // Copy the hand, paste twice: each copy lands a little further down and right.
+  await outlineRow('Hand').click();
+  const original = await selectedAt();
+  await menu('copy');
+  await menu('paste');
+  await expect(page.getByText('Pasted “Hand”.')).toBeVisible();
+  expect(await count('Hand')).toBe(2);
+  const first = await selectedAt();
+  await menu('paste');
+  expect(await count('Hand')).toBe(3);
+  const second = await selectedAt();
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
+  expect((first.x - original.x) / zoom).toBeCloseTo(20, 0);
+  expect((second.x - first.x) / zoom).toBeCloseTo(20, 0);
+  expect((second.y - first.y) / zoom).toBeCloseTo(20, 0);
+  // Undo takes a paste away.
+  await menu('undo');
+  expect(await count('Hand')).toBe(2);
+
+  // A mouth keeps using the same drawing set, not a copy of it.
+  const sets = () => page.evaluate(() => (window as any).__nyah.store.getState().project.drawingSets.length);
+  const setsBefore = await sets();
+  await outlineRow('Mouth').click();
+  await menu('copy');
+  await menu('paste');
+  expect(await count('Mouth')).toBe(2);
+  expect(await sets()).toBe(setsBefore);
+
+  // Cut removes, paste brings back.
+  await outlineRow('Eyes').click();
+  await menu('cut');
+  expect(await count('Eyes')).toBe(0);
+  await menu('paste');
+  expect(await count('Eyes')).toBe(1);
+
+  // A whole layer.
+  const layers = () => page.getByTestId('layer-row').count();
+  const layersBefore = await layers();
+  await page.getByTestId('layer-row').filter({ hasText: 'Scenery' }).click();
+  await menu('copy');
+  await menu('paste');
+  expect(await layers()).toBe(layersBefore + 1);
+
+  // In a text field, Copy and Paste work on the text instead.
+  const name = page.getByLabel('Layer name');
+  await name.fill('Scenery copy');
+  await name.selectText();
+  await menu('copy');
+  expect(await layers()).toBe(layersBefore + 1);
+  await name.press('Escape');
+});
+
+test('copies a pose onto another frame and onto a copy of the character', async () => {
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
+  await menu('copy');
+  await menu('paste'); // a second Pip, with no animation
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  const ids = await page.evaluate(() => {
+    const layers = (window as any).__nyah.store.getState().project.scene.layers.filter((l: any) => l.name === 'Pip');
+    const forearm = (root: any) => {
+      const walk = (p: any): any => (p.name === 'Forearm (front)' ? p : p.children.map(walk).find(Boolean));
+      return walk(root).id;
+    };
+    return { pip: layers[0].root.id, copy: layers[1].root.id, pipArm: forearm(layers[0].root), copyArm: forearm(layers[1].root) };
+  });
+  const value = (id: string, frame: number) => page.evaluate(([i, f]) => (window as any).__nyah.channelValue(i, 'rotation', f), [id, frame] as const);
+  const select = (id: string) => page.evaluate((i) => (window as any).__nyah.store.set({ selection: [i], cameraSelected: false }), id);
+  const pipAt20 = await value(ids.pipArm, 20);
+  expect(await value(ids.copyArm, 20)).not.toBeCloseTo(pipAt20);
+
+  // Copy Pip's pose on frame 21, paste it onto the copy: the arms match.
+  await goToFrame(20);
+  await select(ids.pip);
+  await menu('copy');
+  await select(ids.copy);
+  await menu('paste');
+  await expect(page.getByText(/Pasted the pose from frame 21 onto \d+ parts on frame 21/)).toBeVisible();
+  expect(await value(ids.copyArm, 20)).toBeCloseTo(pipAt20);
+
+  // Paste it onto a later frame of Pip himself: a hold of that pose.
+  await goToFrame(60);
+  await select(ids.pip);
+  await menu('paste');
+  expect(await value(ids.pipArm, 60)).toBeCloseTo(pipAt20);
+});
+
+test('in Animate mode, sending a part back is a draw-order swap from that frame', async () => {
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await goToFrame(30);
+  await page.evaluate(() => {
+    const nyah = (window as any).__nyah;
+    nyah.store.set({ selection: [nyah.part('Upper arm (front)').id] });
+  });
+  const order = (frame: number) => page.evaluate((f) => (window as any).__nyah.paintOrder('Pip', f), frame);
+  const before = await order(30);
+  await menu('sendToBack');
+  await expect(page.getByText('Upper arm (front) moves to the back from frame 31.')).toBeVisible();
+  expect((await order(30))[0]).toBe('Upper arm (front)');
+  expect(await order(29)).toEqual(before);
+  await expect(row('Upper arm (front)').locator('.tl-mark[data-frame="30"]')).toHaveCount(1);
+  // The rest pose isn't touched.
+  await page.getByRole('tab', { name: 'Build' }).click();
+  expect((await order(0))[0]).not.toBe('Upper arm (front)');
+});
+
+test('a custom easing curve, and stretching a range of poses', async () => {
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  // Select Torso's first pose mark and give it a custom curve.
+  await row('Torso').locator('.tl-mark').first().click();
+  await page.getByLabel('Pose easing').selectOption('custom');
+  await expect(page.getByTestId('curve-editor')).toBeVisible();
+  const ease = () =>
+    page.evaluate(() => {
+      const nyah = (window as any).__nyah;
+      const s = nyah.store.getState();
+      const torso = nyah.part('Torso').id;
+      const mark = s.timeline.marks[0];
+      return s.project.scene.tracks.filter((t: any) => t.partId === torso).map((t: any) => t.poses.find((p: any) => p.frame === mark.frame)?.ease).find(Boolean);
+    });
+  expect(await ease()).toEqual({ bezier: [0.42, 0, 0.58, 1] });
+  await page.getByRole('button', { name: 'Overshoot' }).click();
+  expect(await ease()).toEqual({ bezier: [0.3, 0, 0.3, 1.35] });
+  // Drag the second handle up: more overshoot.
+  await page.getByTestId('curve-editor').scrollIntoViewIfNeeded();
+  const handle = (await page.getByTestId('curve-handle-2').boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y - 20, { steps: 4 });
+  await page.mouse.up();
+  expect((await ease()).bezier[3]).toBeGreaterThan(1.35);
+  await page.screenshot({ path: 'test-results/curve-editor.png' });
+
+  // Stretch frames 11–21 of the whole scene to 21 frames: later poses move 10 frames on.
+  await page.keyboard.press('Escape');
+  const lastPose = () =>
+    page.evaluate(() => {
+      const s = (window as any).__nyah.store.getState();
+      return Math.max(...s.project.scene.tracks.filter((t: any) => t.channel !== 'drawing').flatMap((t: any) => t.poses.map((p: any) => p.frame)));
+    });
+  const before = await lastPose();
+  await goToFrame(10);
+  await page.keyboard.press('i');
+  await goToFrame(20);
+  await page.keyboard.press('o');
+  const stretch = page.getByLabel('Stretch loop to frames');
+  await expect(stretch).toHaveValue('11');
+  await stretch.fill('21');
+  await stretch.press('Enter');
+  expect(await lastPose()).toBe(before + 10);
+  await expect(stretch).toHaveValue('21');
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().loop)).toEqual({ in: 10, out: 30 });
 });
 
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {

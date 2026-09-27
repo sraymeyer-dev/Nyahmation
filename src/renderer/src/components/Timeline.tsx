@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { pinIntervals } from '../../../engine/pins';
 import type { Project } from '../../../engine/types';
 import { removeClip, select } from '../editor/actions';
-import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint } from '../editor/animate';
+import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint, stretchLoop } from '../editor/animate';
+import { NumberField } from './fields';
 import { store, useEditor, type MarkRef } from '../editor/store';
 import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings';
 import { CAMERA_ID, type AudioClip, type DrawingSet, type Part } from '../../../engine/types';
@@ -248,6 +249,10 @@ export function Timeline() {
               {loop.in + 1}–{loop.out + 1}
             </span>
             <button onClick={() => store.set({ loop: null })} aria-label="Clear loop">×</button>
+            <span className="label" title="Change how long the loop range takes: its poses spread out or squeeze together, and later poses move along. With parts selected, only their animation.">
+              Stretch to
+            </span>
+            <NumberField label="Stretch loop to frames" value={loop.out - loop.in + 1} digits={0} min={1} max={10000} suffix="frames" onCommit={stretchLoop} />
           </>
         )}
         <span className="divider" />
@@ -360,6 +365,13 @@ export function Timeline() {
                         title={`${b.key} from frame ${b.start + 1}`}
                       >
                         {(b.end - b.start) * zoom > 14 && b.key}
+                        {/* Drag a block's edge to change when that shape starts (LS4), like dragging its mark. */}
+                        <div
+                          className="tl-block-edge"
+                          data-testid="block-edge"
+                          title={`Drag to move when ${b.key} starts`}
+                          onPointerDown={(e) => markDown(e, { row: 'part', id: r.id, frame: b.start })}
+                        />
                       </div>
                     ))}
                   {pins.map((p) => (

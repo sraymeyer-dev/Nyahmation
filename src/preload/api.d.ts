@@ -63,14 +63,14 @@ export interface RecoveryApi {
   discard(id: string): Promise<void>;
 }
 
-export type ExportFormat = 'mp4' | 'png';
+export type ExportFormat = 'mp4' | 'mov' | 'png';
 
 export interface ExportApi {
-  /** Asks where to save: a .mp4 file, or a folder for PNG frames. Null if cancelled. */
+  /** Asks where to save: a .mp4 or .mov file, or a folder for PNG frames. Null if cancelled. */
   choose(format: ExportFormat, suggestedName: string): Promise<string | null>;
   /** `audio`: the mixed soundtrack as WAV bytes, if the scene has sound. */
   begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number; audio?: Uint8Array }): Promise<number>;
-  /** MP4: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
+  /** MP4 and MOV: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
   frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
   end(session: number): Promise<{ path: string }>;
   cancel(session: number): Promise<void>;
@@ -108,7 +108,10 @@ export type MenuCommand =
   | 'autoChainRoots'
   | 'export'
   | 'makeSwitchLayer'
-  | 'measurePreview';
+  | 'measurePreview'
+  | 'cut'
+  | 'copy'
+  | 'paste';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -128,6 +131,8 @@ export interface NyahApi {
    */
   onOpenFile(listener: (file: OpenedFile) => void): () => void;
   readyForFiles(): void;
+  /** Cut, copy or paste text in the focused text field (the menu's shortcuts come to the app first). */
+  editText(command: 'cut' | 'copy' | 'paste'): void;
   library: LibraryApi;
   export: ExportApi;
   recovery: RecoveryApi;

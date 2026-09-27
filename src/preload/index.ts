@@ -17,6 +17,7 @@ const api: NyahApi = {
     return () => ipcRenderer.removeListener('project:openFile', handler);
   },
   readyForFiles: () => ipcRenderer.send('project:ready'),
+  editText: (command) => ipcRenderer.send('edit:text', command),
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
   library: {
     list: () => ipcRenderer.invoke('library:list'),

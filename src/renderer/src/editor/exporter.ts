@@ -18,7 +18,7 @@ export interface ExportSettings {
   /** Output height in pixels; width follows the scene's shape. */
   height: number;
   range: 'all' | 'loop';
-  /** PNG only: leave the background see-through. */
+  /** PNG and MOV: leave the background see-through. */
   transparent: boolean;
 }
 
@@ -130,7 +130,8 @@ export async function runExport(
   const audio = await soundtrack(first, last);
   const session = await api.export.begin({ format: settings.format, path, width: size.width, height: size.height, fps, audio });
   const canvas = new OffscreenCanvas(size.width, size.height);
-  const ctx = canvas.getContext('2d', { willReadFrequently: settings.format === 'mp4' }) as unknown as CanvasRenderingContext2D;
+  const raw = settings.format !== 'png'; // MP4 and MOV take raw pixels
+  const ctx = canvas.getContext('2d', { willReadFrequently: raw }) as unknown as CanvasRenderingContext2D;
   try {
     for (let i = 0; i < total; i++) {
       if (isCancelled()) {
@@ -142,10 +143,10 @@ export async function runExport(
       ctx.clearRect(0, 0, size.width, size.height);
       const resolved = evaluateScene(project, frame);
       renderScene(ctx, project, resolved, pictureView(resolved, size.scale), (id) => images.get(id) ?? null, {
-        background: !(settings.format === 'png' && settings.transparent),
+        background: !(settings.format !== 'mp4' && settings.transparent),
       });
       let bytes: Uint8Array;
-      if (settings.format === 'mp4') {
+      if (raw) {
         const data = ctx.getImageData(0, 0, size.width, size.height).data;
         bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
       } else {
