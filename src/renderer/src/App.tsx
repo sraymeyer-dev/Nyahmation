@@ -74,6 +74,10 @@ const MENU: Record<MenuCommand, () => void> = {
   cut: () => editText('cut') || clipboard.cut(),
   copy: () => editText('copy') || clipboard.copy(),
   paste: () => editText('paste') || clipboard.paste(),
+  boolUnion: () => actions.booleanOp('union'),
+  boolSubtract: () => actions.booleanOp('subtract'),
+  boolIntersect: () => actions.booleanOp('intersect'),
+  boolExclude: () => actions.booleanOp('exclude'),
   mirrorPose: () => mirrorSelected('mirror'),
   swapSides: () => mirrorSelected('swap'),
 };
@@ -223,10 +227,16 @@ export function App() {
   useEffect(() => {
     window.addEventListener('keydown', onKeyDown);
     const unsubscribeMenu = window.nyah?.onMenuCommand((cmd) => {
-      MENU[cmd]?.();
-      // Counted so tests can wait until a command has been handled.
-      menuCommandsHandled++;
-      (window as unknown as { __nyahMenuCount: number }).__nyahMenuCount = menuCommandsHandled;
+      try {
+        MENU[cmd]?.();
+      } catch (err) {
+        store.set({ notice: { title: 'Something went wrong', lines: [(err as Error).message] } });
+        console.error(err);
+      } finally {
+        // Counted so tests can wait until a command has been handled.
+        menuCommandsHandled++;
+        (window as unknown as { __nyahMenuCount: number }).__nyahMenuCount = menuCommandsHandled;
+      }
     });
 
     // Finish in-progress drawing when the tool or mode changes, and keep the

@@ -140,7 +140,11 @@ export type MenuCommand =
   | 'copy'
   | 'paste'
   | 'mirrorPose'
-  | 'swapSides';
+  | 'swapSides'
+  | 'boolUnion'
+  | 'boolSubtract'
+  | 'boolIntersect'
+  | 'boolExclude';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */

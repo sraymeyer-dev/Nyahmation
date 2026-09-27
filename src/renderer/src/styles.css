@@ -1234,3 +1234,36 @@ input[type='color'] {
   border-radius: 4px;
   padding: 6px;
 }
+
+/* Swatches and eyedropper (D13) */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.swatch-add {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 14px;
+}
+
+.eyedropper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+}

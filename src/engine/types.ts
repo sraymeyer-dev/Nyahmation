@@ -348,4 +348,6 @@ export interface Project {
   scene: Scene;
   drawingSets: DrawingSet[];
   assets: AssetRef[];
+  /** The project's colour swatches (docs/DESIGN.md D13), as CSS colours. */
+  swatches?: string[];
 }

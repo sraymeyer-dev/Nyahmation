@@ -18,6 +18,7 @@ import {
   walkParts,
   type ArrangeHow,
 } from '../../../engine/edit';
+import { booleanShapes, type BooleanOp } from '../../../engine/boolean';
 import { arrangeOnFrame } from '../../../engine/drawOrder';
 import { evaluateRestPose, evaluateScene, type ResolvedScene } from '../../../engine/evaluate';
 import { invert } from '../../../engine/math';
@@ -197,6 +198,28 @@ export function combine(): void {
   const { project, shapeId } = combineShapes(s.project, s.selection);
   if (shapeId) store.commit(project, { selection: [shapeId], points: [] });
   else store.set({ status: 'Select two or more shapes to combine.' });
+}
+
+const BOOLEAN_NAMES: Record<BooleanOp, string> = { union: 'Merged', subtract: 'Cut', intersect: 'Kept the overlap of', exclude: 'Removed the overlap of' };
+
+/** Union, subtract, intersect or exclude the selected shapes (docs/DESIGN.md D11). */
+export function booleanOp(op: BooleanOp): void {
+  const s = get();
+  if (s.mode !== 'build') {
+    store.set({ status: 'Shape tools work in Build mode.' });
+    return;
+  }
+  const count = s.selection.filter((id) => locatePart(s.project, id)?.part.kind === 'shape').length;
+  const r = booleanShapes(s.project, s.selection, op);
+  if (!r.shapeId && !r.empty) {
+    store.set({ status: 'Select two or more shapes (not groups) first.' });
+    return;
+  }
+  store.commit(r.project, {
+    selection: r.shapeId ? [r.shapeId] : [],
+    points: [],
+    status: r.empty ? 'Nothing was left, so the shapes were removed. Undo brings them back.' : `${BOOLEAN_NAMES[op]} ${count} shapes.`,
+  });
 }
 
 export function arrange(how: ArrangeHow): void {

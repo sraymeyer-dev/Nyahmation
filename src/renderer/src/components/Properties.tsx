@@ -7,7 +7,7 @@ import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
 import { store, useEditor } from '../editor/store';
-import { NumberField, PaintField, Row, Section } from './fields';
+import { NumberField, PaintField, Row, Section, toHex } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
 import { GradientFields } from './GradientFields';
@@ -24,6 +24,54 @@ function commitParts(ids: readonly string[], fn: (p: Part) => Part, key?: string
   store.commit(project, extra, key);
 }
 
+/**
+ * The project's colour swatches (docs/DESIGN.md D13): click one for the fill,
+ * Shift-click for the outline, Option/Alt-click to remove it; + keeps the
+ * current fill colour.
+ */
+function Swatches({ style, onChange }: { style: ShapeStyle; onChange: (patch: Partial<ShapeStyle>, key: string) => void }) {
+  const project = useEditor((s) => s.project);
+  const swatches = project.swatches ?? [];
+  const setSwatches = (next: string[]) => {
+    const p = store.getState().project;
+    store.commit({ ...p, swatches: next });
+  };
+  const current = style.fill && !style.fill.startsWith('url') ? toHex(style.fill) : null;
+  return (
+    <Row label="Swatches">
+      <span className="swatches" data-testid="swatches">
+        {swatches.map((c, i) => (
+          <button
+            key={`${c}-${i}`}
+            className="swatch"
+            style={{ background: c }}
+            aria-label={`Swatch ${c}`}
+            title={`${c} — click: fill · Shift-click: outline · Option/Alt-click: remove`}
+            onClick={(e) => {
+              e.preventDefault();
+              if (e.altKey) setSwatches(swatches.filter((_, j) => j !== i));
+              else if (e.shiftKey) onChange({ stroke: c }, 'stroke');
+              else onChange({ fill: c, fillGradient: undefined }, 'fill');
+            }}
+          />
+        ))}
+        <button
+          className="swatch-add"
+          aria-label="Add the fill colour to the swatches"
+          title={current ? `Keep ${current} as a swatch` : 'Choose a fill colour first'}
+          disabled={!current || swatches.includes(current)}
+          onClick={(e) => {
+            e.preventDefault();
+            if (current) setSwatches([...swatches, current]);
+          }}
+        >
+          +
+        </button>
+      </span>
+    </Row>
+  );
+}
+
 function StyleEditor({ style, onChange }: { style: ShapeStyle; onChange: (patch: Partial<ShapeStyle>, key: string) => void }) {
   return (
     <>
@@ -33,6 +81,7 @@ function StyleEditor({ style, onChange }: { style: ShapeStyle; onChange: (patch:
       <Row label="Stroke">
         <PaintField label="Stroke" value={style.stroke} onChange={(stroke) => onChange({ stroke }, 'stroke')} />
       </Row>
+      <Swatches style={style} onChange={onChange} />
       <Row label="Width">
         <NumberField label="Stroke width" value={style.strokeWidth} min={0} step={0.5} onCommit={(strokeWidth) => onChange({ strokeWidth }, 'strokeWidth')} />
       </Row>

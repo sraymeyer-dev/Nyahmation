@@ -153,6 +153,7 @@ export function validateProject(project: Project): void {
     }
   }
   if (scene.sky !== undefined && !(typeof scene.sky?.top === 'string' && typeof scene.sky?.bottom === 'string')) fail('the sky is damaged');
+  if (project.swatches !== undefined && !(Array.isArray(project.swatches) && project.swatches.every((c) => typeof c === 'string'))) fail('the colour swatches are damaged');
 
   const partIds = new Set<string>();
   const effectsOf = new Map<string, Effect[]>();

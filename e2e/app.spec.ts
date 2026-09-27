@@ -1179,6 +1179,66 @@ test('a layer can repeat as a cycle, and change its stepping over time', async (
   await expect(page.getByTestId('tl-layer').filter({ hasText: 'Pip' }).locator('.tl-mark[data-frame="40"]')).toHaveCount(1);
 });
 
+test('shape tools: union, subtract, intersect and exclude', async () => {
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  // Red and Green overlap in 250–300; subtract Green from Red (Red is behind).
+  const ids = await page.evaluate(() => ['a', 'b']);
+  await page.evaluate((sel) => (window as any).__nyah.store.set({ selection: sel }), ids);
+  await menu('boolSubtract');
+  await expect(page.getByText('Cut 2 shapes.')).toBeVisible();
+  expect(await state().then((s) => s.names)).not.toContain('Green');
+  expect(near(await stagePixel(225, 250), [255, 0, 0])).toBe(true);
+  expect(near(await stagePixel(275, 250), [255, 255, 255])).toBe(true); // cut away
+  await menu('undo');
+  await page.evaluate((sel) => (window as any).__nyah.store.set({ selection: sel }), ids);
+  await menu('boolIntersect');
+  expect(near(await stagePixel(225, 250), [255, 255, 255])).toBe(true);
+  expect(near(await stagePixel(275, 250), [255, 0, 0])).toBe(true); // only the overlap, in Red's colour
+  await menu('undo');
+  await page.evaluate((sel) => (window as any).__nyah.store.set({ selection: sel }), ids);
+  await menu('boolUnion');
+  expect(near(await stagePixel(325, 250), [255, 0, 0])).toBe(true);
+  await menu('undo');
+  await page.evaluate((sel) => (window as any).__nyah.store.set({ selection: sel }), ids);
+  await menu('boolExclude');
+  expect(near(await stagePixel(275, 250), [255, 255, 255])).toBe(true); // the overlap is a hole
+  expect(near(await stagePixel(325, 250), [255, 0, 0])).toBe(true);
+});
+
+test('colour swatches and the eyedropper', async () => {
+  await outlineRow('Eye').click();
+  await expect(page.getByTestId('swatches')).toBeVisible();
+  // Keep the eye's yellow as a swatch, then paint the pupil with it.
+  await page.getByLabel('Add the fill colour to the swatches').click();
+  await expect(page.getByLabel('Swatch #ffff00')).toBeVisible();
+  await outlineRow('Pupil').click();
+  await page.getByLabel('Swatch #ffff00').click();
+  expect(await page.evaluate(() => (window as any).__nyah.part('Pupil').style.fill)).toBe('#ffff00');
+  // Shift-click paints the outline.
+  await page.getByLabel('Swatch #ffff00').click({ modifiers: ['Shift'] });
+  expect(await page.evaluate(() => (window as any).__nyah.part('Pupil').style.stroke)).toBe('#ffff00');
+  // Swatches are saved with the project.
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().project.swatches)).toEqual(['#ffff00']);
+  // The eyedropper (the system's colour picker is replaced here).
+  await page.evaluate(() => {
+    (window as any).EyeDropper = class {
+      async open() {
+        return { sRGBHex: '#123456' };
+      }
+    };
+  });
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await page.getByRole('tab', { name: 'Build' }).click(); // re-render so the button appears
+  await outlineRow('Pupil').click();
+  await page.getByLabel('Pick fill colour from the screen').click();
+  await expect.poll(() => page.evaluate(() => (window as any).__nyah.part('Pupil').style.fill)).toBe('#123456');
+  // Option/Alt-click removes a swatch.
+  await page.getByLabel('Swatch #ffff00').click({ modifiers: ['Alt'] });
+  await expect(page.getByLabel('Swatch #ffff00')).toHaveCount(0);
+});
+
 test('preview quality draws the canvas at lower resolution, and is remembered', async () => {
   await page.evaluate(() => {
     window.confirm = () => true;

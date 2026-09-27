@@ -54,6 +54,15 @@ export function buildMenu(): void {
         item('Group', 'group', 'CmdOrCtrl+G'),
         item('Ungroup', 'ungroup', 'Shift+CmdOrCtrl+G'),
         item('Combine Shapes', 'combine', 'CmdOrCtrl+8'),
+        {
+          label: 'Shape Tools',
+          submenu: [
+            item('Union (merge into one)', 'boolUnion', 'Alt+CmdOrCtrl+U'),
+            item('Subtract (cut front from back)', 'boolSubtract', 'Alt+CmdOrCtrl+S'),
+            item('Intersect (keep the overlap)', 'boolIntersect', 'Alt+CmdOrCtrl+K'),
+            item('Exclude (remove the overlap)', 'boolExclude', 'Alt+CmdOrCtrl+E'),
+          ],
+        },
         item('Make Switch Layer (Mouth, Eyes…)', 'makeSwitchLayer', 'Shift+CmdOrCtrl+M'),
         { type: 'separator' },
         item('Bring Forward', 'bringForward', 'CmdOrCtrl+]'),
