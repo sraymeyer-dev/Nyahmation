@@ -5,7 +5,7 @@ import type { Project, Vec2, VectorPath } from '../../../../engine/types';
 import { resolvedScene, select } from '../actions';
 import { hitTopPart } from '../hitTest';
 import { store, type EditorState, type PointRef } from '../store';
-import { sceneToScreen } from '../view';
+import { toScreen as stageToScreenPoint } from '../screen';
 import { ACCENT, dist, drawHandle, drawMarquee, GRAB_PX, invalidate, pixel, snap } from './common';
 import type { OverlayContext, Tool, ToolPointer } from './types';
 
@@ -37,7 +37,7 @@ function target(s: EditorState): Target | null {
 const isSelected = (s: EditorState, path: number, index: number) => s.points.some((p) => p.path === path && p.index === index);
 
 function screenOf(s: EditorState, t: Target, p: Vec2): Vec2 {
-  return sceneToScreen(s.view, applyToPoint(t.world, p));
+  return stageToScreenPoint(s, applyToPoint(t.world, p));
 }
 
 function hitAnchor(s: EditorState, t: Target, screen: Vec2): PointRef | null {

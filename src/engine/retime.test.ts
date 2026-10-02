@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createProject } from './project';
-import { deletePoses, poseEaseAt, poseFrames, retimePoses, setPoseEase, type RetimeTarget } from './retime';
+import { createLayer, createPart, createProject } from './project';
+import { deletePoses, poseEaseAt, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from './retime';
 import { findTrack, setPartPose } from './tracks';
 import type { Project } from './types';
 
@@ -93,5 +93,43 @@ describe('easing', () => {
 describe('poseFrames', () => {
   it('lists the frames with poses for a set of parts', () => {
     expect(poseFrames(scene(), new Set(['arm', 'head']))).toEqual([0, 10, 20, 30]);
+  });
+});
+
+describe('stretching a range (A6)', () => {
+  function project() {
+    let p = createProject({ durationFrames: 40, layers: [createLayer('character', 'Pip', [createPart({ name: 'arm', kind: 'shape' })])] });
+    const arm = p.scene.layers[0]!.root.children[0]!.id;
+    for (const [f, v] of [
+      [0, 0],
+      [10, 10],
+      [15, 15],
+      [20, 20],
+      [30, 30],
+    ] as const)
+      p = setPartPose(p, arm, 'rotation', f, v);
+    return { p, arm };
+  }
+  const frames = (p: Project) => p.scene.tracks[0]!.poses.map((x) => x.frame);
+
+  it('spreads the range over more frames and moves later poses along', () => {
+    const { p } = project();
+    // Frames 10–20 (11 frames) become 21 frames: 10–30; the pose on 30 moves to 40.
+    const r = stretchPoses(p, 10, 20, 21);
+    expect(frames(r.project)).toEqual([0, 10, 20, 30, 40]);
+    expect(r.project.scene.durationFrames).toBe(41);
+    expect(r.moved).toBe(3);
+  });
+
+  it('squashes, keeping the later of two poses that meet', () => {
+    const { p } = project();
+    const r = stretchPoses(p, 10, 20, 2);
+    expect(frames(r.project)).toEqual([0, 10, 11, 21]);
+    expect(r.project.scene.tracks[0]!.poses.find((x) => x.frame === 11)!.value).toBe(20);
+  });
+
+  it('leaves tracks out of scope alone', () => {
+    const { p } = project();
+    expect(stretchPoses(p, 10, 20, 30, () => false).project).toBe(p);
   });
 });

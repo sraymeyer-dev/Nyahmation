@@ -5,11 +5,16 @@ import type { MenuCommand } from '../../preload/api';
 import * as actions from './editor/actions';
 import * as library from './editor/library';
 import * as lipsync from './editor/lipsync';
+import { measurePreviewSpeed } from './editor/measure';
+import { startAutosave } from './editor/recovery';
+import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
-import { deleteSelectedMarks, jumpToPose, setFrame, setLoopPoint } from './editor/animate';
+import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
 import { ExportDialog } from './components/ExportDialog';
+import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
+import { RecoveryPrompt } from './components/RecoveryPrompt';
 import { Sidebar } from './components/Sidebar';
 import { ToolOptions } from './components/ToolOptions';
 import { Toolbar } from './components/Toolbar';
@@ -24,6 +29,13 @@ const isTyping = (t: EventTarget | null) =>
 function textCommand(command: 'undo' | 'redo' | 'selectAll'): boolean {
   if (!isTyping(document.activeElement)) return false;
   document.execCommand(command);
+  return true;
+}
+
+/** Cut/Copy/Paste act on text while typing in a field. */
+function editText(command: 'cut' | 'copy' | 'paste'): boolean {
+  if (!isTyping(document.activeElement)) return false;
+  window.nyah?.editText(command);
   return true;
 }
 
@@ -58,7 +70,19 @@ const MENU: Record<MenuCommand, () => void> = {
   autoChainRoots: library.autoChainRootsForActiveLayer,
   export: () => store.set({ exportOpen: true }),
   makeSwitchLayer: lipsync.makeSwitchLayerFromSelection,
+  measurePreview: () => void measurePreviewSpeed(),
+  cut: () => editText('cut') || clipboard.cut(),
+  copy: () => editText('copy') || clipboard.copy(),
+  paste: () => editText('paste') || clipboard.paste(),
+  boolUnion: () => actions.booleanOp('union'),
+  boolSubtract: () => actions.booleanOp('subtract'),
+  boolIntersect: () => actions.booleanOp('intersect'),
+  boolExclude: () => actions.booleanOp('exclude'),
+  mirrorPose: () => mirrorSelected('mirror'),
+  swapSides: () => mirrorSelected('swap'),
 };
+
+let menuCommandsHandled = 0;
 
 const TOOL_KEYS = {
   build: new Map<string, ToolId>(toolsFor('build').map((t) => [t.key.toLowerCase(), t.id])),
@@ -90,7 +114,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.exportOpen) return;
+  if (s.exportOpen || s.lipSyncDialogFor) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (lipSyncKey(e, s)) {
       e.preventDefault();
@@ -193,12 +217,27 @@ export function App() {
     // Then open any project double-clicked in Finder or Explorer.
     const unsubscribe = window.nyah?.onOpenFile((file) => actions.openProjectFile(file));
     window.nyah?.readyForFiles();
-    return unsubscribe;
+    const stopAutosave = startAutosave();
+    return () => {
+      unsubscribe?.();
+      stopAutosave();
+    };
   }, []);
 
   useEffect(() => {
     window.addEventListener('keydown', onKeyDown);
-    const unsubscribeMenu = window.nyah?.onMenuCommand((cmd) => MENU[cmd]?.());
+    const unsubscribeMenu = window.nyah?.onMenuCommand((cmd) => {
+      try {
+        MENU[cmd]?.();
+      } catch (err) {
+        store.set({ notice: { title: 'Something went wrong', lines: [(err as Error).message] } });
+        console.error(err);
+      } finally {
+        // Counted so tests can wait until a command has been handled.
+        menuCommandsHandled++;
+        (window as unknown as { __nyahMenuCount: number }).__nyahMenuCount = menuCommandsHandled;
+      }
+    });
 
     // Finish in-progress drawing when the tool or mode changes, and keep the
     // window title and unsaved-changes prompt up to date.
@@ -228,11 +267,13 @@ export function App() {
           <div className="stage">
             <Viewport />
             <Notice />
+            <RecoveryPrompt />
           </div>
           {mode === 'animate' && <Timeline />}
         </div>
         <Sidebar />
         <ExportDialog />
+        <LipSyncDialog />
       </div>
     </div>
   );

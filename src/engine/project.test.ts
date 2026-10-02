@@ -95,4 +95,17 @@ describe('version 1 files', () => {
     expect(p.scene.layers).toEqual([{ id: 'c', name: 'Pip', kind: 'character', root }]);
     expect('characters' in p.scene).toBe(false);
   });
+
+  it('keeps custom easing curves and rejects unknown easing', () => {
+    const root = createPart({ name: 'body', kind: 'group' });
+    const base = createProject({ layers: [{ id: 'c', name: 'Pip', kind: 'character', root }] });
+    const withEase = (ease: unknown) => ({
+      ...base,
+      scene: { ...base.scene, tracks: [{ partId: root.id, channel: 'x', poses: [{ frame: 0, value: 0, ease }, { frame: 5, value: 10 }] }] },
+    });
+    const curve = parseProject(JSON.parse(JSON.stringify(withEase({ bezier: [0.3, 0, 0.3, 1.35] }))));
+    expect(curve.scene.tracks[0]!.poses[0]!.ease).toEqual({ bezier: [0.3, 0, 0.3, 1.35] });
+    expect(() => parseProject(JSON.parse(JSON.stringify(withEase('wobbly'))))).toThrow(/unknown easing/);
+    expect(() => parseProject(JSON.parse(JSON.stringify(withEase({ bezier: [0, 1] }))))).toThrow(/unknown easing/);
+  });
 });

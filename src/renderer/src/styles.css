@@ -719,12 +719,12 @@ input[type='color'] {
 
 .timeline-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .timeline-bar .label,
@@ -1027,4 +1027,243 @@ input[type='color'] {
 
 .drawing-row button.icon {
   padding: 1px;
+}
+
+/* Recovering autosaved work */
+.notice.recovery {
+  z-index: 5;
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+.notice.recovery p {
+  margin: 6px 0;
+}
+
+.notice.recovery ul {
+  list-style: none;
+  padding: 0;
+}
+
+.notice.recovery li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.recovery-name {
+  font-weight: 600;
+}
+
+.recovery-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Preview quality and playback rate (N9) */
+.preview-quality {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.playback-rate {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.playback-rate.slow {
+  color: var(--warn);
+}
+
+/* The camera's row on the timeline */
+.tl-camera .tl-name {
+  color: #f5b642;
+  font-weight: 600;
+}
+
+/* Effects (phase 5b) */
+.effect {
+  margin: 6px 0;
+  padding: 4px 0 2px 8px;
+  border-left: 2px solid var(--accent);
+}
+
+.effect-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.effect-head button {
+  padding: 0 6px;
+}
+
+/* Easing curve editor (A10) */
+.curve-editor {
+  margin: 6px 0;
+}
+
+.curve-editor svg {
+  display: block;
+  touch-action: none;
+}
+
+.curve-box {
+  fill: var(--panel-2);
+  stroke: var(--border);
+}
+
+.curve-label {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.curve-arm {
+  stroke: var(--muted);
+  stroke-dasharray: 3 3;
+}
+
+.curve-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.curve-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.curve-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.curve-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Lip-sync block edges (LS4): drag to move when a shape starts */
+.tl-block-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+.tl-block-edge:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* "Stretch to N frames" on the timeline bar (A6) */
+.timeline-bar .number-field {
+  flex-shrink: 0;
+}
+
+.timeline-bar .number-field input {
+  width: 44px;
+}
+
+.curve-fields .curve-field-label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Animation cycles on the timeline (CY4) */
+.tl-cycle-range {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border: 1px dashed rgba(245, 182, 66, 0.7);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tl-cycle {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  padding-left: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(45deg, rgba(245, 182, 66, 0.16) 0 6px, rgba(245, 182, 66, 0.06) 6px 12px);
+  color: #f5b642;
+  font-size: 10px;
+  line-height: 16px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tl-mark.unused {
+  opacity: 0.3;
+}
+
+/* Auto lip sync dialog (LS7) */
+.modal .column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.modal textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+}
+
+/* Swatches and eyedropper (D13) */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.swatch-add {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 14px;
+}
+
+.eyedropper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
 }

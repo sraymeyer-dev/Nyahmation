@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { pinIntervals } from '../../../engine/pins';
 import type { Project } from '../../../engine/types';
 import { removeClip, select } from '../editor/actions';
-import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint } from '../editor/animate';
+import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint, stretchLoop } from '../editor/animate';
+import { NumberField } from './fields';
 import { store, useEditor, type MarkRef } from '../editor/store';
 import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings';
-import type { AudioClip, DrawingSet, Part } from '../../../engine/types';
+import { CAMERA_ID, type AudioClip, type DrawingSet, type Part } from '../../../engine/types';
 import { clipPeaks, playbackClock, playFrom, scrubAt, stopPlayback } from '../audio/audioEngine';
 import { activeSwitch, enterDrawing } from '../editor/lipsync';
+import { playbackStats, resetPlaybackStats } from '../render/perf';
 import { DrawingThumb } from './DrawingThumb';
 
 // The timeline (docs/DESIGN.md A1, A6): one row for the whole scene, one per
@@ -28,16 +30,25 @@ interface Row {
   depth: number;
   layerKind?: 'character' | 'background';
   switchPart?: boolean;
+  camera?: boolean;
+  /** The layer a layer or part row belongs to. */
+  layerId?: string;
+  /** A mouth using a lip-sync set: follows the dialogue, never a cycle. */
+  mouth?: boolean;
 }
 
 function buildRows(project: Project, collapsed: ReadonlySet<string>): Row[] {
-  const rows: Row[] = [{ row: 'scene', id: '', name: 'Scene', depth: 0 }];
+  const rows: Row[] = [
+    { row: 'scene', id: '', name: 'Scene', depth: 0 },
+    { row: 'part', id: CAMERA_ID, name: 'Camera', depth: 0, camera: true },
+  ];
   for (const layer of project.scene.layers.slice().reverse()) {
-    rows.push({ row: 'layer', id: layer.id, name: layer.name, depth: 0, layerKind: layer.kind });
+    rows.push({ row: 'layer', id: layer.id, name: layer.name, depth: 0, layerKind: layer.kind, layerId: layer.id });
     if (collapsed.has(layer.id)) continue;
     const visit = (p: typeof layer.root, depth: number) => {
       for (const c of p.children) {
-        rows.push({ row: 'part', id: c.id, name: c.name, depth, switchPart: c.kind === 'switch' });
+        const mouth = c.kind === 'switch' && project.drawingSets.some((d) => d.id === c.drawingSetId && d.vocabulary === 'mouth');
+        rows.push({ row: 'part', id: c.id, name: c.name, depth, switchPart: c.kind === 'switch', layerId: layer.id, mouth });
         visit(c, depth + 1);
       }
     };
@@ -61,9 +72,12 @@ export function Timeline() {
   const onion = useEditor((s) => s.onion);
   const { zoom, marks } = useEditor((s) => s.timeline);
   const selection = useEditor((s) => s.selection);
+  const cameraSelected = useEditor((s) => s.cameraSelected);
   const audioScrub = useEditor((s) => s.audioScrub);
   const selectedClip = useEditor((s) => s.selectedClip);
   const lipSyncStep = useEditor((s) => s.lipSyncStep);
+  const viewOnOnes = useEditor((s) => s.viewOnOnes);
+  const cameraView = useEditor((s) => s.cameraView);
   useEditor((s) => s.audioVersion); // redraw waveforms once sound is decoded
   const active = useMemo(() => activeSwitch({ ...store.getState(), project, selection }), [project, selection]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
@@ -73,6 +87,7 @@ export function Timeline() {
   const { durationFrames: duration, fps } = project.scene;
 
   const rows = useMemo(() => buildRows(project, collapsed), [project, collapsed]);
+  const stepped = project.scene.stepping !== 1 || project.scene.layers.some((l) => (l.stepping ?? 1) !== 1);
   const selectedParts = new Set(selection);
 
   // Playback: the sound plays and the frame follows the audio clock, looping
@@ -192,7 +207,8 @@ export function Timeline() {
   };
 
   const selectRow = (r: Row) => {
-    if (r.row === 'part') select([r.id]);
+    if (r.camera) store.set({ selection: [], points: [], cameraSelected: true });
+    else if (r.row === 'part') select([r.id]);
     else if (r.row === 'layer') {
       const layer = project.scene.layers.find((l) => l.id === r.id);
       if (layer) select([layer.root.id]);
@@ -238,6 +254,10 @@ export function Timeline() {
               {loop.in + 1}–{loop.out + 1}
             </span>
             <button onClick={() => store.set({ loop: null })} aria-label="Clear loop">×</button>
+            <span className="label" title="Change how long the loop range takes: its poses spread out or squeeze together, and later poses move along. With parts selected, only their animation.">
+              Stretch to
+            </span>
+            <NumberField label="Stretch loop to frames" value={loop.out - loop.in + 1} digits={0} min={1} max={10000} suffix="frames" onCommit={stretchLoop} />
           </>
         )}
         <span className="divider" />
@@ -249,6 +269,17 @@ export function Timeline() {
           <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
           Onion skin
         </label>
+        <label className="check" title="Show the picture as the camera sees it (as it will be exported). Off: the stage, with the camera's frame on it.">
+          <input type="checkbox" checked={cameraView} onChange={(e) => store.set({ cameraView: e.target.checked })} />
+          Camera view
+        </label>
+        {stepped && (
+          <label className="check" title="Preview every frame smoothly, even for characters animated on twos or threes. Export still uses twos and threes.">
+            <input type="checkbox" checked={viewOnOnes} onChange={(e) => store.set({ viewOnOnes: e.target.checked })} />
+            View on ones
+          </label>
+        )}
+        {playing && <PlaybackRate fps={fps} />}
         <div className="spacer" />
         {!active && <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>}
         <button onClick={() => setZoom(zoom / 1.3)} aria-label="Zoom timeline out">−</button>
@@ -301,9 +332,13 @@ export function Timeline() {
           {rows.map((r) => {
             const frames = rowFrames(project, r.row, r.id);
             const pins = r.row === 'part' ? pinIntervals(project, r.id) : [];
-            const active = r.row === 'part' ? selectedParts.has(r.id) : r.row === 'layer' && project.scene.layers.some((l) => l.id === r.id && selectedParts.has(l.root.id));
+            const active = r.camera
+              ? cameraSelected
+              : r.row === 'part'
+                ? selectedParts.has(r.id)
+                : r.row === 'layer' && project.scene.layers.some((l) => l.id === r.id && selectedParts.has(l.root.id));
             return (
-              <div key={`${r.row}:${r.id}`} className={`tl-row tl-${r.row} ${active ? 'active' : ''}`} data-testid={`tl-${r.row}`}>
+              <div key={`${r.row}:${r.id}`} className={`tl-row tl-${r.camera ? 'camera' : r.row} ${active ? 'active' : ''}`} data-testid={`tl-${r.camera ? 'camera' : r.row}`}>
                 <div className="tl-name" style={{ paddingLeft: 6 + r.depth * 12 }} onClick={() => selectRow(r)} title={r.name}>
                   {r.row === 'layer' && (
                     <button
@@ -326,6 +361,20 @@ export function Timeline() {
                 </div>
                 <div className="tl-lane" style={{ width: laneWidth }} onPointerDown={scrub}>
                   {loop && <div className="tl-loop" style={{ left: loop.in * zoom, width: (loop.out - loop.in + 1) * zoom }} />}
+                  {r.row === 'layer' &&
+                    (() => {
+                      const c = project.scene.layers.find((l) => l.id === r.id)?.cycle;
+                      if (!c || c.to >= duration - 1) return null;
+                      return (
+                        <>
+                          <div className="tl-cycle-range" style={{ left: c.from * zoom, width: (c.to - c.from + 1) * zoom }} title={`Cycle: frames ${c.from + 1}–${c.to + 1}`} />
+                          <div className="tl-cycle" data-testid="tl-cycle" style={{ left: (c.to + 1) * zoom, width: (duration - c.to - 1) * zoom }}>
+                            ↻ repeats {c.from + 1}–{c.to + 1}
+                            {c.travel ? ', moving on' : ''}
+                          </div>
+                        </>
+                      );
+                    })()}
                   {r.switchPart &&
                     drawingBlocks(project, r.id).map((b) => (
                       <div
@@ -335,6 +384,13 @@ export function Timeline() {
                         title={`${b.key} from frame ${b.start + 1}`}
                       >
                         {(b.end - b.start) * zoom > 14 && b.key}
+                        {/* Drag a block's edge to change when that shape starts (LS4), like dragging its mark. */}
+                        <div
+                          className="tl-block-edge"
+                          data-testid="block-edge"
+                          title={`Drag to move when ${b.key} starts`}
+                          onPointerDown={(e) => markDown(e, { row: 'part', id: r.id, frame: b.start })}
+                        />
                       </div>
                     ))}
                   {pins.map((p) => (
@@ -343,12 +399,15 @@ export function Timeline() {
                   {frames.map((f) => {
                     const mark: MarkRef = { row: r.row, id: r.id, frame: f };
                     const selected = marks.some((m) => sameMark(m, mark));
+                    // Poses after a cycle's end don't play: the cycle repeats instead (CY4). Lip sync still does.
+                    const cycle = r.layerId ? project.scene.layers.find((l) => l.id === r.layerId)?.cycle : undefined;
+                    const unused = !!cycle && f > cycle.to && !r.mouth;
                     return (
                       <div
                         key={f}
-                        className={`tl-mark ${selected ? 'selected' : ''}`}
+                        className={`tl-mark ${selected ? 'selected' : ''} ${unused ? 'unused' : ''}`}
                         style={{ left: f * zoom + zoom / 2 }}
-                        title={`Frame ${f + 1}`}
+                        title={unused ? `Frame ${f + 1}: not used while the layer repeats frames ${cycle!.from + 1}–${cycle!.to + 1}` : `Frame ${f + 1}`}
                         data-frame={f}
                         onPointerDown={(e) => markDown(e, mark)}
                       />
@@ -362,6 +421,28 @@ export function Timeline() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** While playing: how many frames a second the preview really shows (docs/DESIGN.md N2, N9). */
+function PlaybackRate({ fps }: { fps: number }) {
+  const [stats, setStats] = useState<ReturnType<typeof playbackStats>>(null);
+  useEffect(() => {
+    resetPlaybackStats();
+    const timer = window.setInterval(() => setStats(playbackStats()), 500);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!stats) return null;
+  const shown = Math.min(Math.round(stats.fps), fps);
+  const slow = shown < fps * 0.9;
+  return (
+    <span
+      className={`playback-rate ${slow ? 'slow' : ''}`}
+      data-testid="playback-rate"
+      title={`Each frame takes about ${stats.drawMs.toFixed(1)} ms to draw.${slow ? ' Frames are being skipped; a lower Preview quality (top bar) may help. Export is not affected.' : ''}`}
+    >
+      Showing {shown} of {fps} fps
+    </span>
   );
 }
 
@@ -462,6 +543,9 @@ function DrawingPalette({ part, set, step }: { part: Part; set: DrawingSet; step
             <option value={2}>2 frames</option>
           </select>
           <span className="hint">· Backspace steps back</span>
+          <button className="primary" onMouseDown={(e) => e.preventDefault()} onClick={() => store.set({ lipSyncDialogFor: part.id })} title="Fill in the mouth shapes from the dialogue automatically">
+            Auto lip sync…
+          </button>
         </>
       )}
     </div>

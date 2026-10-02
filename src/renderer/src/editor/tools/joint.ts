@@ -5,7 +5,7 @@ import { resolvedScene, select } from '../actions';
 import { hitTopPart } from '../hitTest';
 import { drawSkeleton, jointIndex, jointPositions } from '../overlay';
 import { store } from '../store';
-import { sceneToScreen } from '../view';
+import { toScreen as stageToScreenPoint } from '../screen';
 import { dist, GRAB_PX, invalidate, pixel, snap } from './common';
 import type { OverlayContext, Tool, ToolPointer } from './types';
 
@@ -19,10 +19,10 @@ function hitJoint(p: ToolPointer): string | null {
   // Prefer the selected part's joint, then the topmost part.
   for (const id of s.selection) {
     const pos = joints.get(id);
-    if (pos && dist(sceneToScreen(s.view, pos), p.screen) <= GRAB_PX) return id;
+    if (pos && dist(stageToScreenPoint(s, pos), p.screen) <= GRAB_PX) return id;
   }
   const ids = [...joints.keys()].reverse();
-  return ids.find((id) => dist(sceneToScreen(s.view, joints.get(id)!), p.screen) <= GRAB_PX) ?? null;
+  return ids.find((id) => dist(stageToScreenPoint(s, joints.get(id)!), p.screen) <= GRAB_PX) ?? null;
 }
 
 let drag: { id: string; base: Project } | null = null;

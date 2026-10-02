@@ -3,14 +3,16 @@ import { locatePart } from '../../../engine/edit';
 import { defaultStyle } from '../../../engine/geometry';
 import { createProject } from '../../../engine/project';
 import type { Project, ShapeStyle } from '../../../engine/types';
-import type { LibraryEntry } from '../../../preload/api';
+import type { LibraryEntry, RecoveryEntry } from '../../../preload/api';
 
 // Editor state and undo history. The project is immutable, so every undo
 // step is simply an earlier project object; unchanged parts are shared
 // between steps, which keeps history cheap (docs/DESIGN.md D-31).
 
-export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pin' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
+export type ToolId = 'select' | 'points' | 'joint' | 'pose' | 'pin' | 'camera' | 'pen' | 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'hand';
 export type Mode = 'build' | 'animate';
+/** Preview resolution (docs/DESIGN.md N9): full, half or quarter. Export is always full. */
+export type PreviewQuality = 1 | 0.5 | 0.25;
 
 export interface View {
   /** Screen pixels per scene unit. */
@@ -76,6 +78,38 @@ export interface EditorState {
   /** Increments when decoded audio becomes available, so waveforms redraw. */
   audioVersion: number;
   library: { dir: string; items: readonly LibraryEntry[]; loaded: boolean };
+  /** How sharply the canvas draws the scene; lower is faster (N9). */
+  previewQuality: PreviewQuality;
+  /** Preview characters on ones even if they animate on twos or threes (ST6). Export is unaffected. */
+  viewOnOnes: boolean;
+  /** Animate mode: look through the camera, as the video will be (docs/DESIGN.md CAM3). Otherwise the stage is shown with the camera's frame on it. */
+  cameraView: boolean;
+  /** The camera is selected (its timeline row, or the Camera tool): Properties shows it. */
+  cameraSelected: boolean;
+  /** The mouth the Auto lip sync dialog is open for (LS7), or null. */
+  lipSyncDialogFor: string | null;
+  /** Autosaved work from a session that didn't close normally, offered back (F3). */
+  recoveries: readonly RecoveryEntry[];
+}
+
+const QUALITY_KEY = 'nyah.previewQuality';
+
+/** The preview quality chosen last time (a per-computer preference, not part of the project). */
+function savedQuality(): PreviewQuality {
+  try {
+    const q = Number(localStorage.getItem(QUALITY_KEY));
+    return q === 0.5 || q === 0.25 ? q : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export function rememberQuality(q: PreviewQuality): void {
+  try {
+    localStorage.setItem(QUALITY_KEY, String(q));
+  } catch {
+    // Not remembered; it still applies now.
+  }
 }
 
 const HISTORY_LIMIT = 200;
@@ -111,6 +145,12 @@ function initialState(): EditorState {
     lipSyncStep: 1,
     audioVersion: 0,
     library: { dir: '', items: [], loaded: false },
+    previewQuality: savedQuality(),
+    viewOnOnes: false,
+    cameraView: true,
+    cameraSelected: false,
+    lipSyncDialogFor: null,
+    recoveries: [],
   };
 }
 
@@ -230,6 +270,11 @@ export class EditorStore {
       frame: 0,
       playing: false,
       notice: null,
+      // The loop range and selected marks belong to the old project.
+      loop: null,
+      timeline: { ...this.state.timeline, marks: [] },
+      selectedClip: null,
+      cameraSelected: false,
     });
   }
 }

@@ -17,11 +17,12 @@ const api: NyahApi = {
     return () => ipcRenderer.removeListener('project:openFile', handler);
   },
   readyForFiles: () => ipcRenderer.send('project:ready'),
+  editText: (command) => ipcRenderer.send('edit:text', command),
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
   library: {
     list: () => ipcRenderer.invoke('library:list'),
     read: (relPath) => ipcRenderer.invoke('library:read', relPath),
-    save: (name, bytes) => ipcRenderer.invoke('library:save', name, bytes),
+    save: (name, bytes, replace) => ipcRenderer.invoke('library:save', name, bytes, replace),
     remove: (relPath) => ipcRenderer.invoke('library:remove', relPath),
     reveal: () => ipcRenderer.invoke('library:reveal'),
   },
@@ -31,6 +32,23 @@ const api: NyahApi = {
     frame: (session, index, bytes) => ipcRenderer.invoke('export:frame', session, index, bytes),
     end: (session) => ipcRenderer.invoke('export:end', session),
     cancel: (session) => ipcRenderer.invoke('export:cancel', session),
+  },
+  lipSync: {
+    available: () => ipcRenderer.invoke('lipsync:available'),
+    run: (wav, options) => ipcRenderer.invoke('lipsync:run', wav, options),
+    cancel: () => ipcRenderer.invoke('lipsync:cancel'),
+    onProgress: (listener) => {
+      const handler = (_event: IpcRendererEvent, value: number) => listener(value);
+      ipcRenderer.on('lipsync:progress', handler);
+      return () => ipcRenderer.removeListener('lipsync:progress', handler);
+    },
+  },
+  recovery: {
+    write: (bytes, meta) => ipcRenderer.invoke('recovery:write', bytes, meta),
+    clear: () => ipcRenderer.invoke('recovery:clear'),
+    list: () => ipcRenderer.invoke('recovery:list'),
+    read: (id) => ipcRenderer.invoke('recovery:read', id),
+    discard: (id) => ipcRenderer.invoke('recovery:discard', id),
   },
 };
 

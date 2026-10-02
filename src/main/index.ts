@@ -4,6 +4,8 @@ import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
 import { buildMenu } from './menu';
+import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
+import { registerLipSyncHandlers } from './lipsync';
 
 // The main process only touches the file system. Everything about the
 // project's contents (packing, validation) happens in the renderer, so it
@@ -74,6 +76,12 @@ app.on('second-instance', (_event, argv) => {
   if (path) pendingPaths.push(path);
 }
 
+ipcMain.on('edit:text', (event, command: unknown) => {
+  if (command === 'cut') event.sender.cut();
+  else if (command === 'copy') event.sender.copy();
+  else if (command === 'paste') event.sender.paste();
+});
+
 ipcMain.on('project:ready', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
@@ -108,6 +116,20 @@ function createWindow(): void {
       detail: 'If you close now, your changes since the last save will be lost.',
     });
     if (choice === 1) event.preventDefault();
+  });
+  // Closed on purpose (saved, or changes discarded): its autosave isn't needed.
+  const webContentsId = win.webContents.id;
+  win.on('closed', () => forgetWindow(webContentsId));
+  // If the page crashes, keep its autosave and reload: the fresh page offers it
+  // back. Not again within half a minute, so a page that keeps crashing can't loop.
+  let lastCrashReload = -Infinity;
+  win.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit') return;
+    releaseWindow(webContentsId);
+    dirtyWindows.delete(win);
+    if (Date.now() - lastCrashReload < 30_000) return;
+    lastCrashReload = Date.now();
+    win.reload();
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -183,6 +205,8 @@ void app.whenReady().then(() => {
   if (!isFirstInstance) return;
   registerLibraryHandlers();
   registerExportHandlers();
+  registerRecoveryHandlers();
+  registerLipSyncHandlers();
   buildMenu();
   createWindow();
   app.on('activate', () => {

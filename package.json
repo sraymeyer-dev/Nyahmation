@@ -18,13 +18,16 @@
     "test:watch": "vitest",
     "test:e2e": "node scripts/setup.mjs && electron-vite build && playwright test",
     "check": "npm run typecheck && npm run test",
+    "manual": "node scripts/setup.mjs && electron-vite build && playwright test -c docs/manual/playwright.config.ts && node scripts/manual.mjs",
     "dist:mac": "node scripts/setup.mjs && electron-vite build && electron-builder --mac && open release",
     "dist:win": "node scripts/setup.mjs && electron-vite build && electron-builder --win",
     "manual": "electron-vite build && node scripts/manual/make.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",
-    "ffmpeg-static": "^5.3.0"
+    "ffmpeg-static": "^5.3.0",
+    "fit-curve": "^0.2.0",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",

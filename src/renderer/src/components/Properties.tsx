@@ -4,10 +4,17 @@ import { applyToPoint } from '../../../engine/math';
 import { poseEaseAt } from '../../../engine/retime';
 import { deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
-import type { Ease, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
+import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
+import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
 import { store, useEditor } from '../editor/store';
-import { NumberField, PaintField, Row, Section } from './fields';
+import { updateFromLibrary } from '../editor/library';
+import { NumberField, PaintField, Row, Section, toHex } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
+import { CameraSection, LayerCameraSection } from './CameraProperties';
+import { GradientFields } from './GradientFields';
+import { EffectsSection } from './EffectsSection';
+import { CurveEditor, type Bezier } from './CurveEditor';
+import { EASE_PRESET_CURVES } from '../../../engine/easing';
 
 // Shows and edits whatever is selected: the scene (nothing selected), a
 // layer, one part, or several parts at once (shared settings only).
@@ -16,6 +23,54 @@ function commitParts(ids: readonly string[], fn: (p: Part) => Part, key?: string
   let project = store.getState().project;
   for (const id of ids) project = updatePart(project, id, fn);
   store.commit(project, extra, key);
+}
+
+/**
+ * The project's colour swatches (docs/DESIGN.md D13): click one for the fill,
+ * Shift-click for the outline, Option/Alt-click to remove it; + keeps the
+ * current fill colour.
+ */
+function Swatches({ style, onChange }: { style: ShapeStyle; onChange: (patch: Partial<ShapeStyle>, key: string) => void }) {
+  const project = useEditor((s) => s.project);
+  const swatches = project.swatches ?? [];
+  const setSwatches = (next: string[]) => {
+    const p = store.getState().project;
+    store.commit({ ...p, swatches: next });
+  };
+  const current = style.fill && !style.fill.startsWith('url') ? toHex(style.fill) : null;
+  return (
+    <Row label="Swatches">
+      <span className="swatches" data-testid="swatches">
+        {swatches.map((c, i) => (
+          <button
+            key={`${c}-${i}`}
+            className="swatch"
+            style={{ background: c }}
+            aria-label={`Swatch ${c}`}
+            title={`${c} — click: fill · Shift-click: outline · Option/Alt-click: remove`}
+            onClick={(e) => {
+              e.preventDefault();
+              if (e.altKey) setSwatches(swatches.filter((_, j) => j !== i));
+              else if (e.shiftKey) onChange({ stroke: c }, 'stroke');
+              else onChange({ fill: c, fillGradient: undefined }, 'fill');
+            }}
+          />
+        ))}
+        <button
+          className="swatch-add"
+          aria-label="Add the fill colour to the swatches"
+          title={current ? `Keep ${current} as a swatch` : 'Choose a fill colour first'}
+          disabled={!current || swatches.includes(current)}
+          onClick={(e) => {
+            e.preventDefault();
+            if (current) setSwatches([...swatches, current]);
+          }}
+        >
+          +
+        </button>
+      </span>
+    </Row>
+  );
 }
 
 function StyleEditor({ style, onChange }: { style: ShapeStyle; onChange: (patch: Partial<ShapeStyle>, key: string) => void }) {
@@ -27,6 +82,7 @@ function StyleEditor({ style, onChange }: { style: ShapeStyle; onChange: (patch:
       <Row label="Stroke">
         <PaintField label="Stroke" value={style.stroke} onChange={(stroke) => onChange({ stroke }, 'stroke')} />
       </Row>
+      <Swatches style={style} onChange={onChange} />
       <Row label="Width">
         <NumberField label="Stroke width" value={style.strokeWidth} min={0} step={0.5} onCommit={(strokeWidth) => onChange({ strokeWidth }, 'strokeWidth')} />
       </Row>
@@ -80,6 +136,26 @@ function SceneProperties({ project }: { project: Project }) {
         <Row label="Background">
           <input type="color" aria-label="Background color" value={scene.background} onChange={(e) => set({ background: e.target.value }, 'bg')} />
         </Row>
+        <Row label="Sky">
+          <label className="check" title="A gradient behind everything, fixed to the picture: top colour fading to the bottom colour.">
+            <input
+              type="checkbox"
+              aria-label="Sky gradient"
+              checked={!!scene.sky}
+              onChange={(e) => {
+                const { sky: _old, ...rest } = scene;
+                store.commit({ ...project, scene: e.target.checked ? { ...rest, sky: { top: '#5b9bd5', bottom: scene.background } } : rest });
+              }}
+            />
+            Gradient
+          </label>
+          {scene.sky && (
+            <>
+              <input type="color" aria-label="Sky top colour" title="Top" value={scene.sky.top} onChange={(e) => set({ sky: { ...scene.sky!, top: e.target.value } }, 'skyTop')} />
+              <input type="color" aria-label="Sky bottom colour" title="Bottom" value={scene.sky.bottom} onChange={(e) => set({ sky: { ...scene.sky!, bottom: e.target.value } }, 'skyBottom')} />
+            </>
+          )}
+        </Row>
         <Row label="Animate on">
           <select aria-label="Animate on" value={scene.stepping} onChange={(e) => set({ stepping: Number(e.target.value) as Stepping }, 'step')}>
             <option value={1}>Ones</option>
@@ -95,9 +171,60 @@ function SceneProperties({ project }: { project: Project }) {
   );
 }
 
+/** An animation cycle on a layer (docs/DESIGN.md CY1–CY4). Frames are shown from 1. */
+function CycleRows({ layer }: { layer: Layer }) {
+  const loop = useEditor((s) => s.loop);
+  const cycle = layer.cycle;
+  const update = (next: Layer['cycle'] | null, key?: string) =>
+    store.commit(
+      updateLayer(store.getState().project, layer.id, (l) => {
+        const { cycle: _c, ...rest } = l;
+        return next ? { ...rest, cycle: next } : rest;
+      }),
+      {},
+      key,
+    );
+  return (
+    <>
+      <Row label="Cycle">
+        <label className="check" title="Repeat part of the animation for the rest of the scene: a walk, a flapping flag, a blink.">
+          <input
+            type="checkbox"
+            aria-label="Repeat as a cycle"
+            checked={!!cycle}
+            onChange={(e) => update(e.target.checked ? { from: loop?.in ?? 0, to: loop && loop.out > loop.in ? loop.out : 24, travel: false } : null)}
+          />
+          Repeat frames
+        </label>
+      </Row>
+      {cycle && (
+        <>
+          <Row label="From">
+            <NumberField label="Cycle from frame" value={cycle.from + 1} digits={0} min={1} onCommit={(v) => update({ ...cycle, from: Math.min(Math.round(v) - 1, cycle.to - 1) }, 'cycleFrom')} />
+          </Row>
+          <Row label="To">
+            <NumberField label="Cycle to frame" value={cycle.to + 1} digits={0} min={2} onCommit={(v) => update({ ...cycle, to: Math.max(Math.round(v) - 1, cycle.from + 1) }, 'cycleTo')} />
+          </Row>
+          <Row label="Moves">
+            <label className="check">
+              <input type="checkbox" aria-label="Cycle keeps moving" checked={cycle.travel} onChange={(e) => update({ ...cycle, travel: e.target.checked })} />
+              Keep moving (each repeat starts where the last ended)
+            </label>
+          </Row>
+          <p className="hint">
+            After frame {cycle.to + 1}, frames {cycle.from + 1}–{cycle.to + 1} play again and again. Pose frame {cycle.to + 1} like frame {cycle.from + 1} (moved along, for a walk). Lip sync isn't repeated.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 function LayerProperties({ loc }: { loc: PartLocation }) {
   const layer = loc.layer;
   const project = useEditor((s) => s.project);
+  const mode = useEditor((s) => s.mode);
+  const frame = useEditor((s) => s.frame);
   return (
     <Section title="Layer">
       <Row label="Name">
@@ -118,6 +245,22 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
           <option value="background">Background</option>
         </select>
       </Row>
+      {mode === 'animate' ? (
+        <>
+          <Row label="Animate on">
+            <select
+              aria-label="Layer stepping"
+              value={layerSteppingAt(project, layer, frame)}
+              onChange={(e) => store.commit(recordStepping(project, layer, frame, Number(e.target.value) as Stepping), { status: `${layer.name} is on ${['', 'ones', 'twos', 'threes'][Number(e.target.value)]} from frame ${frame + 1}.` })}
+            >
+              <option value={1}>Ones</option>
+              <option value={2}>Twos</option>
+              <option value={3}>Threes</option>
+            </select>
+          </Row>
+          <p className="hint">From frame {frame + 1} on: ones for fast action, twos or threes for a hand-drawn feel. Changes show as marks on the layer's row.</p>
+        </>
+      ) : (
       <Row label="Animate on">
         <select
           aria-label="Layer stepping"
@@ -136,12 +279,47 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
           <option value={3}>Threes</option>
         </select>
       </Row>
+      )}
+      <CycleRows layer={layer} />
       <Row label="Rig">
         <button onClick={() => store.commit(autoChainRoots(project, layer.id), { status: 'Chain roots set where limbs branch off (shoulders, hips, neck).' })}>
           Mark branch joints as chain roots
         </button>
       </Row>
     </Section>
+  );
+}
+
+/** Where a layer came from in the library, and updating it to the library's version (L5). */
+function LibrarySource({ layer }: { layer: Layer }) {
+  const items = useEditor((s) => s.library.items);
+  const src = layer.source;
+  if (!src) return null;
+  const entry = items.find((e) => e.relPath === src.relPath);
+  const newer = entry && entry.modified > src.savedAt + 1000;
+  return (
+    <Section title="Library">
+      <p className="hint" data-testid="library-source">
+        From the library: {src.relPath.replace(/\.nyahitem$/i, '')}
+        {newer ? ' — the library has a newer version.' : '.'}
+      </p>
+      <Row label="">
+        <button onClick={() => void updateFromLibrary(layer.id)} title="Bring in the library's drawings and rig. The animation is kept.">
+          Update from library
+        </button>
+      </Row>
+    </Section>
+  );
+}
+
+function LayerSections({ loc }: { loc: PartLocation }) {
+  return (
+    <>
+      <LayerProperties loc={loc} />
+      <LibrarySource layer={loc.layer} />
+      <LayerCameraSection layer={loc.layer} />
+      <EffectsSection part={loc.layer.root} title="Layer effects" />
+    </>
   );
 }
 
@@ -223,6 +401,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
         {single?.kind === 'image' && single.image && <ImageHint loc={locs[0]!} />}
       </Section>
       {single?.kind === 'switch' && <SwitchSection part={single} />}
+      {single && <EffectsSection part={single} />}
       {single && mode === 'build' && <JointSection loc={locs[0]!} />}
       {shapes.length > 0 && (
         <Section title={shapes.length === 1 ? 'Fill & stroke' : `Fill & stroke (${shapes.length} shapes)`}>
@@ -237,6 +416,7 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
               )
             }
           />
+          <GradientFields shapes={shapes} commit={(fn, key) => commitParts(shapes.map((p) => p.id), fn, key)} />
         </Section>
       )}
     </>
@@ -323,20 +503,27 @@ function PoseMarks() {
   if (!marks.length) return null;
   const ease = poseEaseAt(project, markTargets(project, marks));
   const value = typeof ease === 'string' ? ease : ease ? 'custom' : 'smooth';
+  // A custom curve starts from the chosen preset's shape (or a gentle ease).
+  const curve: Bezier = ease && typeof ease === 'object' ? [...ease.bezier] : ease && ease in EASE_PRESET_CURVES ? [...EASE_PRESET_CURVES[ease as keyof typeof EASE_PRESET_CURVES]] : [0.42, 0, 0.58, 1];
   const frames = [...new Set(marks.map((m) => m.frame + 1))].sort((a, b) => a - b);
   return (
     <Section title={marks.length === 1 ? `Pose · frame ${frames[0]}` : `${marks.length} poses`}>
       <Row label="Motion out">
-        <select aria-label="Pose easing" value={value} onChange={(e) => setSelectedMarksEase(e.target.value as Ease)}>
+        <select
+          aria-label="Pose easing"
+          value={value}
+          onChange={(e) => setSelectedMarksEase(e.target.value === 'custom' ? { bezier: curve } : (e.target.value as Ease))}
+        >
           <option value="smooth">Smooth (flows through)</option>
           <option value="easeInOut">Ease in and out</option>
           <option value="easeIn">Ease in (start slow)</option>
           <option value="easeOut">Ease out (end slow)</option>
           <option value="linear">Linear (steady)</option>
           <option value="hold">Hold (jump at the next pose)</option>
-          {value === 'custom' && <option value="custom" disabled>Custom curve</option>}
+          <option value="custom">Custom curve…</option>
         </select>
       </Row>
+      {value === 'custom' && <CurveEditor value={curve} onChange={(bezier, key) => setSelectedMarksEase({ bezier }, key)} />}
       <p className="hint">How the motion travels from this pose to the next one. Drag the mark to retime it (Shift: move everything after it too; Option or Ctrl: copy it).</p>
       <Row label="">
         <button onClick={deleteSelectedMarks}>Delete pose{marks.length > 1 ? 's' : ''}</button>
@@ -352,6 +539,7 @@ export function Properties() {
   const locs = selection.map((id) => locatePart(project, id)).filter((l): l is PartLocation => !!l);
   const layerRoot = locs.length === 1 && !locs[0]!.parent ? locs[0] : null;
   const clip = useEditor((s) => s.project.scene.audio.find((c) => c.id === s.selectedClip));
+  const camera = useEditor((s) => s.cameraSelected && s.mode === 'animate');
   return (
     <div className="properties" data-testid="properties">
       <div className="panel-header">
@@ -360,8 +548,9 @@ export function Properties() {
       <div className="properties-body">
         {clip && <AudioClipSection clip={clip} />}
         {mode === 'animate' && <PoseMarks />}
-        {locs.length === 0 && <SceneProperties project={project} />}
-        {layerRoot && <LayerProperties loc={layerRoot} />}
+        {camera && <CameraSection />}
+        {locs.length === 0 && !camera && <SceneProperties project={project} />}
+        {layerRoot && <LayerSections loc={layerRoot} />}
         {locs.length > 0 && !layerRoot && <PartProperties locs={locs.filter((l) => l.parent)} />}
       </div>
     </div>

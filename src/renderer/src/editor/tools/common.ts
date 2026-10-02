@@ -1,4 +1,5 @@
 import type { Vec2 } from '../../../../engine/types';
+import { screenScale } from '../screen';
 import { store } from '../store';
 import { snapToGrid } from '../view';
 
@@ -24,7 +25,7 @@ export function snap(p: Vec2): Vec2 {
 
 /** Scene units per screen pixel. */
 export function pixel(): number {
-  return 1 / store.getState().view.zoom;
+  return 1 / screenScale(store.getState());
 }
 
 export function dist(a: Vec2, b: Vec2): number {

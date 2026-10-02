@@ -18,6 +18,8 @@ import {
   walkParts,
   type ArrangeHow,
 } from '../../../engine/edit';
+import { booleanShapes, type BooleanOp } from '../../../engine/boolean';
+import { arrangeOnFrame } from '../../../engine/drawOrder';
 import { evaluateRestPose, evaluateScene, type ResolvedScene } from '../../../engine/evaluate';
 import { invert } from '../../../engine/math';
 import { deletePoints, movePoints } from '../../../engine/pathEdit';
@@ -39,9 +41,16 @@ const get = () => store.getState();
 // ---- Derived data ----------------------------------------------------------
 
 const restCache = new WeakMap<Project, ResolvedScene>();
+let frameCache: { project: Project; frame: number; onOnes: boolean; resolved: ResolvedScene } | null = null;
 /** What the canvas shows: the rest pose in Build mode, the animation in Animate mode. */
 export function resolvedScene(s: EditorState): ResolvedScene {
-  if (s.mode === 'animate') return evaluateScene(s.project, s.frame);
+  if (s.mode === 'animate') {
+    const c = frameCache;
+    if (c && c.project === s.project && c.frame === s.frame && c.onOnes === s.viewOnOnes) return c.resolved;
+    const resolved = evaluateScene(s.project, s.frame, { onOnes: s.viewOnOnes });
+    frameCache = { project: s.project, frame: s.frame, onOnes: s.viewOnOnes, resolved };
+    return resolved;
+  }
   let r = restCache.get(s.project);
   if (!r) restCache.set(s.project, (r = evaluateRestPose(s.project)));
   return r;
@@ -97,11 +106,11 @@ export function select(ids: readonly string[], additive = false): void {
     selection = [...set];
   }
   const layerId = selection[0] ? locatePart(s.project, selection[0])?.layer.id : undefined;
-  store.set({ selection, points: [], selectedClip: ids.length ? null : s.selectedClip, activeLayerId: layerId ?? s.activeLayerId });
+  store.set({ selection, points: [], selectedClip: ids.length ? null : s.selectedClip, activeLayerId: layerId ?? s.activeLayerId, cameraSelected: false });
 }
 
 export function deselect(): void {
-  store.set({ selection: [], points: [] });
+  store.set({ selection: [], points: [], cameraSelected: false });
 }
 
 export function selectAll(): void {
@@ -118,7 +127,8 @@ export function selectParent(): void {
 }
 
 export function setTool(tool: ToolId): void {
-  store.set({ tool });
+  // The Camera tool shows the camera's settings.
+  store.set(tool === 'camera' ? { tool, selection: [], points: [], cameraSelected: true } : { tool });
 }
 
 /** Switches mode, picking a tool that works in the new mode. */
@@ -128,8 +138,8 @@ export function setMode(mode: 'build' | 'animate'): void {
   const buildOnly = ['points', 'joint', 'pen', 'rect', 'ellipse', 'polygon', 'star', 'line'];
   let tool = s.tool;
   if (mode === 'animate' && buildOnly.includes(tool)) tool = 'pose';
-  if (mode === 'build' && tool === 'pin') tool = 'select';
-  store.set({ mode, tool, playing: false, points: [] });
+  if (mode === 'build' && (tool === 'pin' || tool === 'camera')) tool = 'select';
+  store.set({ mode, tool, playing: false, points: [], cameraSelected: mode === 'animate' && s.cameraSelected });
 }
 
 // ---- Editing -------------------------------------------------------------------
@@ -190,9 +200,43 @@ export function combine(): void {
   else store.set({ status: 'Select two or more shapes to combine.' });
 }
 
+const BOOLEAN_NAMES: Record<BooleanOp, string> = { union: 'Merged', subtract: 'Cut', intersect: 'Kept the overlap of', exclude: 'Removed the overlap of' };
+
+/** Union, subtract, intersect or exclude the selected shapes (docs/DESIGN.md D11). */
+export function booleanOp(op: BooleanOp): void {
+  const s = get();
+  if (s.mode !== 'build') {
+    store.set({ status: 'Shape tools work in Build mode.' });
+    return;
+  }
+  const count = s.selection.filter((id) => locatePart(s.project, id)?.part.kind === 'shape').length;
+  const r = booleanShapes(s.project, s.selection, op);
+  if (!r.shapeId && !r.empty) {
+    store.set({ status: 'Select two or more shapes (not groups) first.' });
+    return;
+  }
+  store.commit(r.project, {
+    selection: r.shapeId ? [r.shapeId] : [],
+    points: [],
+    status: r.empty ? 'Nothing was left, so the shapes were removed. Undo brings them back.' : `${BOOLEAN_NAMES[op]} ${count} shapes.`,
+  });
+}
+
 export function arrange(how: ArrangeHow): void {
   const s = get();
-  store.commit(arrangeParts(s.project, s.selection, how));
+  if (s.mode !== 'animate') {
+    store.commit(arrangeParts(s.project, s.selection, how));
+    return;
+  }
+  // Animate mode: a draw-order swap from this frame on (docs/DESIGN.md R9).
+  const { project, moved } = arrangeOnFrame(s.project, s.frame, s.selection, how);
+  if (!moved.length) {
+    store.set({ status: s.selection.length ? 'Already there.' : 'Select a part to move in front or behind.' });
+    return;
+  }
+  const names = moved.map((id) => locatePart(project, id)?.part.name).filter(Boolean);
+  const where = { forward: 'forward', backward: 'backward', front: 'to the front', back: 'to the back' }[how];
+  store.commit(project, { status: `${names.join(', ')} ${names.length === 1 ? 'moves' : 'move'} ${where} from frame ${s.frame + 1}.` });
 }
 
 export function nudge(dx: number, dy: number): void {
@@ -257,11 +301,11 @@ export function toggleSnap(): void {
 
 // ---- Files ---------------------------------------------------------------------------
 
-function confirmDiscard(): boolean {
+export function confirmDiscard(): boolean {
   return !get().dirty || window.confirm('You have unsaved changes. Discard them?');
 }
 
-function loadProject(project: Project, assets: ReadonlyMap<string, Uint8Array>, file: EditorState['file']): void {
+export function loadProject(project: Project, assets: ReadonlyMap<string, Uint8Array>, file: EditorState['file']): void {
   store.load(project, assets, file);
   store.set({ status: file ? `Opened ${file.name}` : '' });
   zoomToFit();
@@ -304,18 +348,24 @@ export function openProjectFile(opened: OpenedFile, confirm = true): void {
   }
 }
 
+/** The project as .nyah file bytes, keeping only the files it still uses. */
+export function packForSave(s: Pick<EditorState, 'project' | 'assets'>): Uint8Array {
+  const used = referencedAssetIds(s.project);
+  const project = { ...s.project, assets: s.project.assets.filter((a) => used.has(a.id)) };
+  const assets = new Map([...s.assets].filter(([id]) => used.has(id)));
+  return packProject({ project, assets });
+}
+
 export async function save(saveAs = false): Promise<void> {
   const api = window.nyah;
   if (!api) return;
   const s = get();
   try {
-    // Only keep the files the project still uses.
-    const used = referencedAssetIds(s.project);
-    const project = { ...s.project, assets: s.project.assets.filter((a) => used.has(a.id)) };
-    const assets = new Map([...s.assets].filter(([id]) => used.has(id)));
-    const saved = await api.saveProject(packProject({ project, assets }), saveAs ? undefined : s.file?.path);
+    const saved = await api.saveProject(packForSave(s), saveAs ? undefined : s.file?.path);
     if (!saved) return;
-    store.set({ file: saved, dirty: false, status: `Saved ${saved.name}` });
+    // Anything changed while the file was being written stays unsaved.
+    const unchanged = get().project === s.project && get().assets === s.assets;
+    store.set({ file: saved, dirty: !unchanged, status: `Saved ${saved.name}` });
   } catch (err) {
     store.set({ notice: { title: "Couldn't save", lines: [(err as Error).message] } });
   }

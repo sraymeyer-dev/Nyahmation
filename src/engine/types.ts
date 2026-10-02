@@ -51,8 +51,24 @@ export interface VectorPath {
   closed: boolean;
 }
 
+/**
+ * A gradient fill (docs/DESIGN.md D10), in the shape's drawing coordinates.
+ * Linear: colours run from `from` to `to`. Radial: from the centre `from`
+ * out to the circle through `to`.
+ */
+export interface Gradient {
+  kind: 'linear' | 'radial';
+  from: Vec2;
+  to: Vec2;
+  /** Sorted by offset, 0..1. */
+  stops: { offset: number; color: string }[];
+}
+
 export interface ShapeStyle {
+  /** Solid fill. With a gradient, kept as its first colour (used where a gradient can't be). */
   fill: string | null;
+  /** Replaces the solid fill when set (and `fill` isn't null). */
+  fillGradient?: Gradient;
   stroke: string | null;
   strokeWidth: number;
   lineCap: 'butt' | 'round' | 'square';
@@ -61,6 +77,59 @@ export interface ShapeStyle {
 }
 
 export type PartKind = 'group' | 'shape' | 'switch' | 'image';
+
+/**
+ * How a part is combined with what is behind it (docs/DESIGN.md FX4).
+ * Multiply darkens (shading), screen and add lighten (light, glows),
+ * overlay boosts contrast.
+ */
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'add' | 'overlay';
+
+/**
+ * An effect on a part and everything inside it, applied to the group as a
+ * whole (docs/DESIGN.md FX1, FX2, BG6). Distances are in stage pixels.
+ * `id` is unique within the part; animated settings are tracks on the
+ * channel `fx:<id>:<setting>` (FX3).
+ */
+export type Effect =
+  | {
+      id: string;
+      kind: 'shadow';
+      color: string;
+      /** 0..1 */
+      opacity: number;
+      /** Direction the shadow falls, in degrees on screen: 0 right, 90 down. */
+      angle: number;
+      distance: number;
+      /** Blur radius. */
+      softness: number;
+    }
+  | { id: string; kind: 'glow'; color: string; opacity: number; size: number; /** 1 is normal; up to 4 is stronger. */ strength: number }
+  | {
+      id: string;
+      /** A soft oval on the ground under the part (FX5): it shrinks and fades as the part rises. */
+      kind: 'contact';
+      color: string;
+      opacity: number;
+      /** Where the ground is: a height on the stage (y, in stage pixels). */
+      ground: number;
+      /** Width as a share of the part's width (1 = as wide). */
+      width: number;
+      softness: number;
+    }
+  | { id: string; kind: 'blur'; amount: number }
+  | { id: string; kind: 'haze'; color: string; /** 0 none .. 1 all haze colour. */ amount: number };
+
+export type EffectKind = Effect['kind'];
+
+/** Settings of each effect that can be animated. */
+export const EFFECT_SETTINGS = {
+  shadow: ['opacity', 'angle', 'distance', 'softness'],
+  glow: ['opacity', 'size', 'strength'],
+  contact: ['opacity', 'ground', 'width', 'softness'],
+  blur: ['amount'],
+  haze: ['amount'],
+} as const satisfies Record<EffectKind, readonly string[]>;
 
 export interface Part {
   id: string;
@@ -87,6 +156,15 @@ export interface Part {
   restDrawing?: string;
   /** kind === 'image': drawn with its top-left corner at the part's (0, 0). */
   image?: ImageRef;
+  /** Effects, applied in the order haze, blur, then shadows and glows behind (FX1). */
+  effects?: Effect[];
+  /** Default 'normal'. */
+  blend?: BlendMode;
+  /**
+   * The part's children (and their children) only show where the part's own
+   * artwork is: pupils inside an eye (docs/DESIGN.md D12).
+   */
+  clipChildren?: boolean;
 }
 
 export interface ImageRef {
@@ -112,6 +190,49 @@ export interface Layer {
   root: Part;
   /** Overrides the scene's stepping for this layer. */
   stepping?: Stepping;
+  /**
+   * How the layer moves when the camera moves (docs/DESIGN.md BG4). 1 (the
+   * default) is the stage itself; below 1 is further away and moves less (a
+   * distant hill); above 1 is foreground and moves more. 0 is fixed to the
+   * camera: it stays put on screen, the same size, whatever the camera does.
+   */
+  depth?: number;
+  /**
+   * Only for a layer fixed to the camera (depth 0): it rides along with this
+   * part (a name tag or speech bubble following a head), keeping its size and
+   * angle on screen. It sits where it was drawn relative to the part's joint
+   * in the rest pose (docs/DESIGN.md CAM6).
+   */
+  follow?: { partId: string };
+  /**
+   * Scrolling and repeating (docs/DESIGN.md BG5): the layer slides sideways
+   * at `speed` stage pixels a second (negative: to the left), always on
+   * ones; with `repeat`, copies of it sit side by side so it never runs out
+   * (a treadmill of scenery, the view from a car window).
+   */
+  scroll?: { speed: number; repeat: boolean };
+  /**
+   * An animation cycle (docs/DESIGN.md CY1–CY4): after frame `to`, the
+   * layer's animation repeats from `from` (frame `to` counts as `from` again,
+   * so pose both the same). With `travel`, each repeat carries on from where
+   * the last one ended (a walk moving forward) instead of jumping back.
+   */
+  cycle?: { from: number; to: number; travel: boolean };
+  /**
+   * The library item this layer was added from (docs/DESIGN.md L5), so it
+   * can be updated to a newer version while keeping its animation. `parts`
+   * and `sets` map the item's ids to this project's.
+   */
+  source?: LayerSource;
+}
+
+export interface LayerSource {
+  /** The item's file, inside the library folder. */
+  relPath: string;
+  /** When the item's file had been saved (ms since 1970), when added or last updated. */
+  savedAt: number;
+  parts: Record<string, string>;
+  sets: Record<string, string>;
 }
 
 // ---- Animation ---------------------------------------------------------------
@@ -123,8 +244,11 @@ export interface EaseCurve {
 }
 export type Ease = EasePreset | EaseCurve;
 
-export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity';
-export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin';
+/** An animated effect setting: `fx:<effect id>:<setting>` (FX3). */
+export type EffectChannel = `fx:${string}:${string}`;
+export type ContinuousChannel = 'x' | 'y' | 'rotation' | 'scaleX' | 'scaleY' | 'opacity' | 'zoom' | EffectChannel;
+/** 'stepping' lives on a layer's root: ones, twos or threes from that frame on (ST7). */
+export type DiscreteChannel = 'drawing' | 'visible' | 'drawOrder' | 'pin' | 'stepping';
 
 /**
  * A pin (docs/DESIGN.md §6.3): from its frame on, `point` (in the part's
@@ -157,7 +281,26 @@ export interface Pose<T> {
   ease?: Ease;
 }
 
+/**
+ * The camera's tracks use this in place of a part id, with the channels x, y
+ * (the stage point at the centre of the picture), zoom and rotation
+ * (docs/DESIGN.md §9.3).
+ */
+export const CAMERA_ID = 'camera';
+
+/** What the camera sees on one frame. */
+export interface CameraState {
+  /** Stage point shown at the centre of the picture. */
+  x: number;
+  y: number;
+  /** 2 shows everything twice as big. */
+  zoom: number;
+  /** Degrees, clockwise: the picture turns the other way. */
+  rotation: number;
+}
+
 export interface Track<C extends Channel = Channel> {
+  /** A part id, or CAMERA_ID. */
   partId: string;
   channel: C;
   /** Sorted by frame, at most one pose per frame. */
@@ -196,6 +339,8 @@ export interface Scene {
   fps: number;
   durationFrames: number;
   background: string;
+  /** A sky behind everything instead of the plain background: top colour fading to bottom colour, fixed to the picture (BG7). */
+  sky?: { top: string; bottom: string };
   stepping: Stepping;
   /** Drawn in list order: later layers are on top. */
   layers: Layer[];
@@ -231,4 +376,6 @@ export interface Project {
   scene: Scene;
   drawingSets: DrawingSet[];
   assets: AssetRef[];
+  /** The project's colour swatches (docs/DESIGN.md D13), as CSS colours. */
+  swatches?: string[];
 }
