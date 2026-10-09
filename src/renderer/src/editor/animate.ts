@@ -1,7 +1,8 @@
 import { frameAccess, restAccess, type TransformAccess } from '../../../engine/access';
-import { locatePart, walkParts } from '../../../engine/edit';
-import { deletePoses, poseFrames, retimePoses, setPoseEase, type RetimeTarget } from '../../../engine/retime';
-import type { Ease, Project, Track } from '../../../engine/types';
+import { locatePart, topLevelSelection, walkParts } from '../../../engine/edit';
+import { mirrorPose, type MirrorMode } from '../../../engine/mirror';
+import { deletePoses, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from '../../../engine/retime';
+import { CAMERA_ID, type Ease, type Project, type Track } from '../../../engine/types';
 import { store, type EditorState, type MarkRef } from './store';
 
 // Animate-mode helpers: how tools read and write transforms, and what the
@@ -14,11 +15,11 @@ export function editAccess(s: EditorState, project: Project = s.project): Transf
   return s.mode === 'animate' ? frameAccess(project, s.frame) : restAccess(project);
 }
 
-/** The parts a timeline row stands for. */
+/** The parts a timeline row stands for. The scene row includes the camera (CAMERA_ID); the Camera row is a part row. */
 export function rowParts(project: Project, row: MarkRef['row'], id: string): Set<string> {
   if (row === 'part') return new Set([id]);
   const layers = row === 'scene' ? project.scene.layers : project.scene.layers.filter((l) => l.id === id);
-  const ids = new Set<string>();
+  const ids = new Set<string>(row === 'scene' ? [CAMERA_ID] : []);
   for (const layer of layers) for (const p of walkParts(layer.root)) ids.add(p.id);
   return ids;
 }
@@ -61,9 +62,9 @@ export function deleteSelectedMarks(): void {
   store.commit(project, { timeline: { ...s.timeline, marks: [] } });
 }
 
-export function setSelectedMarksEase(ease: Ease): void {
+export function setSelectedMarksEase(ease: Ease, coalesce = 'ease'): void {
   const s = get();
-  store.commit(setPoseEase(s.project, markTargets(s.project, s.timeline.marks), ease), {}, 'ease');
+  store.commit(setPoseEase(s.project, markTargets(s.project, s.timeline.marks), ease), {}, coalesce);
 }
 
 export function setFrame(frame: number): void {
@@ -78,6 +79,65 @@ export function jumpToPose(direction: 1 | -1): void {
   const frames = poseFrames(s.project, ids);
   const target = direction > 0 ? frames.find((f) => f > s.frame) : [...frames].reverse().find((f) => f < s.frame);
   if (target !== undefined) setFrame(target);
+}
+
+/**
+ * Stretches or squashes the loop range to `length` frames (docs/DESIGN.md A6).
+ * With parts selected, only their animation (and their children's); with
+ * nothing selected, the whole scene and the camera. Lip sync only changes
+ * when the mouth itself is selected, so it stays matched to the dialogue.
+ */
+export function stretchLoop(length: number): void {
+  const s = get();
+  if (!s.loop) return;
+  const parts = new Set<string>();
+  for (const id of s.selection) {
+    const loc = locatePart(s.project, id);
+    if (loc) for (const p of walkParts(loc.part)) parts.add(p.id);
+  }
+  const selectedMouth = new Set(s.selection);
+  const isLipSync = lipSyncTrack(s.project);
+  const inScope = (t: Track) => (parts.size === 0 || parts.has(t.partId)) && (!isLipSync(t) || selectedMouth.has(t.partId));
+  const { project, moved } = stretchPoses(s.project, s.loop.in, s.loop.out, length, inScope);
+  const n = Math.max(1, Math.round(length));
+  const loop = { in: s.loop.in, out: s.loop.in + n - 1 };
+  const scope = parts.size ? 'the selected parts' : 'the scene';
+  store.commit(project, {
+    loop,
+    status: moved
+      ? `Retimed frames ${s.loop.in + 1}–${s.loop.out + 1} of ${scope} to ${n} frames (${loop.in + 1}–${loop.out + 1}); later poses moved along.`
+      : `No poses of ${scope} to retime in that range.`,
+  });
+}
+
+/**
+ * Mirrors the selected parts' pose on this frame, or swaps its sides
+ * (docs/DESIGN.md MR1–MR4). With nothing selected, the active character.
+ */
+export function mirrorSelected(mode: MirrorMode): void {
+  const s = get();
+  if (s.mode !== 'animate') {
+    store.set({ status: 'Mirroring works on a pose: switch to Animate mode.' });
+    return;
+  }
+  let roots = topLevelSelection(s.project, s.selection, { includeLayerRoots: true });
+  if (!roots.length) {
+    const layer = s.project.scene.layers.find((l) => l.id === s.activeLayerId && l.kind === 'character') ?? s.project.scene.layers.find((l) => l.kind === 'character');
+    if (layer) roots = [layer.root.id];
+  }
+  if (!roots.length) {
+    store.set({ status: 'Select a character (or some of its parts) to mirror.' });
+    return;
+  }
+  const r = mirrorPose(s.project, roots, s.frame, mode);
+  const what = mode === 'mirror' ? 'Mirrored' : 'Swapped the sides of';
+  store.commit(r.project, {
+    status: r.changed
+      ? `${what} the pose on frame ${s.frame + 1} (${r.changed} part${r.changed === 1 ? '' : 's'} changed, ${r.pairs} left/right pair${r.pairs === 1 ? '' : 's'}).`
+      : r.pairs || mode === 'mirror'
+        ? 'The pose is already symmetrical.'
+        : 'No left/right (or front/back) parts found. Name them like “Arm (left)” and “Arm (right)”, or “Leg L” and “Leg R”.',
+  });
 }
 
 export function setLoopPoint(which: 'in' | 'out'): void {

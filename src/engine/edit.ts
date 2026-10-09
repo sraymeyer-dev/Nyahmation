@@ -157,7 +157,18 @@ export function removeParts(project: Project, ids: Iterable<string>): Project {
     );
   }
   if (removed.size === 0) return project;
-  return { ...next, scene: { ...next.scene, tracks: next.scene.tracks.filter((t) => !removed.has(t.partId)) } };
+  return dropFollows({ ...next, scene: { ...next.scene, tracks: next.scene.tracks.filter((t) => !removed.has(t.partId)) } }, removed);
+}
+
+/** Layers that followed a removed part stop following it (they stay fixed to the camera). */
+function dropFollows(project: Project, removed: ReadonlySet<string>): Project {
+  if (!project.scene.layers.some((l) => l.follow && removed.has(l.follow.partId))) return project;
+  const layers = project.scene.layers.map((l) => {
+    if (!l.follow || !removed.has(l.follow.partId)) return l;
+    const { follow: _gone, ...rest } = l;
+    return rest;
+  });
+  return { ...project, scene: { ...project.scene, layers } };
 }
 
 /** The highest stacking number in a layer, plus one: new parts go on top. */
@@ -196,12 +207,12 @@ export function reparentPart(project: Project, id: string, newParentId: string, 
 }
 
 /** Keeps only ids that aren't inside another selected part, in tree order. */
-export function topLevelSelection(project: Project, ids: Iterable<string>): string[] {
+export function topLevelSelection(project: Project, ids: Iterable<string>, options: { includeLayerRoots?: boolean } = {}): string[] {
   const set = new Set(ids);
   const result: string[] = [];
   for (const layer of project.scene.layers) {
     const visit = (p: Part, insideSelected: boolean) => {
-      const selected = set.has(p.id) && p !== layer.root;
+      const selected = set.has(p.id) && (options.includeLayerRoots || p !== layer.root);
       if (selected && !insideSelected) result.push(p.id);
       for (const c of p.children) visit(c, insideSelected || selected);
     };
@@ -362,14 +373,17 @@ export function removeLayer(project: Project, layerId: string): Project {
   const layer = project.scene.layers.find((l) => l.id === layerId);
   if (!layer) return project;
   const removed = new Set([...walkParts(layer.root)].map((p) => p.id));
-  return {
-    ...project,
-    scene: {
-      ...project.scene,
-      layers: project.scene.layers.filter((l) => l.id !== layerId),
-      tracks: project.scene.tracks.filter((t) => !removed.has(t.partId)),
+  return dropFollows(
+    {
+      ...project,
+      scene: {
+        ...project.scene,
+        layers: project.scene.layers.filter((l) => l.id !== layerId),
+        tracks: project.scene.tracks.filter((t) => !removed.has(t.partId)),
+      },
     },
-  };
+    removed,
+  );
 }
 
 /** Moves a layer to a new position in the stack (0 = back). */

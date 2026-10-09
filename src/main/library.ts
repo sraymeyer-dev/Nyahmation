@@ -68,13 +68,19 @@ export function registerLibraryHandlers(): void {
 
   ipcMain.handle('library:read', async (_event, rel: unknown) => new Uint8Array(await readFile(insideLibrary(rel))));
 
-  ipcMain.handle('library:save', async (_event, name: unknown, bytes: unknown) => {
+  ipcMain.handle('library:save', async (_event, name: unknown, bytes: unknown, replace: unknown) => {
     if (typeof name !== 'string' || !(bytes instanceof Uint8Array)) throw new TypeError('library:save expects a name and bytes');
     const dir = libraryDir();
     await mkdir(dir, { recursive: true });
     const base = safeFileName(name);
     let file = join(dir, `${base}.${LIBRARY_EXTENSION}`);
-    for (let n = 2; await exists(file); n++) file = join(dir, `${base} ${n}.${LIBRARY_EXTENSION}`);
+    if (typeof replace === 'string' && replace) {
+      // Saving a new version of an item over the old one (docs/DESIGN.md L5).
+      file = insideLibrary(replace);
+      if (!file.toLowerCase().endsWith(`.${LIBRARY_EXTENSION}`)) throw new Error('That is not a library item.');
+    } else {
+      for (let n = 2; await exists(file); n++) file = join(dir, `${base} ${n}.${LIBRARY_EXTENSION}`);
+    }
     const tmp = `${file}.saving`;
     await writeFile(tmp, bytes);
     await rename(tmp, file);

@@ -90,9 +90,10 @@ export const poseTool: Tool = {
         changes = moveChanges(d.base, d.access, [d.id], delta);
         break;
       case 'moveLayer': {
-        // The layer root sits directly in the scene, so the delta applies as is.
+        // The layer root sits in its layer's space: the stage, unless the camera moves the layer differently.
         const local = d.access.local(d.layerRootId)!;
-        changes = new Map([[d.layerRootId, { x: local.x + delta.x, y: local.y + delta.y }]]);
+        const inv = invert(d.access.parentWorld(d.layerRootId));
+        changes = new Map([[d.layerRootId, { x: local.x + inv[0] * delta.x + inv[2] * delta.y, y: local.y + inv[1] * delta.x + inv[3] * delta.y }]]);
         break;
       }
     }

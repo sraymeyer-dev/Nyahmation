@@ -1,4 +1,6 @@
-import type { Stepping } from './types';
+import { evaluateDiscreteFrom } from './interpolate';
+import { findTrack, setPartPose } from './tracks';
+import type { Layer, Pose, Project, Stepping } from './types';
 
 /**
  * Animating on twos/threes (docs/DESIGN.md §9.1b).
@@ -33,4 +35,22 @@ export function collectAnchors(frameLists: Iterable<readonly { frame: number }[]
   const set = new Set<number>();
   for (const poses of frameLists) for (const p of poses) set.add(p.frame);
   return [...set].sort((a, b) => a - b);
+}
+
+/** The stepping a layer uses on `frame`: its changes over time (ST7), or its setting, or the scene's. */
+export function layerSteppingAt(project: Project, layer: Layer, frame: number): Stepping {
+  const base = layer.stepping ?? project.scene.stepping;
+  const track = findTrack(project.scene.tracks, layer.root.id, 'stepping');
+  return track ? evaluateDiscreteFrom(track.poses as Pose<Stepping>[], frame, base) : base;
+}
+
+/**
+ * Changes a layer's stepping from `frame` on (ST7), as a pose on its root.
+ * The first change after frame 0 also records the earlier stepping on frame 0.
+ */
+export function recordStepping(project: Project, layer: Layer, frame: number, stepping: Stepping): Project {
+  const track = findTrack(project.scene.tracks, layer.root.id, 'stepping');
+  let next = project;
+  if ((!track || track.poses.length === 0) && frame > 0) next = setPartPose(next, layer.root.id, 'stepping', 0, layer.stepping ?? project.scene.stepping);
+  return setPartPose(next, layer.root.id, 'stepping', frame, stepping);
 }

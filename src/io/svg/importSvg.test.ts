@@ -102,7 +102,38 @@ describe('importSvg', () => {
     expect(dot.rest).toMatchObject({ x: 50, y: 20 });
   });
 
-  it('simplifies gradients and skips unsupported things with plain warnings', () => {
+  it('imports gradient fills, placed on the shape', () => {
+    const { root, warnings } = importSvg(
+      svg(`
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#123456"/><stop offset="100%" stop-color="#fff" stop-opacity="0.5"/></linearGradient>
+          <linearGradient id="skyLater" href="#sky"/>
+          <radialGradient id="sun" gradientUnits="userSpaceOnUse" cx="60" cy="60" r="10"><stop offset="0" stop-color="yellow"/><stop offset="1" stop-color="orange"/></radialGradient>
+        </defs>
+        <rect id="Sky" x="10" y="20" width="40" height="20" fill="url(#skyLater)"/>
+        <circle id="Sun" cx="60" cy="60" r="10" fill="url(#sun)"/>`),
+      'a.svg',
+    );
+    const sky = find(root, 'Sky');
+    const g = sky.style!.fillGradient!;
+    expect(g.kind).toBe('linear');
+    expect(sky.style!.fill).toBe('#123456');
+    expect(g.stops.map((x) => x.offset)).toEqual([0, 1]);
+    expect(g.stops[1]!.color).toBe('rgba(255, 255, 255, 0.5)');
+    // Top to bottom of the rectangle, in the shape's own coordinates (centred on its middle).
+    const top = { x: g.from.x + sky.rest.x, y: g.from.y + sky.rest.y };
+    const bottom = { x: g.to.x + sky.rest.x, y: g.to.y + sky.rest.y };
+    expect(top).toEqual({ x: 10, y: 20 });
+    expect(bottom).toEqual({ x: 10, y: 40 });
+    const sun = find(root, 'Sun');
+    const r = sun.style!.fillGradient!;
+    expect(r.kind).toBe('radial');
+    expect(r.from.x + sun.rest.x).toBeCloseTo(60);
+    expect(Math.hypot(r.to.x - r.from.x, r.to.y - r.from.y)).toBeCloseTo(10);
+    expect(warnings).toEqual([]);
+  });
+
+  it('skips unsupported things with plain warnings', () => {
     const { root, warnings } = importSvg(
       svg(`
         <defs><linearGradient id="g"><stop offset="0" stop-color="#123456"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>
@@ -113,8 +144,8 @@ describe('importSvg', () => {
       'a.svg',
     );
     expect(find(root, 'G').style!.fill).toBe('#123456');
+    expect(find(root, 'G').style!.fillGradient?.kind).toBe('linear');
     expect(find(root, 'Gone')).toBeUndefined();
-    expect(warnings.some((w) => w.startsWith('Gradients were simplified'))).toBe(true);
     expect(warnings.some((w) => w.startsWith('Text was skipped') && w.endsWith('(2 times)'))).toBe(true);
     expect(warnings.some((w) => w.startsWith('Clipping paths were ignored'))).toBe(true);
   });

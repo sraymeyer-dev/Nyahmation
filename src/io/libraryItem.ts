@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { insertPartAtScene, locatePart, referencedAssetIds, restWorldMatrix, topLevelSelection, walkParts } from '../engine/edit';
 import type { Mat2D } from '../engine/math';
 import { createId, createLayer, createProject, ProjectFormatError, validateProject } from '../engine/project';
-import type { AssetRef, DrawingSet, Layer, LayerKind, Part, Project } from '../engine/types';
+import type { AssetRef, DrawingSet, Layer, LayerKind, LayerSource, Part, Project } from '../engine/types';
 
 // Library items (docs/DESIGN.md §7): reusable characters, backgrounds and
 // shapes saved as files in the library folder. A `.nyahitem` file is a zip:
@@ -154,6 +154,107 @@ export function unpackLibraryItem(bytes: Uint8Array): LibraryItem {
   return { doc: { ...doc, drawingSets: doc.drawingSets ?? [], assets: doc.assets ?? [], tags: doc.tags ?? [] }, assets };
 }
 
+// ---- Updating from the library (L5) -------------------------------------------------
+
+/**
+ * For saving a new version of a library item over the old one: the layer's
+ * parts and drawing sets get back the ids they have in the library, so every
+ * project linked to the item can still update and keep its animation. Parts
+ * and sets added since keep this project's ids.
+ */
+export function withLibraryIds(item: LibraryItem, source: LayerSource): LibraryItem {
+  const layer = item.doc.layer;
+  if (!layer) return item;
+  const partBack = new Map(Object.entries(source.parts).map(([lib, here]) => [here, lib]));
+  const setBack = new Map(Object.entries(source.sets).map(([lib, here]) => [here, lib]));
+  const back = (p: Part): Part => {
+    const next: Part = { ...p, id: partBack.get(p.id) ?? p.id, children: p.children.map(back) };
+    if (p.drawingSetId) next.drawingSetId = setBack.get(p.drawingSetId) ?? p.drawingSetId;
+    return next;
+  };
+  const { source: _link, ...plain } = layer;
+  return {
+    ...item,
+    doc: {
+      ...item.doc,
+      layer: { ...plain, root: back(layer.root) },
+      drawingSets: item.doc.drawingSets.map((s) => ({ ...s, id: setBack.get(s.id) ?? s.id })),
+    },
+  };
+}
+
+/**
+ * Replaces a layer's drawings and rig with a newer version of the library
+ * item it came from, keeping its animation: parts that were in the old
+ * version keep their ids (so their poses still apply), new parts are added,
+ * and parts the new version no longer has are removed with their poses. The
+ * layer keeps its name, place in the scene and settings.
+ */
+export function updateLayerFromLibrary(
+  project: Project,
+  projectAssets: ReadonlyMap<string, Uint8Array>,
+  layerId: string,
+  item: LibraryItem,
+  savedAt: number,
+): { project: Project; assets: Map<string, Uint8Array>; kept: number; added: number; removed: number } {
+  const layer = project.scene.layers.find((l) => l.id === layerId);
+  const src = layer?.source;
+  const libLayer = item.doc.layer;
+  if (!layer || !src || !libLayer) throw new Error('This layer didn’t come from a character or background in the library.');
+
+  const here = new Set([...walkParts(layer.root)].map((p) => p.id));
+  const maps: IdMaps = { parts: new Map(), sets: new Map(), assets: new Map() };
+  const presetParts = new Map(Object.entries(src.parts).filter(([, id]) => here.has(id)));
+  const presetSets = new Map(Object.entries(src.sets).filter(([, id]) => project.drawingSets.some((s) => s.id === id)));
+  for (const a of item.doc.assets) maps.assets.set(a.id, createId());
+  for (const s of item.doc.drawingSets) maps.sets.set(s.id, presetSets.get(s.id) ?? createId());
+
+  const remap = (p: Part): Part => {
+    const id = presetParts.get(p.id) ?? createId();
+    maps.parts.set(p.id, id);
+    const next: Part = { ...p, id, children: p.children.map(remap) };
+    if (p.drawingSetId) next.drawingSetId = maps.sets.get(p.drawingSetId) ?? p.drawingSetId;
+    if (p.image) next.image = { ...p.image, assetId: maps.assets.get(p.image.assetId) ?? p.image.assetId };
+    return next;
+  };
+  const fresh = remap(libLayer.root);
+  // The layer stays where it is, with its own name.
+  const root: Part = { ...fresh, id: layer.root.id, name: layer.root.name, rest: layer.root.rest, visible: layer.root.visible, ...(layer.root.locked ? { locked: true } : {}) };
+  maps.parts.set(libLayer.root.id, layer.root.id);
+
+  const now = new Set([...walkParts(root)].map((p) => p.id));
+  const removed = [...here].filter((id) => !now.has(id));
+  const kept = [...now].filter((id) => here.has(id)).length;
+
+  const assets = new Map(projectAssets);
+  for (const [oldId, newId] of maps.assets) assets.set(newId, item.assets.get(oldId)!);
+  const setsById = new Map(
+    item.doc.drawingSets.map((s) => [
+      maps.sets.get(s.id)!,
+      { ...s, id: maps.sets.get(s.id)!, drawings: s.drawings.map((d) => ({ ...d, items: d.items.map((i) => (i.kind === 'image' ? { ...i, assetId: maps.assets.get(i.assetId) ?? i.assetId } : i)) })) },
+    ]),
+  );
+  const drawingSets = [...project.drawingSets.map((s) => setsById.get(s.id) ?? s), ...[...setsById.values()].filter((s) => !project.drawingSets.some((p) => p.id === s.id))];
+  const gone = new Set(removed);
+  const newLayer: Layer = { ...layer, root, source: { ...src, savedAt, parts: Object.fromEntries(maps.parts), sets: Object.fromEntries(maps.sets) } };
+  return {
+    project: {
+      ...project,
+      drawingSets,
+      assets: [...project.assets, ...item.doc.assets.map((a) => ({ ...a, id: maps.assets.get(a.id)! }))],
+      scene: {
+        ...project.scene,
+        layers: project.scene.layers.map((l) => (l.id === layerId ? newLayer : l)),
+        tracks: project.scene.tracks.filter((t) => !gone.has(t.partId)),
+      },
+    },
+    assets,
+    kept,
+    added: now.size - kept,
+    removed: removed.length,
+  };
+}
+
 // ---- Using items -----------------------------------------------------------------
 
 interface IdMaps {
@@ -189,16 +290,19 @@ export function insertLibraryItem(
   project: Project,
   projectAssets: ReadonlyMap<string, Uint8Array>,
   item: LibraryItem,
-  target: { layerIndex?: number; containerId?: string } = {},
+  target: { layerIndex?: number; containerId?: string; reuseExisting?: boolean; source?: { relPath: string; savedAt: number } } = {},
 ): InsertedItem {
   const { doc } = item;
   const maps: IdMaps = { parts: new Map(), sets: new Map(), assets: new Map() };
-  for (const a of doc.assets) maps.assets.set(a.id, createId());
-  for (const s of doc.drawingSets) maps.sets.set(s.id, createId());
+  // Pasting within a project: drawing sets and images it already has are shared, not copied.
+  const hasSet = (id: string) => target.reuseExisting && project.drawingSets.some((s) => s.id === id);
+  const hasAsset = (id: string) => target.reuseExisting && project.assets.some((a) => a.id === id) && projectAssets.has(id);
+  for (const a of doc.assets) maps.assets.set(a.id, hasAsset(a.id) ? a.id : createId());
+  for (const s of doc.drawingSets) maps.sets.set(s.id, hasSet(s.id) ? s.id : createId());
 
   const assets = new Map(projectAssets);
-  for (const [oldId, newId] of maps.assets) assets.set(newId, item.assets.get(oldId)!);
-  const drawingSets = doc.drawingSets.map((s) => ({
+  for (const [oldId, newId] of maps.assets) if (oldId !== newId) assets.set(newId, item.assets.get(oldId)!);
+  const drawingSets = doc.drawingSets.filter((s) => maps.sets.get(s.id) !== s.id).map((s) => ({
     ...s,
     id: maps.sets.get(s.id)!,
     drawings: s.drawings.map((d) => ({
@@ -209,12 +313,23 @@ export function insertLibraryItem(
   let next: Project = {
     ...project,
     drawingSets: [...project.drawingSets, ...drawingSets],
-    assets: [...project.assets, ...doc.assets.map((a) => ({ ...a, id: maps.assets.get(a.id)! }))],
+    assets: [...project.assets, ...doc.assets.filter((a) => maps.assets.get(a.id) !== a.id).map((a) => ({ ...a, id: maps.assets.get(a.id)! }))],
   };
 
   if (doc.layer) {
-    const layer: Layer = { ...doc.layer, id: createId(), name: doc.name, root: remapPart(doc.layer.root, maps) };
+    // A layer that followed a part in another project follows nothing here (it stays fixed to the camera).
+    const { follow: _follow, source: oldSource, ...saved } = doc.layer;
+    const layer: Layer = { ...saved, id: createId(), name: doc.name, root: remapPart(doc.layer.root, maps) };
     layer.root = { ...layer.root, name: doc.name };
+    // Remember the library item (L5): straight from the library, or, for a
+    // copy of a layer that came from it, through the copy's new ids.
+    if (target.source) {
+      layer.source = { ...target.source, parts: Object.fromEntries(maps.parts), sets: Object.fromEntries(maps.sets) };
+    } else if (oldSource) {
+      const through = (m: Record<string, string>, ids: Map<string, string>) =>
+        Object.fromEntries(Object.entries(m).flatMap(([lib, old]) => (ids.has(old) ? [[lib, ids.get(old)!]] : [])));
+      layer.source = { ...oldSource, parts: through(oldSource.parts, maps.parts), sets: through(oldSource.sets, maps.sets) };
+    }
     const layers = next.scene.layers.slice();
     layers.splice(target.layerIndex ?? layers.length, 0, layer);
     next = { ...next, scene: { ...next.scene, layers } };

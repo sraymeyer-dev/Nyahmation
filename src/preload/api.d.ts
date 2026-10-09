@@ -33,22 +33,75 @@ export interface LibraryEntry {
 export interface LibraryApi {
   list(): Promise<{ dir: string; items: LibraryEntry[] }>;
   read(relPath: string): Promise<Uint8Array>;
-  /** Saves a new item in the top of the library folder; returns its path (a number is added if the name is taken). */
-  save(name: string, bytes: Uint8Array): Promise<string>;
+  /**
+   * Saves a new item in the top of the library folder; returns its path (a
+   * number is added if the name is taken). With `replace`, overwrites that
+   * item instead (a new version of it).
+   */
+  save(name: string, bytes: Uint8Array, replace?: string): Promise<string>;
   /** Moves an item to the Trash / Recycle Bin. */
   remove(relPath: string): Promise<void>;
   /** Opens the library folder in Finder / Explorer. */
   reveal(): Promise<void>;
 }
 
-export type ExportFormat = 'mp4' | 'png';
+/** Unsaved work autosaved by a window that didn't close normally (docs/DESIGN.md F3). */
+export interface RecoveryEntry {
+  id: string;
+  /** The project's file name, or "Untitled". */
+  name: string;
+  /** Where the project was saved, if it had been. */
+  path: string | null;
+  /** When it was autosaved (milliseconds since 1970). */
+  savedAt: number;
+}
+
+export interface RecoveryApi {
+  /** Writes this window's recovery file, replacing its previous one. */
+  write(bytes: Uint8Array, meta: { name: string; path: string | null }): Promise<void>;
+  /** Deletes this window's recovery file (the work was saved or discarded). */
+  clear(): Promise<void>;
+  /** Recovery files left by windows that closed without saving, newest first. */
+  list(): Promise<RecoveryEntry[]>;
+  read(id: string): Promise<Uint8Array>;
+  discard(id: string): Promise<void>;
+}
+
+/** A mouth shape starting and ending at times in seconds, from automatic lip sync (LS7). */
+export interface LipSyncCue {
+  start: number;
+  end: number;
+  /** A–H or X. */
+  shape: string;
+}
+
+export interface LipSyncOptions {
+  /** The words spoken: helps the analysis a lot. */
+  script?: string;
+  /** 'english' (default, uses speech recognition) or 'phonetic' (any language, a little less exact). */
+  recognizer?: 'english' | 'phonetic';
+  /** Which of the extra shapes G, H and X the mouth set has. */
+  extendedShapes?: string;
+}
+
+export interface LipSyncApi {
+  /** Whether Rhubarb Lip Sync is installed. */
+  available(): Promise<boolean>;
+  /** Analyses dialogue (WAV bytes) into mouth cues. Rejects with a readable message, or "Cancelled.". */
+  run(wav: Uint8Array, options: LipSyncOptions): Promise<LipSyncCue[]>;
+  cancel(): Promise<void>;
+  /** Progress from 0 to 1 while running. Returns an unsubscribe function. */
+  onProgress(listener: (value: number) => void): () => void;
+}
+
+export type ExportFormat = 'mp4' | 'hevc' | 'mov' | 'webm' | 'png';
 
 export interface ExportApi {
-  /** Asks where to save: a .mp4 file, or a folder for PNG frames. Null if cancelled. */
+  /** Asks where to save: a .mp4, .mov or .webm file, or a folder for PNG frames. Null if cancelled. */
   choose(format: ExportFormat, suggestedName: string): Promise<string | null>;
   /** `audio`: the mixed soundtrack as WAV bytes, if the scene has sound. */
-  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number; audio?: Uint8Array }): Promise<number>;
-  /** MP4: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
+  begin(options: { format: ExportFormat; path: string; width: number; height: number; fps: number; audio?: Uint8Array; transparent?: boolean }): Promise<number>;
+  /** Video formats: raw RGBA pixels (width × height × 4 bytes). PNG: an encoded PNG file. */
   frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
   end(session: number): Promise<{ path: string }>;
   cancel(session: number): Promise<void>;
@@ -85,7 +138,17 @@ export type MenuCommand =
   | 'saveToLibrary'
   | 'autoChainRoots'
   | 'export'
-  | 'makeSwitchLayer';
+  | 'makeSwitchLayer'
+  | 'measurePreview'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'mirrorPose'
+  | 'swapSides'
+  | 'boolUnion'
+  | 'boolSubtract'
+  | 'boolIntersect'
+  | 'boolExclude';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -105,8 +168,12 @@ export interface NyahApi {
    */
   onOpenFile(listener: (file: OpenedFile) => void): () => void;
   readyForFiles(): void;
+  /** Cut, copy or paste text in the focused text field (the menu's shortcuts come to the app first). */
+  editText(command: 'cut' | 'copy' | 'paste'): void;
   library: LibraryApi;
   export: ExportApi;
+  recovery: RecoveryApi;
+  lipSync: LipSyncApi;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }

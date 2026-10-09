@@ -4,7 +4,7 @@ A desktop studio for making character-animated videos: draw or import a vector c
 
 The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 
-**New to Nyahmation?** Read the illustrated [user manual (PDF)](docs/Nyahmation-User-Manual.pdf). It walks through drawing, rigging, animating, sound, lip sync and export, with annotated pictures of the app. To rebuild it after the app changes: `npm run manual` (on Linux, under `xvfb-run`).
+**New to Nyahmation?** Read the illustrated [user manual (PDF)](docs/manual/Nyahmation-User-Manual.pdf). It walks through drawing, rigging, animating, the camera, effects, sound, lip sync and export, with annotated pictures of the app. To rebuild it after the app changes, see "The user manual" below.
 
 ## Status
 
@@ -13,7 +13,12 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 2 (rigging):** done. Joints, chain roots, joint limits, drag-to-pose (inverse kinematics), and a library of reusable characters and shapes.
 - **Phase 3 (animating):** done. Posing on any frame, the timeline with retiming (ripple and copy), pins, onion skin, a loop range, and MP4 / PNG-sequence export.
 - **Phase 4 (dialogue):** done. Sound import with waveforms and scrubbing, switch layers and mouth sets (vector or PNG), lip sync by typing letters, and MP4 export with the sound. **This completes the MVP.**
-- Next: phase 5 (camera, parallax backgrounds, glow and shadow).
+- **Phase 4.5 (hardening):** done. Autosave with crash recovery, a preview quality setting for slower computers, a speed check, and "View on ones".
+- **Phase 5a (stage):** done. A camera you pose on the timeline, layers fixed to the camera (which can follow a character, like a speech bubble), parallax depth, scrolling and repeating scenery, gradient fills and a gradient sky.
+- **Phase 5b (look):** done. Drop shadows, glows, blur and haze on parts or whole layers (animatable), blend modes, and clipping (pupils that stay inside the eye).
+- **Phase 5c (craft):** done. Copy and paste of parts and poses, arms that swing behind the body, a custom easing curve, stretching or squashing a section of animation, and ProRes 4444 export for video editors.
+- **Phase 6 (stretch goals):** done. Automatic lip sync, mirrored poses, walk cycles, stepping that changes over time, shape tools (union, subtract…), colour swatches and an eyedropper, contact shadows, WebM and H.265 export, and updating characters from the library.
+- Next: a full review and test of the whole app. See the roadmap in the design document.
 
 ## Running it on a Mac (step by step)
 
@@ -35,9 +40,9 @@ node -v    # should print v22.something or higher
 npm install
 ```
 
-This takes a few minutes the first time: it downloads Electron (about 100 MB), FFmpeg (for video export) and the other parts.
+This takes a few minutes the first time: it downloads Electron (about 100 MB), FFmpeg (for video export), Rhubarb Lip Sync (about 90 MB, for automatic lip sync) and the other parts.
 
-Newer versions of npm print warnings like `npm warn allow-scripts … not yet covered by allowScripts` and `npm warn deprecated …`. They are harmless: Nyahmation downloads Electron and FFmpeg itself and doesn't need those steps approved. If a download is interrupted, run `npm run setup` to finish it.
+Newer versions of npm print warnings like `npm warn allow-scripts … not yet covered by allowScripts` and `npm warn deprecated …`. They are harmless: Nyahmation downloads Electron and FFmpeg itself and doesn't need those steps approved. If a download is interrupted, run `npm run setup` to finish it. (If only Rhubarb fails, everything else still works; automatic lip sync just waits until `npm run setup` succeeds.)
 
 **4. Start Nyahmation.**
 
@@ -104,7 +109,7 @@ The app has two modes (top bar). **Build** is for drawing and arranging. **Anima
 | Rectangle, Ellipse, Polygon, Star, Line | M, L, Y, S, \ | Drag out a shape. Shift keeps it square (or the line at 45°); Alt draws from the centre. |
 | Hand | H | Drag to pan. Space-drag or the middle mouse button pans with any tool. |
 
-Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
+Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Cut / Copy / Paste Cmd+X / C / V, Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
 
 **Animating (Animate mode):**
 - Go to a frame (click the timeline, or ← / →), then pose with the **Pose** tool (K) or the **Select** tool (V). Every change is recorded as a pose on that frame; Nyahmation fills in the frames between poses. The first time you change a part, its starting position is kept on frame 1 automatically.
@@ -114,17 +119,44 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - **Option-drag** (Mac) or **Ctrl-drag** copies the pose to another frame: a hold.
   - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold.
   - Mouth sounds only move from the mouth's own row, so lip sync stays matched to the dialogue.
+- **Copy a pose:** select parts (or a whole character) and **Copy** (Cmd+C). Go to another frame, or select another character with the same part names, and **Paste**: the pose is recorded there.
+- **Arm behind the body:** select the arm and choose **Send Backward** (Cmd+[) or **Send to Back**: from this frame on it's drawn behind. Bring it forward again on a later frame.
+- **Custom easing:** click a ◆, then **Motion out → Custom curve…**. Drag the two handles, or pick a preset such as Overshoot (a little bounce into the pose) or Anticipate (a small wind-up first).
+- **Mirror a pose:** select the character and choose **Object → Mirror Pose** (Alt+Cmd+M): the pose flips side to side. **Swap Sides** (Alt+Shift+Cmd+M) swaps the left and right (or front and back) parts' poses as they are: for a walk, copy the first step's pose, paste it half a step later, and swap sides. Parts pair up by name: "Arm (left)"/"Arm (right)", "Leg (front)"/"Leg (back)", or "Leg L"/"Leg R".
+- **Walk cycles:** select the character's layer and tick **Repeat frames** (Properties): after the last frame of the cycle it plays again and again. Tick **Keep moving** so each step carries on from the last (feet pinned to the floor stay planted). Pose the last frame like the first, moved along. Lip sync isn't repeated.
+- **Ones and twos over time:** with the layer selected, change **Animate on** in Animate mode: it applies from that frame, so a fast action can be on ones and the rest on twos.
+- **Stretch or squash timing:** set a loop range with **I** and **O**, then type a new length in **Stretch to … frames**. The poses in the range spread out or squeeze together, and everything after moves along. With parts selected, only they are retimed. Lip sync stays put unless you selected the mouth.
 - **Pin tool** (P): click a foot to pin it to the floor from this frame; click it again on a later frame to release it. The leg bends to keep the foot planted while the body moves.
 - **Playback:** Space plays and pauses. Shift+← / → jumps between poses. **I** and **O** set a loop range. **Onion skin** shows nearby frames in red (before) and green (after).
-- **Export** (Cmd+E, or the button on the timeline): MP4 video or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range. The sound goes into the MP4; a PNG export saves it next to the frames as `soundtrack.wav`. If a PNG drawing will be enlarged (and look soft), the Export window says which.
+- **Export** (Cmd+E, or the button on the timeline): MP4 video (H.264, or H.265 for smaller files), WebM (for the web, optionally see-through), a MOV (ProRes 4444, for video editors like DaVinci Resolve or Final Cut, optionally see-through) or a PNG image sequence (optionally see-through), at the scene size or 720p–4K, for the whole scene or the loop range. The sound goes into the MP4; a PNG export saves it next to the frames as `soundtrack.wav`. If a PNG drawing will be enlarged (and look soft), the Export window says which.
+
+**The camera (Animate mode):**
+- Press **C** for the **Camera** tool. Drag to pan, Shift-drag to turn, Option-drag (Alt on Windows) up or down to zoom. Each change is a camera pose on the current frame, and the camera glides between poses like a character does. The **Camera** row on the timeline shows its poses; drag them to retime.
+- **Camera view** (on the timeline) shows the picture as the video will be. Untick it to see the whole stage with the camera's frame drawn on it.
+- The camera only changes what you see: characters, poses and pinned feet stay where they are on the stage.
+- **Layer options** (select a layer, then Properties → Camera and scrolling):
+  - **Fixed to the camera**: stays in place on screen at the same size, for titles or a narrator in the corner.
+  - **Follows**: a fixed layer can ride along with a part, such as a speech bubble on Pip's head. Draw the bubble where it should sit above the head in Build mode; it follows the head, keeps its size, and stays clear of the head when the camera zooms in.
+  - **Depth**: 1 is the stage. Distant scenery at 0.3 moves less when the camera pans or zooms; foreground at 1.5 moves more.
+  - **Scroll** and **Repeat sideways**: slide the layer along (negative speeds go left) and repeat it so it never runs out, for scenery passing a car window or a walk on the spot.
+- **Gradients:** select a shape and choose a **Fill type** (straight or round gradient) with two colours and an angle. With nothing selected, the scene's **Sky** option paints a gradient sky behind everything. Gradients in imported SVGs come in too.
+
+**Effects (Properties → Effects, or Layer effects for a whole layer):**
+- **Add an effect…**: **Drop shadow**, **Outer glow**, **Contact shadow** (a soft shadow on the ground under a character, which shrinks as it jumps), **Blur** or **Haze**. Effects on a group or layer apply to it as a whole, so a shadow on Pip is one shadow of all of Pip, not darker where his arm crosses his body. Remove one with ×.
+- In **Animate** mode, changing an effect's number (a glow's size, a shadow's distance) records it on that frame, so effects can pulse or grow. The marks appear on that part's timeline row.
+- **Blend**: Multiply for shading, Screen or Add for light, Overlay for contrast.
+- **Clip**: put parts inside a shape (drag the pupil onto the eye in the Layers panel), select the shape and tick **Clip**: the pupil only shows on the eye.
+- **Depth of field and distance:** give far-away scenery layers a little **Blur** and **Haze** (it fades them toward the sky).
+- Effects are the slowest thing to draw. Groups that don't change from frame to frame are reused rather than redrawn; if playback stutters, try Preview → Half. Exports are always full quality.
 
 **Dialogue and lip sync:**
 1. **Record or get the line** as a WAV, MP3, M4A, OGG or FLAC file. In Animate mode, go to the frame where it should start and **Import Art or Sound…** (Cmd+I). It appears on the **Sound** row with its waveform. Drag it to line it up; click it to set its volume or mute it. The scene gets longer if the sound needs it.
 2. **Make the mouth** (Build mode). Draw each mouth shape, or import them, and **name each one after its shape**: `A` (M, B, P), `B` (K, S, T, EE), `C` (EH, AE), `D` (AA), `E` (AO, ER), `F` (OO, W), `G` (F, V), `H` (L) and `X` (rest). Names like `rest`, `MBP`, `FV` or `mouth_D` work too. A mouth can be several shapes grouped together (lips, teeth, tongue).
 3. Select all the shapes and choose **Object → Make Switch Layer** (Shift+Cmd+M). They become one **Mouth** layer that shows one shape at a time. Put it inside the head in the Layers panel so it moves with the head, and use the Joints tool to place it. PNG mouths: select the Mouth, then **Add drawings from files…** in Properties; files named `A.png`, `D.png` and so on land on the right letter.
-4. **Lip sync** (Animate mode): click the **Mouth** row on the timeline, go to where the line starts, and **type the letter** for each sound as you hear it. **Sound while scrubbing** plays each frame as you step. After each letter the playhead moves on one frame (or two, from the menu above the timeline), so you only type where the mouth changes; a shape holds until the next one. **Backspace** steps back and clears. You can also click the thumbnails.
-5. Coloured blocks on the Mouth row show which shape is on. Drag a ◆ on that row to nudge a change; Shift-drag moves a whole phrase. Lip sync often reads better a frame or two before the sound.
-6. Other switch layers (eyes, hands) work the same way with any names; press 1–9 or click a thumbnail to switch drawings.
+4. **Automatic lip sync:** click the **Mouth** row on the timeline and choose **Auto lip sync…**. Pick the dialogue, and type the words if you can (it's much more accurate with them). It listens and fills in the mouth shapes for the length of the sound; then play it back and fix anything by typing letters. English works best; for another language choose "Another language (by sound)".
+5. **Lip sync by hand** (Animate mode): click the **Mouth** row on the timeline, go to where the line starts, and **type the letter** for each sound as you hear it. **Sound while scrubbing** plays each frame as you step. After each letter the playhead moves on one frame (or two, from the menu above the timeline), so you only type where the mouth changes; a shape holds until the next one. **Backspace** steps back and clears. You can also click the thumbnails.
+6. Coloured blocks on the Mouth row show which shape is on. Drag a ◆ (or a block's left edge) on that row to nudge a change; Shift-drag moves a whole phrase. Lip sync often reads better a frame or two before the sound.
+7. Other switch layers (eyes, hands) work the same way with any names; press 1–9 or click a thumbnail to switch drawings.
 
 While a switch layer is selected in Animate mode, the mouth letters take priority over tool shortcuts (so H sets the H mouth rather than picking the Hand tool). Press Escape to deselect it and get the tool keys back.
 
@@ -135,7 +167,19 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 4. Optionally, select a part and turn on **Limits** in its Joint settings (for example, so an elbow can't bend backwards).
 5. Try it with the **Pose** tool.
 
-**Library tab:** select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them.
+**Autosave and recovery:** while you have unsaved changes, Nyahmation keeps a copy of your work, updated about once a minute. If the app or the computer crashes, the next time Nyahmation starts it offers the work back: click **Restore**, then **Save** to keep it. The copy is deleted when you save or choose to discard your changes, so it never replaces saving.
+
+**If playback stutters:** choose **Preview → Half** (or Quarter) in the top bar. The canvas is drawn at lower resolution while you work; exported videos are always full quality. While playing, the timeline shows how many frames a second you're really seeing ("Showing 17 of 24 fps"; orange means frames are being skipped). **View → Measure Preview Speed** times the open scene at each quality and recommends one for this computer.
+
+**View on ones:** for characters animated on twos or threes, tick **View on ones** on the timeline to see every in-between while you check the motion. It only changes the preview; the export still uses twos and threes.
+
+**Library tab:** select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them. A character added from the library remembers it. Improve it, then save it to the library again: Nyahmation offers to save it **as a new version** of the same item. In any other project using that character, select its layer and click **Update from library** (Properties): the drawings and rig are replaced and the animation is kept.
+
+**Copy and paste (Build mode):** select shapes, groups or a whole layer and **Copy** (Cmd+C) or **Cut** (Cmd+X), then **Paste** (Cmd+V). Copies go into the selected group or the active layer, each a little down and to the right so you can see them. A copied mouth keeps sharing its mouth shapes. You can paste into another project too: open it and paste.
+
+**Shape tools (Build mode, Object → Shape Tools):** select two or more shapes. **Union** (Alt+Cmd+U) merges them, **Subtract** (Alt+Cmd+S) cuts the front ones out of the back one, **Intersect** (Alt+Cmd+K) keeps only the overlap, **Exclude** (Alt+Cmd+E) removes the overlap. The result keeps smooth curves, so it's easy to edit with the Points tool.
+
+**Colours:** in Fill & stroke, **Swatches** keep the project's colours: click one for the fill, Shift-click for the outline, Option-click to remove it, + to keep the current fill. The eyedropper next to each colour picks a colour from anywhere on the screen.
 
 **Layers panel:** layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
 
@@ -145,6 +189,10 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 npm run check     # type-check + unit tests
 npm run test:e2e  # builds the app and drives it with Playwright (on Linux, run under xvfb-run)
 ```
+
+## The user manual
+
+`docs/manual/manual.html` is the manual's text; `npm run manual` takes fresh screenshots of the app (on Linux, run it under `xvfb-run`) and prints `docs/manual/Nyahmation-User-Manual.pdf`. After editing only the text, `node scripts/manual.mjs` reprints it with the existing screenshots.
 
 ## Building an installer
 

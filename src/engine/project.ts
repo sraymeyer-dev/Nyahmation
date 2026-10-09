@@ -1,9 +1,9 @@
 import { translatePath } from './geometry';
-import { isContinuousChannel } from './tracks';
-import type { Layer, LayerKind, Part, PartKind, Project, Scene, Stepping, Track } from './types';
+import { isContinuousChannel, parseEffectChannel } from './tracks';
+import { CAMERA_ID, EFFECT_SETTINGS, type BlendMode, type Effect, type Layer, type LayerKind, type Part, type PartKind, type Project, type Scene, type Stepping, type Track } from './types';
 
 /** Bump when the saved format changes, and add a migration from the old version. */
-export const PROJECT_VERSION = 3;
+export const PROJECT_VERSION = 5;
 
 export class ProjectFormatError extends Error {
   override name = 'ProjectFormatError';
@@ -84,6 +84,13 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     }));
     return { ...raw, scene, drawingSets };
   },
+  // v4: a camera (tracks on CAMERA_ID), and layers with a parallax depth or
+  // fixed to the camera. Nothing to convert; the number marks files that older
+  // versions can't show correctly.
+  3: (raw) => raw,
+  // v5: effects (shadow, glow, blur, haze), blend modes and clipping on
+  // parts, and effect animation tracks. Nothing to convert.
+  4: (raw) => raw,
 };
 
 export function migrateProject(
@@ -140,20 +147,47 @@ export function validateProject(project: Project): void {
     }
   }
   for (const set of project.drawingSets) {
-    for (const d of set.drawings ?? []) if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);
+    for (const d of set.drawings ?? []) {
+      if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);
+      for (const item of d.items) if (item.kind === 'shape' && item.style?.fillGradient !== undefined && !validGradient(item.style.fillGradient)) fail(`drawing ${d.key} in ${set.name} has a damaged gradient`);
+    }
   }
+  if (scene.sky !== undefined && !(typeof scene.sky?.top === 'string' && typeof scene.sky?.bottom === 'string')) fail('the sky is damaged');
+  if (project.swatches !== undefined && !(Array.isArray(project.swatches) && project.swatches.every((c) => typeof c === 'string'))) fail('the colour swatches are damaged');
 
   const partIds = new Set<string>();
+  const effectsOf = new Map<string, Effect[]>();
+  const layerRoots = new Set<string>();
   const checkPart = (part: Part) => {
     if (!isObject(part) || typeof part.id !== 'string') fail('a part has no id');
     if (partIds.has(part.id)) fail(`part id ${part.id} is used twice`);
     partIds.add(part.id);
     if (!Array.isArray(part.children)) fail(`part ${part.name} has no children list`);
+    const g = part.style?.fillGradient;
+    if (g !== undefined && !validGradient(g)) fail(`part ${part.name} has a damaged gradient`);
+    if (part.blend !== undefined && !BLEND_MODES.includes(part.blend)) fail(`part ${part.name} has an unknown blend mode`);
+    if (part.effects !== undefined) {
+      if (!Array.isArray(part.effects)) fail(`part ${part.name} has damaged effects`);
+      const ids = new Set<string>();
+      for (const e of part.effects) {
+        if (!validEffect(e) || ids.has(e.id)) fail(`part ${part.name} has a damaged effect`);
+        ids.add(e.id);
+      }
+      effectsOf.set(part.id, part.effects);
+    }
     part.children.forEach(checkPart);
   };
   scene.layers.forEach((layer: Layer) => {
     if (layer.kind !== 'character' && layer.kind !== 'background') fail(`layer ${layer.name} has an unknown kind`);
     if (layer.stepping !== undefined && !isStepping(layer.stepping)) fail(`layer ${layer.name} has invalid stepping`);
+    if (layer.depth !== undefined && !(Number.isFinite(layer.depth) && layer.depth >= 0)) fail(`layer ${layer.name} has an invalid depth`);
+    if (layer.follow !== undefined && typeof layer.follow?.partId !== 'string') fail(`layer ${layer.name} follows nothing`);
+    if (layer.scroll !== undefined && !(Number.isFinite(layer.scroll?.speed) && typeof layer.scroll?.repeat === 'boolean')) fail(`layer ${layer.name} has invalid scrolling`);
+    const c = layer.cycle;
+    if (c !== undefined && !(Number.isInteger(c?.from) && Number.isInteger(c?.to) && c.from >= 0 && c.to > c.from && typeof c.travel === 'boolean')) fail(`layer ${layer.name} has an invalid cycle`);
+    layerRoots.add(layer.root.id);
+    const src = layer.source;
+    if (src !== undefined && !(typeof src?.relPath === 'string' && Number.isFinite(src.savedAt) && isObject(src.parts) && isObject(src.sets))) fail(`layer ${layer.name} has a damaged library link`);
     checkPart(layer.root);
   });
 
@@ -162,13 +196,26 @@ export function validateProject(project: Project): void {
     const key = `${track.partId}/${track.channel}`;
     if (seen.has(key)) fail(`two tracks for ${key}`);
     seen.add(key);
-    if (!partIds.has(track.partId)) fail(`track for unknown part ${track.partId}`);
+    if (track.partId === CAMERA_ID) {
+      if (!['x', 'y', 'zoom', 'rotation'].includes(track.channel)) fail(`the camera has no ${track.channel} channel`);
+    } else if (!partIds.has(track.partId)) fail(`track for unknown part ${track.partId}`);
+    if (track.partId !== CAMERA_ID && track.channel === 'zoom') fail(`only the camera zooms (${key})`);
+    if (track.channel === 'stepping') {
+      if (!layerRoots.has(track.partId)) fail(`stepping changes belong on a layer (${key})`);
+      if (!track.poses.every((p) => isStepping(p.value))) fail(`stepping on ${key} must be 1, 2 or 3`);
+    }
+    const fx = parseEffectChannel(track.channel);
+    if (track.channel.startsWith('fx:')) {
+      const effect = fx && effectsOf.get(track.partId)?.find((e) => e.id === fx.effectId);
+      if (!fx || !effect || !(EFFECT_SETTINGS[effect.kind] as readonly string[]).includes(fx.setting)) fail(`animation for a missing effect (${key})`);
+    }
     let lastFrame = -1;
     for (const pose of track.poses) {
       if (!Number.isInteger(pose.frame) || pose.frame <= lastFrame) {
         fail(`poses on ${key} must be on increasing whole frames`);
       }
       lastFrame = pose.frame;
+      if (pose.ease !== undefined && !validEase(pose.ease)) fail(`pose on ${key} at frame ${pose.frame} has an unknown easing`);
       if (isContinuousChannel(track.channel) && !Number.isFinite(pose.value)) {
         fail(`pose on ${key} at frame ${pose.frame} is not a number`);
       }
@@ -179,6 +226,28 @@ export function validateProject(project: Project): void {
       }
     }
   });
+}
+
+const BLEND_MODES: readonly BlendMode[] = ['normal', 'multiply', 'screen', 'add', 'overlay'];
+
+function validEffect(e: unknown): e is Effect {
+  if (!isObject(e) || typeof e.id !== 'string' || !(e.kind in EFFECT_SETTINGS)) return false;
+  const settings = EFFECT_SETTINGS[e.kind as Effect['kind']] as readonly string[];
+  if (!settings.every((k) => Number.isFinite(e[k]))) return false;
+  return e.kind === 'blur' || typeof e.color === 'string';
+}
+
+const EASE_PRESETS = ['smooth', 'linear', 'hold', 'easeIn', 'easeOut', 'easeInOut'];
+
+function validEase(e: unknown): boolean {
+  if (typeof e === 'string') return EASE_PRESETS.includes(e);
+  return isObject(e) && Array.isArray(e.bezier) && e.bezier.length === 4 && e.bezier.every((n: unknown) => Number.isFinite(n));
+}
+
+function validGradient(g: unknown): boolean {
+  if (!isObject(g) || (g.kind !== 'linear' && g.kind !== 'radial')) return false;
+  const point = (p: unknown) => isObject(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
+  return point(g.from) && point(g.to) && Array.isArray(g.stops) && g.stops.every((s: unknown) => isObject(s) && Number.isFinite(s.offset) && typeof s.color === 'string');
 }
 
 function isStepping(v: unknown): v is Stepping {

@@ -1,13 +1,15 @@
-// Makes sure the two programs Nyahmation needs are downloaded: Electron (the
+// Makes sure the programs Nyahmation needs are downloaded: Electron (the
 // app window) and FFmpeg (video export). npm normally fetches them during
 // `npm install`, but newer npm versions skip packages' install steps until
-// they are approved, so we run those steps ourselves. Safe to run any time:
-// each one does nothing if its program is already there.
+// they are approved, so we run those steps ourselves. Then, optionally,
+// Rhubarb Lip Sync for automatic lip sync (see rhubarb.mjs). Safe to run any
+// time: each one does nothing if its program is already there.
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { installRhubarb } from './rhubarb.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -34,4 +36,6 @@ for (const step of steps) {
     failed = true;
   }
 }
+// Optional: a failed download only means no automatic lip sync.
+await installRhubarb();
 process.exit(failed ? 1 : 0);
