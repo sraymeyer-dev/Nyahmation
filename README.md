@@ -2,7 +2,9 @@
 
 A desktop studio for making character-animated videos: draw or import a vector character, rig its parts at joints, pose it on the frames that matter, and Nyahmation fills in every frame between. Lip sync uses mouth shapes from a named library. The output is video.
 
-The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md). The illustrated user manual is [docs/manual/Nyahmation-User-Manual.pdf](docs/manual/Nyahmation-User-Manual.pdf).
+The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
+
+**New to Nyahmation?** Read the illustrated [user manual (PDF)](docs/manual/Nyahmation-User-Manual.pdf). It walks through drawing, rigging, animating, the camera, effects, sound, lip sync and export, with annotated pictures of the app. To rebuild it after the app changes, see "The user manual" below.
 
 ## Status
 
