@@ -150,6 +150,7 @@ export type MenuCommand =
   | 'paste'
   | 'mirrorPose'
   | 'swapSides'
+  | 'addBlinks'
   | 'boolUnion'
   | 'boolSubtract'
   | 'boolIntersect'

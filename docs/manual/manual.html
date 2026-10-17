@@ -277,7 +277,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><td>Cut, copy and paste</td><td class="wrap">Parts and whole layers in Build mode, even between projects; poses in Animate mode.</td><td class="ch" data-ref="drawing"></td></tr>
     <tr><td>Shape tools</td><td class="wrap">Union, Subtract, Intersect and Exclude combine shapes into new ones.</td><td class="ch" data-ref="drawing"></td></tr>
     <tr><td>Swatches and eyedropper</td><td class="wrap">A palette of the project's colours, and picking a colour from anywhere on the screen.</td><td class="ch" data-ref="drawing"></td></tr>
-    <tr><td>Walks and repeats</td><td class="wrap">Mirror Pose, Swap Sides, and cycles: a layer that repeats a stretch of its animation, optionally moving on each time.</td><td class="ch" data-ref="walks"></td></tr>
+    <tr><td>Walks and repeats</td><td class="wrap">Mirror Pose, Swap Sides, blinks, and cycles: a layer that repeats a stretch of its animation, optionally moving on each time.</td><td class="ch" data-ref="walks"></td></tr>
     <tr><td>Timing tools</td><td class="wrap">A custom easing curve, stretching a range of poses, draw-order changes over time, and switching between ones and twos mid-scene.</td><td class="ch" data-ref="timing"></td></tr>
     <tr><td>Automatic lip sync</td><td class="wrap">Nyahmation listens to the dialogue and fills in the mouth shapes for you to polish.</td><td class="ch" data-ref="lipsync"></td></tr>
     <tr><td>More export formats</td><td class="wrap">H.265, WebM (optionally see-through) and ProRes 4444 MOV for video editors.</td><td class="ch" data-ref="export"></td></tr>
@@ -428,6 +428,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
         <tr><td>New Background Layer</td><td></td></tr>
         <tr><td>Mirror Pose (flip left and right)</td><td><k>⌥⌘M</k></td></tr>
         <tr><td>Swap Sides (for walks)</td><td><k>⌥⇧⌘M</k></td></tr>
+        <tr><td>Add Blinks…</td><td><k>⌥⌘B</k></td></tr>
         <tr><td>Mark Branch Joints as Chain Roots</td><td></td></tr>
         <tr><td>Save Selection to Library…</td><td><k>⇧⌘L</k></td></tr>
       </table>
@@ -844,7 +845,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
 </section>
 
 <!-- ============================================================== 10 walks -->
-<section class="chapter new" id="walks" data-title="Walks and repeats" data-sub="Copying poses, mirroring, and animation cycles">
+<section class="chapter new" id="walks" data-title="Walks and repeats" data-sub="Copying poses, mirroring, blinks and animation cycles">
   <p>A walk is the classic animation exercise, and three tools make it much quicker: copying poses, mirroring them, and repeating a stretch of animation as a cycle. They're useful well beyond walks, too: a blink every few seconds, a flag flapping, a dog wagging its tail.</p>
 
   <h2>Copying and pasting poses</h2>
@@ -862,6 +863,14 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><td>Mirror Pose</td><td><k>⌥⌘M</k></td><td class="wrap">Flips the pose side to side, like looking in a mirror: the left arm takes the right arm's pose turned the other way, and parts without a partner (the head, the torso) turn the other way themselves. For characters facing the camera: wave with the other hand in one keystroke.</td></tr>
     <tr><td>Swap Sides</td><td><k>⌥⇧⌘M</k></td><td class="wrap">Paired parts swap poses exactly as they are; everything else stays. For characters seen from the side, this is the second half of a walk: the left leg does what the right leg just did.</td></tr>
   </table>
+
+  <h2>Blinks</h2>
+  <p>A character who never blinks looks like a doll. Select the eyes in Animate mode and choose <b>Object → Add Blinks…</b> (<k>⌥⌘B</k>, or right-click the eyes). Nyahmation scatters blinks over the scene, or the loop range, every few seconds but never evenly, the way people blink, now and then twice in quick succession. Each blink is ordinary poses, so you can move one to land on a beat, or delete it; <b>Undo</b> takes them all away again.</p>
+  <ul>
+    <li>If the eyes are a switch layer, a blink shows a drawing you choose (one called "Closed" is picked for you) for a moment.</li>
+    <li>Otherwise the eyes squash flat for a moment, toward their joint: put the joint in the middle of the eyes (<a class="xref" data-ref="rigging"></a>).</li>
+    <li>Frames where the eyes already have poses of their own (a blink you placed, a squint) are left alone.</li>
+  </ul>
 
   <h2>Cycles: repeating animation</h2>
   <figure data-shot="cycle">

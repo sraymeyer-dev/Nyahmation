@@ -53,7 +53,7 @@ export function acceptDroppedFiles(): () => void {
     // Never let the window navigate to the file.
     e.preventDefault();
     const s = store.getState();
-    if (s.exportOpen || s.lipSyncDialogFor) return;
+    if (s.exportOpen || s.lipSyncDialogFor || s.blinkDialogFor) return;
     const canvas = document.querySelector<HTMLElement>('[data-testid="stage"]');
     const rect = canvas?.getBoundingClientRect();
     const onCanvas = rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;

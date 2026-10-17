@@ -1587,6 +1587,44 @@ test('a part picked on the canvas is shown in the Layers list and the timeline',
   for (const row of sunRows()) await expect(row).toBeInViewport();
 });
 
+test('Add Blinks scatters short blinks over the scene as poses', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Build');
+  await page.evaluate(() => { const n = (window as any).__nyah; n.store.set({ selection: [n.part('Eyes').id] }); });
+  // Blinks are poses: Build mode says so.
+  await menu('addBlinks');
+  await expect(page.locator('.topbar .status')).toContainText('switch to Animate mode');
+  await switchMode('Animate');
+  await page.evaluate(() => { const n = (window as any).__nyah; n.store.set({ selection: [n.part('Eyes').id] }); });
+  const eyePoses = () => page.evaluate(() => { const n = (window as any).__nyah; return JSON.stringify(n.store.getState().project.scene.tracks.find((t: any) => t.partId === n.part('Eyes').id && t.channel === 'scaleY')); });
+  // The demo has one blink of its own, on frames 53–55.
+  const before = await eyePoses();
+  await menu('addBlinks');
+  const dialog = page.getByTestId('blink-dialog');
+  await expect(dialog).toContainText('Add blinks to “Eyes”');
+  // Pip's eyes are a shape, so they squash.
+  await expect(dialog.getByLabel('Blink with')).toHaveValue('');
+  await dialog.getByLabel('Seconds between blinks').fill('1');
+  await dialog.getByLabel('Seconds between blinks').press('Enter');
+  await dialog.getByRole('button', { name: 'Add blinks' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.topbar .status')).toContainText(/Added \d+ blinks? to Eyes/);
+  const shutFrames = await page.evaluate(() => {
+    const n = (window as any).__nyah;
+    const id = n.part('Eyes').id;
+    const frames = n.store.getState().project.scene.durationFrames;
+    return Array.from({ length: frames }, (_, f) => f).filter((f) => n.channelValue(id, 'scaleY', f) < 0.5);
+  });
+  expect(shutFrames.length).toBeGreaterThan(0);
+  // The demo's own blink is kept, and Undo removes the new ones all at once.
+  expect(shutFrames).toContain(52);
+  await menu('undo');
+  expect(await eyePoses()).toBe(before);
+});
+
 test('a new scene shape keeps the characters in the middle', async () => {
   await switchMode('Build');
   await page.keyboard.press('Escape');

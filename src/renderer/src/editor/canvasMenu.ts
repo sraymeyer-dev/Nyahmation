@@ -2,7 +2,7 @@ import { locatePart, isLayerRoot } from '../../../engine/edit';
 import type { Vec2 } from '../../../engine/types';
 import type { ContextMenuItem } from '../../../preload/api';
 import { arrange, deleteSelection, duplicate, group, resolvedScene, select, selectAll, selectParent, ungroup, importFile } from './actions';
-import { mirrorSelected } from './animate';
+import { mirrorSelected, openBlinks } from './animate';
 import { clipboardContents, copy, cut, paste } from './clipboard';
 import { hitTopPart } from './hitTest';
 import { openLibrarySave } from './library';
@@ -46,6 +46,7 @@ export async function canvasContextMenu(scene: Vec2): Promise<void> {
           sep,
           { id: 'mirror', label: 'Mirror Pose' },
           { id: 'swap', label: 'Swap Sides' },
+          ...(selection.length === 1 && parts.length === 1 ? [{ id: 'blinks', label: 'Add Blinks…' }] : []),
           ...(hit ? [sep, { id: 'pin', label: pinned ? `Unpin from Frame ${s.frame + 1}` : `Pin Here from Frame ${s.frame + 1}` }] : []),
           sep,
           ...arrangeItems.map((i) => ({ ...i, label: `${(i as { label: string }).label} from Here` })),
@@ -117,6 +118,8 @@ export async function canvasContextMenu(scene: Vec2): Promise<void> {
       return mirrorSelected('mirror');
     case 'swap':
       return mirrorSelected('swap');
+    case 'blinks':
+      return openBlinks();
     case 'pin':
       if (hit) togglePin(hit, scene);
       return;

@@ -110,4 +110,17 @@ function findPart(name: string) {
     const b = toScreen(s, applyToPoint(p.world, { x: 100, y: 0 }));
     return Math.hypot(b.x - a.x, b.y - a.y) / 100;
   },
+  /** What's wrong with the editor's state, if anything: the project as a file would be refused, or the selection names a missing part (tests). */
+  problems(): string | null {
+    const s = store.getState();
+    try {
+      parseProject(JSON.parse(JSON.stringify(s.project)));
+    } catch (err) {
+      return `project: ${(err as Error).message}`;
+    }
+    const missing = s.selection.filter((id) => !locatePart(s.project, id));
+    if (missing.length) return `selection names missing parts: ${missing.join(', ')}`;
+    if (!(s.frame >= 0 && s.frame < s.project.scene.durationFrames)) return `frame ${s.frame} is outside the scene`;
+    return null;
+  },
 };

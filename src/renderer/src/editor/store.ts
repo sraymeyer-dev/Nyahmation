@@ -94,6 +94,8 @@ export interface EditorState {
   cameraSelected: boolean;
   /** The mouth the Auto lip sync dialog is open for (LS7), or null. */
   lipSyncDialogFor: string | null;
+  /** The part (eyes) the Add Blinks window is open for. */
+  blinkDialogFor: string | null;
   /** Autosaved work from a session that didn't close normally, offered back (F3). */
   recoveries: readonly RecoveryEntry[];
 }
@@ -159,6 +161,7 @@ function initialState(): EditorState {
     cameraView: true,
     cameraSelected: false,
     lipSyncDialogFor: null,
+    blinkDialogFor: null,
     recoveries: [],
   };
 }

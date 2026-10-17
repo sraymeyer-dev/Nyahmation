@@ -137,6 +137,7 @@ export function buildMenu(openRecent: (path: string) => void): void {
         { type: 'separator' },
         item('Mirror Pose (flip left and right)', 'mirrorPose', 'Alt+CmdOrCtrl+M'),
         item('Swap Sides (for walks)', 'swapSides', 'Alt+Shift+CmdOrCtrl+M'),
+        item('Add Blinks…', 'addBlinks', 'Alt+CmdOrCtrl+B'),
         { type: 'separator' },
         item('Mark Branch Joints as Chain Roots', 'autoChainRoots'),
         item('Save Selection to Library…', 'saveToLibrary', 'Shift+CmdOrCtrl+L'),

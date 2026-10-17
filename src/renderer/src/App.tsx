@@ -11,13 +11,14 @@ import { acceptDroppedFiles } from './editor/dropFiles';
 import { restoreInterfaceSize, setInterfaceSize } from './editor/interfaceSize';
 import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
-import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
+import { deleteSelectedMarks, jumpToPose, mirrorSelected, openBlinks, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
 import { EmptyScene } from './components/EmptyScene';
 import { ExportDialog } from './components/ExportDialog';
 import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
 import { RecordDialog } from './components/RecordDialog';
+import { BlinkDialog } from './components/BlinkDialog';
 import { RecoveryPrompt } from './components/RecoveryPrompt';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { Sidebar } from './components/Sidebar';
@@ -85,6 +86,7 @@ const MENU: Record<MenuCommand, () => void> = {
   boolExclude: () => actions.booleanOp('exclude'),
   mirrorPose: () => mirrorSelected('mirror'),
   swapSides: () => mirrorSelected('swap'),
+  addBlinks: () => openBlinks(),
   shortcuts: () => store.set({ shortcutsOpen: true }),
   recordDialogue: () => store.set({ recordOpen: true, playing: false }),
   interfaceSmaller: () => setInterfaceSize('smaller'),
@@ -125,7 +127,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.exportOpen || s.lipSyncDialogFor || s.shortcutsOpen || s.recordOpen) return;
+  if (s.exportOpen || s.lipSyncDialogFor || s.blinkDialogFor || s.shortcutsOpen || s.recordOpen) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (lipSyncKey(e, s)) {
       e.preventDefault();
@@ -294,6 +296,7 @@ export function App() {
         <LipSyncDialog />
         <ShortcutsDialog />
         <RecordDialog />
+        <BlinkDialog />
       </div>
     </div>
   );

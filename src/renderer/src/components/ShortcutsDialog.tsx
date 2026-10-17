@@ -51,6 +51,7 @@ const SECTIONS: { title: string; entries: Entry[] }[] = [
       [`${cmd('U', { alt: true })}  S  K  E`, 'Union, subtract, intersect, exclude'],
       [cmd('M', { shift: true }), 'Make a switch layer (mouth, eyes…)'],
       [cmd('M', { alt: true }), 'Mirror pose (add Shift: swap sides)'],
+      [cmd('B', { alt: true }), 'Add blinks to the selected eyes'],
       [cmd('L', { shift: true }), 'Save selection to the library'],
     ],
   },

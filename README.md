@@ -117,7 +117,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 
 **File → Open Recent** lists the last ten projects you opened or saved.
 
-**Right-click** a part on the canvas for what you can do with it: in Build mode cut, copy, paste, duplicate, group, arrange, edit points, make a switch layer, save to the library or delete; in Animate mode copy or paste its pose, mirror it, pin it there, or move it in front or behind from this frame.
+**Right-click** a part on the canvas for what you can do with it: in Build mode cut, copy, paste, duplicate, group, arrange, edit points, make a switch layer, save to the library or delete; in Animate mode copy or paste its pose, mirror it, add blinks to it, pin it there, or move it in front or behind from this frame.
 
 **Drag and drop:** drag files from Finder or Explorer onto the window. Art (SVG, PNG, JPEG) lands where you drop it on the canvas, sounds go on the Sound row, and a `.nyah` project opens.
 
@@ -132,6 +132,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 - **Copy a pose:** select parts (or a whole character) and **Copy** (Cmd+C). Go to another frame, or select another character with the same part names, and **Paste**: the pose is recorded there.
 - **Arm behind the body:** select the arm and choose **Send Backward** (Cmd+[) or **Send to Back**: from this frame on it's drawn behind. Bring it forward again on a later frame.
 - **Custom easing:** click a ◆, then **Motion out → Custom curve…**. Drag the two handles, or pick a preset such as Overshoot (a little bounce into the pose) or Anticipate (a small wind-up first).
+- **Blinks:** select the eyes in Animate mode and choose **Object → Add Blinks…** (Alt+Cmd+B): blinks every few seconds, unevenly like a person's, as ordinary poses you can move or delete. Eyes made as a switch layer show their closed drawing; other eyes squash flat for a moment.
 - **Mirror a pose:** select the character and choose **Object → Mirror Pose** (Alt+Cmd+M): the pose flips side to side. **Swap Sides** (Alt+Shift+Cmd+M) swaps the left and right (or front and back) parts' poses as they are: for a walk, copy the first step's pose, paste it half a step later, and swap sides. Parts pair up by name: "Arm (left)"/"Arm (right)", "Leg (front)"/"Leg (back)", or "Leg L"/"Leg R".
 - **Walk cycles:** select the character's layer and tick **Repeat frames** (Properties): after the last frame of the cycle it plays again and again. Tick **Keep moving** so each step carries on from the last (feet pinned to the floor stay planted). Pose the last frame like the first, moved along. Lip sync isn't repeated.
 - **Ones and twos over time:** with the layer selected, change **Animate on** in Animate mode: it applies from that frame, so a fast action can be on ones and the rest on twos.

@@ -148,6 +148,15 @@ export function stretchLoop(length: number): void {
  * Mirrors the selected parts' pose on this frame, or swaps its sides
  * (docs/DESIGN.md MR1–MR4). With nothing selected, the active character.
  */
+/** Object → Add Blinks…: for the one part selected (the eyes). Blinks are poses, so this is for Animate mode. */
+export function openBlinks(): void {
+  const s = get();
+  if (s.mode !== 'animate') return void store.set({ status: 'Blinks are poses: switch to Animate mode, select the eyes, then Add Blinks.' });
+  const parts = s.selection.filter((id) => locatePart(s.project, id)?.parent);
+  if (parts.length !== 1) return void store.set({ status: 'Select the eyes (one part: a switch layer with a closed drawing, or a shape), then Add Blinks.' });
+  store.set({ blinkDialogFor: parts[0]!, playing: false });
+}
+
 export function mirrorSelected(mode: MirrorMode): void {
   const s = get();
   if (s.mode !== 'animate') {

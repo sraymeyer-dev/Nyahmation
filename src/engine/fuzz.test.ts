@@ -31,6 +31,7 @@ import { pinPart, unpinPart } from './pins';
 import { createProject, parseProject } from './project';
 import { changeFrameRate, deletePoses, retimePoses, stretchPoses } from './retime';
 import { resizeScene } from './stage';
+import { addBlinks } from './blink';
 import { setPivot } from './rig';
 import { recordStepping } from './stepping';
 import { EFFECT_SETTINGS, type Part, type Project, type Stepping } from './types';
@@ -139,6 +140,13 @@ const EDITS: Record<string, (p: Project, r: Rng) => Project> = {
   },
   frameRate: (p, r) => changeFrameRate(p, r.pick([12, 24, 25, 30, 60])!),
   resize: (p, r) => resizeScene(p, r.int(16, 4000), r.int(16, 4000)),
+  blinks(p, r) {
+    const id = r.pick(ids(p));
+    if (!id) return p;
+    const set = p.drawingSets.find((d) => d.id === locatePart(p, id)?.part.drawingSetId);
+    const closed = set && r.next() < 0.8 ? r.pick(set.drawings)?.key : undefined;
+    return addBlinks(p, id, { from: r.int(0, 60), to: r.int(0, p.scene.durationFrames + 10), every: r.int(1, 8), closed }).project;
+  },
   mirror: (p, r) => (p.scene.layers.length ? mirrorPose(p, [r.pick(roots(p))!], r.int(0, p.scene.durationFrames - 1), r.next() < 0.5 ? 'mirror' : 'swap').project : p),
   pin(p, r) {
     const id = r.pick(ids(p));
