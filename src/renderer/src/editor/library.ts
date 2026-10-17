@@ -13,6 +13,7 @@ import {
   unpackLibraryItem,
   updateLayerFromLibrary,
   withLibraryIds,
+  type LibraryIds,
   type LibraryItem,
 } from '../../../io/libraryItem';
 import { getImage } from '../render/images';
@@ -86,14 +87,15 @@ export async function saveSelectionToLibrary(name: string, tags: string[], repla
     const layer = s.selection.length === 1 ? s.project.scene.layers.find((l) => l.root.id === s.selection[0]) : undefined;
     const source = replace ? layer?.source : undefined;
     let item = layer ? itemFromLayer(s.project, s.assets, layer.id, name, tags) : itemFromParts(s.project, s.assets, s.selection, name, tags);
-    if (source) item = withLibraryIds(item, source);
+    let ids: LibraryIds | null = null;
+    if (source) ({ item, ids } = withLibraryIds(item, source));
     const thumbnail = await renderThumbnail(previewProject(item), (id) => getImage(id, s.assets.get(id), assetMimeType(s, id)));
     const relPath = await api.library.save(name, packLibraryItem(item, thumbnail ?? undefined), source?.relPath);
     await refreshLibrary();
-    if (layer && source) {
+    if (layer && ids) {
       // This layer now matches the library's version.
       const modified = get().library.items.find((e) => e.relPath === relPath)?.modified ?? Date.now();
-      store.commit(updateLayer(get().project, layer.id, (l) => (l.source ? { ...l, source: linkAfterSaving(l, modified)! } : l)));
+      store.commit(updateLayer(get().project, layer.id, (l) => (l.source ? { ...l, source: linkAfterSaving(l, modified, ids!)! } : l)));
     }
     store.set({ status: source ? `Saved a new version of “${name}” to the library. Other projects using it can now Update from library.` : `Saved “${name}” to the library (${relPath}).` });
     return true;

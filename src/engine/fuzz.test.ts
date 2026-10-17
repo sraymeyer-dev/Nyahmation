@@ -11,10 +11,12 @@ import {
   duplicateParts,
   groupParts,
   insertShapeFromScene,
+  locatePart,
   movePartsBy,
   removeLayer,
   removeParts,
   reparentPart,
+  restWorldMatrix,
   ungroupPart,
   updateLayer,
   walkParts,
@@ -23,6 +25,7 @@ import {
 import { addEffect, recordEffectValue, removeEffect } from './effects';
 import { evaluateScene } from './evaluate';
 import { defaultStyle, ellipsePath, rectPath } from './geometry';
+import type { Mat2D } from './math';
 import { mirrorPose } from './mirror';
 import { pinPart, unpinPart } from './pins';
 import { createProject, parseProject } from './project';
@@ -118,7 +121,12 @@ const EDITS: Record<string, (p: Project, r: Rng) => Project> = {
     const id = r.pick([...ids(p), ...roots(p)]);
     if (!id) return p;
     const targets = [{ frame: frame(r, p, new Set([id])), partIds: new Set([id]) }];
-    return retimePoses(p, targets, r.int(-20, 20), { ripple: r.next() < 0.3, copy: r.next() < 0.3 }).project;
+    const copy = r.next() < 0.3;
+    const next = retimePoses(p, targets, r.int(-20, 20), { ripple: r.next() < 0.3, copy }).project;
+    // Moving poses never loses or adds any; copying never loses any.
+    const count = (q: Project) => q.scene.tracks.reduce((n, t) => n + t.poses.length, 0);
+    if (copy ? count(next) < count(p) : count(next) !== count(p)) throw new Error(`retiming changed ${count(p)} poses to ${count(next)}`);
+    return next;
   },
   deletePoses(p, r) {
     const chosen = new Set(r.some([...ids(p), ...roots(p)]));
@@ -183,8 +191,9 @@ const EDITS: Record<string, (p: Project, r: Rng) => Project> = {
     if (!layer?.source) return p;
     // A new version of the item: the layer as it is now, saved back with the
     // library's ids, after which the layer is linked to that version.
-    const item = unpackLibraryItem(packLibraryItem(withLibraryIds(itemFromLayer(p, new Map(), layer.id, layer.name), layer.source)));
-    const linked = updateLayer(p, layer.id, (l) => ({ ...l, source: linkAfterSaving(l, l.source!.savedAt + 1)! }));
+    const saved = withLibraryIds(itemFromLayer(p, new Map(), layer.id, layer.name), layer.source);
+    const item = unpackLibraryItem(packLibraryItem(saved.item));
+    const linked = updateLayer(p, layer.id, (l) => ({ ...l, source: linkAfterSaving(l, l.source!.savedAt + 1, saved.ids)! }));
     const r2 = updateLayerFromLibrary(linked, new Map(), layer.id, item, layer.source.savedAt + 2);
     // Updating to the version just saved from this very layer changes nothing.
     if (r2.added || r2.removed) throw new Error(`updating to its own new version added ${r2.added} and removed ${r2.removed} parts`);
@@ -195,6 +204,26 @@ const EDITS: Record<string, (p: Project, r: Rng) => Project> = {
     return layer ? recordStepping(p, layer, r.int(0, p.scene.durationFrames - 1), r.int(1, 3) as Stepping) : p;
   },
 };
+
+/** Edits that rearrange things without moving any artwork in the rest pose. */
+const KEEPS_ARTWORK = new Set(['group', 'ungroup', 'reparent', 'arrange', 'pivot']);
+
+/** Where every part's drawing sits on the stage, in the rest pose. */
+function placements(p: Project): Map<string, Mat2D> {
+  const out = new Map<string, Mat2D>();
+  for (const part of parts(p)) out.set(part.id, restWorldMatrix(locatePart(p, part.id)!));
+  return out;
+}
+
+function checkArtworkKept(before: Project, after: Project): void {
+  const was = placements(before);
+  for (const [id, m] of placements(after)) {
+    const old = was.get(id);
+    if (old && m.some((v, i) => Math.abs(v - old[i]!) > 1e-6 * Math.max(1, Math.abs(v)))) {
+      throw new Error(`${locatePart(after, id)!.part.name} moved: [${old.map((v) => v.toFixed(3))}] → [${m.map((v) => v.toFixed(3))}]`);
+    }
+  }
+}
 
 function check(p: Project): void {
   // It saves and opens again.
@@ -229,8 +258,10 @@ describe('random edits keep the project valid', () => {
       for (let step = 0; step < STEPS; step++) {
         const name = r.pick(names)!;
         try {
+          const before = p;
           p = EDITS[name]!(p, r);
           check(p);
+          if (KEEPS_ARTWORK.has(name)) checkArtworkKept(before, p);
         } catch (err) {
           throw new Error(`seed ${seed}, step ${step} (${name}): ${(err as Error).message}`);
         }
