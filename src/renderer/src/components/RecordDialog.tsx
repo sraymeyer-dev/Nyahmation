@@ -7,7 +7,7 @@ import { store, useEditor } from '../editor/store';
 // the Sound row, starting at the playhead. Listen to it, then keep it or try
 // again.
 
-type Take = { wav: Uint8Array; seconds: number; url: string };
+type Take = { wav: Uint8Array; seconds: number; framesSkipped: number; url: string };
 
 /** "Line 1", "Line 2"…: the next name not used by a sound in the project. */
 function nextLineName(names: readonly string[]): string {
@@ -94,7 +94,7 @@ export function RecordDialog() {
     stopPicture();
     setBusy(true);
     try {
-      const result = await r.stop();
+      const result = await r.stop(store.getState().project.scene.fps);
       setTake({ ...result, url: URL.createObjectURL(new Blob([result.wav as BlobPart], { type: 'audio/wav' })) });
     } catch (err) {
       setError(`The recording couldn't be read (${(err as Error).message}).`);
@@ -105,7 +105,8 @@ export function RecordDialog() {
   const keep = async () => {
     if (!take) return;
     const name = nextLineName(store.getState().project.scene.audio.map((c) => c.name));
-    await importAudio(`${name}.wav`, take.wav);
+    // Played along with the scene, the trimmed take moves on to keep its timing; otherwise the words start at the playhead.
+    await importAudio(`${name}.wav`, take.wav, withPicture ? startFrame.current + take.framesSkipped : undefined);
     close();
   };
 
@@ -130,7 +131,7 @@ export function RecordDialog() {
         ) : take ? (
           <>
             <p className="hint">
-              {take.seconds.toFixed(1)} s ({Math.ceil(take.seconds * fps)} frames). Listen, then keep it or try again.
+              {take.seconds.toFixed(1)} s ({Math.ceil(take.seconds * fps)} frames), with the silence before and after trimmed. Listen, then keep it or try again.
             </p>
             <audio controls src={take.url} aria-label="Listen to the recording" />
           </>

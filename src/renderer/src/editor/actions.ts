@@ -413,10 +413,11 @@ const AUDIO_TYPES: Record<string, string> = {
 };
 
 /**
- * Adds a sound file as an audio clip starting on the current frame (Animate
- * mode) or frame 1. The scene gets longer if the sound runs past its end.
+ * Adds a sound file as an audio clip starting on `startFrame`, or the
+ * current frame (Animate mode) or frame 1. The scene gets longer if the
+ * sound runs past its end.
  */
-export async function importAudio(name: string, bytes: Uint8Array): Promise<void> {
+export async function importAudio(name: string, bytes: Uint8Array, startFrame?: number): Promise<void> {
   const ext = name.split('.').pop()!.toLowerCase();
   let duration: number;
   try {
@@ -432,7 +433,7 @@ export async function importAudio(name: string, bytes: Uint8Array): Promise<void
     id: createId(),
     assetId,
     name: name.replace(/\.[^.]+$/, ''),
-    startFrame: s.mode === 'animate' ? s.frame : 0,
+    startFrame: startFrame ?? (s.mode === 'animate' ? s.frame : 0),
     duration,
     volume: 1,
   };

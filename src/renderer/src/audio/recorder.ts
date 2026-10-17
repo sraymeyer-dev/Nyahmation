@@ -1,17 +1,22 @@
 import { encodeWav } from '../../../io/wav';
 import { decodeAudio } from './audioEngine';
+import { trimSilence } from './trim';
 
 // Recording dialogue from the microphone (docs/DESIGN.md AU6). The sound is
 // kept as a WAV file (one channel, the decoder's 48 kHz), like an imported
-// one, so lip sync, export and saving treat it the same.
+// one, so lip sync, export and saving treat it the same. The silence before
+// and after the words is trimmed.
 
 export interface Recording {
   /** How loud the microphone is right now, 0–1. */
   level(): number;
   /** Seconds since recording started. */
   elapsed(): number;
-  /** Stops and returns the recording as WAV bytes. */
-  stop(): Promise<{ wav: Uint8Array; seconds: number }>;
+  /**
+   * Stops and returns the recording as WAV bytes, with the silence at either
+   * end trimmed; `framesSkipped` whole frames (at `fps`) came off the start.
+   */
+  stop(fps: number): Promise<{ wav: Uint8Array; seconds: number; framesSkipped: number }>;
   /** Stops and throws the recording away. */
   cancel(): void;
 }
@@ -61,7 +66,7 @@ export async function startRecording(): Promise<Recording> {
       return Math.min(1, peak);
     },
     elapsed: () => (performance.now() - started) / 1000,
-    async stop() {
+    async stop(fps) {
       if (recorder.state !== 'inactive') recorder.stop();
       await stopped;
       release();
@@ -73,7 +78,8 @@ export async function startRecording(): Promise<Recording> {
         const data = buffer.getChannelData(c);
         for (let i = 0; i < mono.length; i++) mono[i]! += data[i]! / buffer.numberOfChannels;
       }
-      return { wav: encodeWav([mono], buffer.sampleRate), seconds: buffer.duration };
+      const trimmed = trimSilence(mono, buffer.sampleRate, fps);
+      return { wav: encodeWav([trimmed.samples], buffer.sampleRate), seconds: trimmed.samples.length / buffer.sampleRate, framesSkipped: trimmed.framesSkipped };
     },
     cancel() {
       if (recorder.state !== 'inactive') recorder.stop();
