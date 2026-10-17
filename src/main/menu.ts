@@ -1,5 +1,7 @@
 import { BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron';
+import { basename, dirname } from 'node:path';
 import type { MenuCommand } from '../preload/api';
+import { clearRecentProjects, recentProjects } from './recent';
 
 // The native menu. Items send a command to the focused window; the renderer
 // decides what it means (e.g. Undo inside a text field undoes the typing).
@@ -14,7 +16,23 @@ const item = (label: string, command: MenuCommand, accelerator?: string): MenuIt
   click: () => send(command),
 });
 
-export function buildMenu(): void {
+/** File → Open Recent: each project by name (with its folder when two share a name), then Clear Menu. */
+function recentMenu(openRecent: (path: string) => void): MenuItemConstructorOptions[] {
+  const paths = recentProjects();
+  if (!paths.length) return [{ label: 'No Recent Projects', enabled: false }];
+  const names = paths.map((p) => basename(p));
+  return [
+    ...paths.map((path, i): MenuItemConstructorOptions => ({
+      label: names.indexOf(names[i]!) !== names.lastIndexOf(names[i]!) ? `${names[i]} — ${basename(dirname(path))}` : names[i]!,
+      click: () => openRecent(path),
+    })),
+    { type: 'separator' },
+    { label: 'Clear Menu', click: clearRecentProjects },
+  ];
+}
+
+/** Builds the menu bar; call again when the recent projects change. */
+export function buildMenu(openRecent: (path: string) => void): void {
   const isMac = process.platform === 'darwin';
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
@@ -23,6 +41,7 @@ export function buildMenu(): void {
       submenu: [
         item('New', 'new', 'CmdOrCtrl+N'),
         item('Open…', 'open', 'CmdOrCtrl+O'),
+        { label: 'Open Recent', submenu: recentMenu(openRecent) },
         item('Open Demo Puppet', 'openDemo'),
         { type: 'separator' },
         item('Save', 'save', 'CmdOrCtrl+S'),

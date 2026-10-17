@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
 import { buildMenu } from './menu';
+import { forgetProject, onRecentChange, rememberProject } from './recent';
 import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
 import { registerLipSyncHandlers } from './lipsync';
 
@@ -41,8 +42,11 @@ async function sendProject(win: BrowserWindow, path: string): Promise<void> {
   try {
     const bytes = new Uint8Array(await readFile(path));
     win.webContents.send('project:openFile', { path, name: basename(path), bytes });
+    rememberProject(path);
   } catch (err) {
-    dialog.showErrorBox("Couldn't open the project", `${basename(path)}: ${(err as Error).message}`);
+    const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
+    if (missing) forgetProject(path);
+    dialog.showErrorBox("Couldn't open the project", missing ? `${basename(path)} isn't there any more. It may have been moved, renamed or deleted.` : `${basename(path)}: ${(err as Error).message}`);
   }
 }
 
@@ -160,6 +164,7 @@ ipcMain.handle('project:open', async (event) => {
   const path = result.filePaths[0];
   if (result.canceled || !path) return null;
   const bytes = new Uint8Array(await readFile(path));
+  rememberProject(path);
   return { path, name: basename(path), bytes };
 });
 
@@ -174,6 +179,7 @@ ipcMain.handle('project:save', async (event, bytes: unknown, existingPath: unkno
     path = result.filePath.endsWith('.nyah') ? result.filePath : `${result.filePath}.nyah`;
   }
   await writeFileAtomic(path, bytes);
+  rememberProject(path);
   return { path, name: basename(path) };
 });
 
@@ -214,7 +220,8 @@ void app.whenReady().then(() => {
   registerExportHandlers();
   registerRecoveryHandlers();
   registerLipSyncHandlers();
-  buildMenu();
+  buildMenu(openPath);
+  onRecentChange(() => buildMenu(openPath));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

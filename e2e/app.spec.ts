@@ -11,7 +11,7 @@ let page: Page;
 const dir = mkdtempSync(join(tmpdir(), 'nyah-'));
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery') } });
+  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery'), NYAH_RECENT_FILE: join(dir, 'recent.json') } });
   page = await app.firstWindow();
   page.on('pageerror', (err) => console.error('Page error:', err.message));
   await page.setViewportSize({ width: 1400, height: 860 });
@@ -210,6 +210,24 @@ test('saves and reopens a project', async () => {
   await menu('open');
   await expect(page.getByText('Opened Drawing.nyah')).toBeVisible();
   expect((await state()).names).toEqual(before);
+
+  // File → Open Recent lists it, and opens it again.
+  const recent = () =>
+    app.evaluate(({ Menu }) => {
+      const file = Menu.getApplicationMenu()!.items.find((i) => i.label === 'File')!.submenu!;
+      return file.items.find((i) => i.label === 'Open Recent')!.submenu!.items.map((i) => i.label);
+    });
+  expect(await recent()).toEqual(['Drawing.nyah', '', 'Clear Menu']);
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('new');
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()!.items.find((i) => i.label === 'File')!.submenu!;
+    file.items.find((i) => i.label === 'Open Recent')!.submenu!.items[0]!.click();
+  });
+  await expect.poll(async () => (await state()).names).toEqual(before);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().file?.name)).toBe('Drawing.nyah');
 });
 
 test('the demo plays in Animate mode, on ones and on twos', async () => {

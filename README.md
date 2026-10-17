@@ -111,6 +111,8 @@ The app has two modes (top bar). **Build** is for drawing and arranging. **Anima
 
 Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Cut / Copy / Paste Cmd+X / C / V, Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
 
+**File → Open Recent** lists the last ten projects you opened or saved.
+
 **Drag and drop:** drag files from Finder or Explorer onto the window. Art (SVG, PNG, JPEG) lands where you drop it on the canvas, sounds go on the Sound row, and a `.nyah` project opens.
 
 **Animating (Animate mode):**
