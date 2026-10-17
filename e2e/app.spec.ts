@@ -1591,6 +1591,25 @@ test('records dialogue from the microphone onto the Sound row', async () => {
   expect(second).toMatchObject({ name: 'Line 2', startFrame: 10 });
 });
 
+test('adds the built-in Pip and scenery to a new project', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await switchMode('Build');
+  await menu('new');
+  await page.getByRole('tab', { name: 'Library' }).click();
+  const pip = page.getByTestId('builtin-item').filter({ hasText: 'Pip' });
+  await expect(pip.locator('img')).toBeVisible(); // its picture
+  await pip.getByRole('button', { name: 'Add' }).click();
+  await pip.getByRole('button', { name: 'Add' }).click();
+  const s = await state();
+  // Two independent Pips, each with a mouth for lip sync, and no animation.
+  expect(s.names.filter((n) => n === 'Mouth')).toHaveLength(2);
+  expect(new Set(await page.evaluate(() => (window as any).__nyah.store.getState().project.drawingSets.map((d: any) => d.id))).size).toBe(2);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.tracks.length)).toBe(0);
+  await page.getByRole('tab', { name: 'Layers' }).click();
+});
+
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
 async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
   const b = await canvasBox();

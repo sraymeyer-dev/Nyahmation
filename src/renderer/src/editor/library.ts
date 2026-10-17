@@ -18,6 +18,7 @@ import {
 } from '../../../io/libraryItem';
 import { getImage } from '../render/images';
 import { renderThumbnail } from '../render/thumbnail';
+import { createDemoProject } from '../demo';
 import { activeLayer, assetMimeType, containerForNewPart } from './actions';
 import { store, type EditorState } from './store';
 
@@ -151,6 +152,46 @@ export async function updateFromLibrary(layerId: string): Promise<void> {
   } catch (err) {
     store.set({ notice: { title: `Couldn't update “${layer.name}”`, lines: [(err as Error).message] } });
   }
+}
+
+// ---- Built in ---------------------------------------------------------------------
+
+/** Characters and scenery that come with Nyahmation (the demo's), ready to add to any project. */
+export interface BuiltinItem {
+  id: string;
+  name: string;
+  kind: 'character' | 'background';
+  description: string;
+}
+
+export const BUILT_IN: readonly BuiltinItem[] = [
+  { id: 'pip', name: 'Pip', kind: 'character', description: 'Rigged, with mouths for lip sync' },
+  { id: 'scenery', name: 'Sunny hills', kind: 'background', description: 'Sun, hills and ground' },
+];
+
+/** A fresh library item for a built-in: the demo's layer, without its animation. */
+function builtinItem(b: BuiltinItem): LibraryItem {
+  return itemFromLayer(createDemoProject(), new Map(), b.id, b.name);
+}
+
+const builtinThumbs = new Map<string, Promise<string | null>>();
+/** A picture of a built-in item for the library list (an object URL), made once. */
+export function builtinThumbnail(b: BuiltinItem): Promise<string | null> {
+  let url = builtinThumbs.get(b.id);
+  if (!url) {
+    url = renderThumbnail(previewProject(builtinItem(b)), () => null).then((png) => (png ? URL.createObjectURL(new Blob([png as BlobPart], { type: 'image/png' })) : null));
+    builtinThumbs.set(b.id, url);
+  }
+  return url;
+}
+
+/** Adds a copy of a built-in item as a new layer above the active one. */
+export function addBuiltin(b: BuiltinItem): void {
+  const s = get();
+  const active = activeLayer(s);
+  const index = active ? s.project.scene.layers.indexOf(active) + 1 : undefined;
+  const result = insertLibraryItem(s.project, s.assets, builtinItem(b), { layerIndex: index });
+  store.commit(result.project, { assets: result.assets, selection: result.partIds, points: [], activeLayerId: result.layerId, status: `Added ${b.name}.` });
 }
 
 export async function removeFromLibrary(entry: LibraryEntry): Promise<void> {

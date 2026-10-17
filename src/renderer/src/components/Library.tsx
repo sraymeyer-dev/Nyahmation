@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LibraryEntry } from '../../../preload/api';
-import { addFromLibrary, libraryCandidate, refreshLibrary, removeFromLibrary, revealLibrary, saveSelectionToLibrary } from '../editor/library';
+import { addBuiltin, addFromLibrary, BUILT_IN, builtinThumbnail, libraryCandidate, refreshLibrary, removeFromLibrary, revealLibrary, saveSelectionToLibrary, type BuiltinItem } from '../editor/library';
 import { store, useEditor } from '../editor/store';
 
 // The Library tab: reusable characters, backgrounds and shapes stored as
@@ -83,6 +83,7 @@ export function Library() {
     return library.items.filter((i) => [i.name, i.folder, ...i.tags].some((t) => t.toLowerCase().includes(q)));
   }, [library.items, query]);
 
+  const builtins = BUILT_IN.filter((b) => !query.trim() || b.name.toLowerCase().includes(query.trim().toLowerCase()));
   const info = candidate ? JSON.parse(candidate) as { label: string; defaultName: string; replaces?: string } : null;
   let lastFolder: string | null = null;
 
@@ -105,7 +106,7 @@ export function Library() {
       )}
       <div className="library-list" data-testid="library-list">
         {library.loaded && library.items.length === 0 && (
-          <p className="empty">The library is empty. Select a character layer (or some parts) and save it here to reuse it in other projects.</p>
+          <p className="empty">Your library is empty. Select a character layer (or some parts) and save it here to reuse it in other projects. To start, add one that comes with Nyahmation, below.</p>
         )}
         {items.map((entry) => {
           const header = entry.folder !== lastFolder && entry.folder ? <div className="folder" key={`f:${entry.folder}`}>{entry.folder}</div> : null;
@@ -130,7 +131,39 @@ export function Library() {
             </div>,
           ];
         })}
+        {builtins.length > 0 && (
+          <>
+            <div className="folder">Built in</div>
+            {builtins.map((b) => (
+              <BuiltinRow key={b.id} item={b} />
+            ))}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** One of the characters or backgrounds that come with Nyahmation. */
+function BuiltinRow({ item }: { item: BuiltinItem }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void builtinThumbnail(item).then((u) => live && setUrl(u));
+    return () => {
+      live = false;
+    };
+  }, [item]);
+  return (
+    <div className="library-item" data-testid="builtin-item" onDoubleClick={() => addBuiltin(item)} title={item.description}>
+      <div className="thumb">{url ? <img src={url} alt="" /> : <span>?</span>}</div>
+      <div className="meta">
+        <strong>{item.name}</strong>
+        <span>
+          {KIND_LABEL[item.kind]} · {item.description}
+        </span>
+      </div>
+      <button onClick={() => addBuiltin(item)}>Add</button>
     </div>
   );
 }
