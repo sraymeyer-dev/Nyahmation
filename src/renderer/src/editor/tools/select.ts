@@ -5,7 +5,7 @@ import { applyToPoint, invert, localMatrix, multiply, type Mat2D } from '../../.
 import { moveChanges } from '../../../../engine/rig';
 import type { Project, Transform, Vec2 } from '../../../../engine/types';
 import { resolvedScene, select } from '../actions';
-import { editAccess } from '../animate';
+import { canPoseOnFrame, editAccess } from '../animate';
 import { boundsIntersect, hitTopPart, resolvedBounds } from '../hitTest';
 import { store, type EditorState } from '../store';
 import { toScreen as stageToScreenPoint } from '../screen';
@@ -116,7 +116,7 @@ export const selectTool: Tool = {
   down(p) {
     const s = store.getState();
     const frame = selectionFrame(s);
-    if (frame) {
+    if (frame && canPoseOnFrame([frame.partId], s)) {
       const access = editAccess(s);
       const local = access.local(frame.partId);
       const loc = locatePart(s.project, frame.partId)!;
@@ -166,6 +166,7 @@ export const selectTool: Tool = {
       }
       if (!s.selection.includes(hit.id)) select([hit.id]);
       const ids = topLevelSelection(s.project, store.getState().selection);
+      if (!canPoseOnFrame(ids, s)) return;
       const access = editAccess(s);
       const first = ids[0] ?? hit.id;
       const joint = applyToPoint(access.world(first), locatePart(s.project, first)!.part.joint.pivot);

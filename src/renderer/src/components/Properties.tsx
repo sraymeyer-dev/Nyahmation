@@ -2,7 +2,7 @@ import { locatePart, restWorldMatrix, updateLayer, updatePart, type PartLocation
 import { channelValueAt, frameAccess, recordValue } from '../../../engine/access';
 import { applyToPoint } from '../../../engine/math';
 import { poseEaseAt } from '../../../engine/retime';
-import { deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
+import { canPoseOnFrame, shownFrame, deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
@@ -258,7 +258,7 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
             <select
               aria-label="Layer stepping"
               value={layerSteppingAt(project, layer, frame)}
-              onChange={(e) => store.commit(recordStepping(project, layer, frame, Number(e.target.value) as Stepping), { status: `${layer.name} is on ${['', 'ones', 'twos', 'threes'][Number(e.target.value)]} from frame ${frame + 1}.` })}
+              onChange={(e) => canPoseOnFrame([layer.root.id]) && store.commit(recordStepping(project, layer, frame, Number(e.target.value) as Stepping), { status: `${layer.name} is on ${['', 'ones', 'twos', 'threes'][Number(e.target.value)]} from frame ${frame + 1}.` })}
             >
               <option value={1}>Ones</option>
               <option value={2}>Twos</option>
@@ -346,18 +346,20 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
   const shown = single ? (animate ? frameAccess(project, frame).local(single.id) : single.rest) ?? single.rest : null;
   const setRest = (patch: Partial<Transform>, key: string) => {
     if (animate && single) {
+      if (!canPoseOnFrame([single.id])) return;
       const s = store.getState();
       store.commit(editAccess(s).write(s.project, new Map([[single.id, patch]])), {}, key);
     } else commitParts(ids, (p) => ({ ...p, rest: { ...p.rest, ...patch } }), key);
   };
   const opacity = animate
     ? (() => {
-        const values = locs.map((l) => channelValueAt(project, l.part.id, 'opacity', frame) ?? 1);
+        const values = locs.map((l) => channelValueAt(project, l.part.id, 'opacity', shownFrame(project, l.part.id, frame)) ?? 1);
         return values.every((v) => v === values[0]) ? values[0]! : null;
       })()
     : same((p) => p.opacity);
   const setOpacity = (v: number) => {
     if (!animate) return commitParts(ids, (p) => ({ ...p, opacity: v }), 'opacity');
+    if (!canPoseOnFrame(ids)) return;
     let next = store.getState().project;
     for (const id of ids) next = recordValue(next, id, 'opacity', frame, v);
     store.commit(next, {}, 'opacity');

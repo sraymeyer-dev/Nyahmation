@@ -1198,11 +1198,12 @@ test('a layer can repeat as a cycle, and change its stepping over time', async (
   expect(b.y).toBeCloseTo(a.y, 1);
   await page.screenshot({ path: 'test-results/cycle.png' });
 
-  // From frame 41, Pip is on twos: a mark on the layer row, and frames 42 and 43 show the same step.
-  await goToFrame(40);
+  // From frame 21, Pip is on twos: a mark on the layer row. Like the rest of
+  // the cycle, it repeats: frames 45 and 46 (repeating 21 and 22) show the same step.
+  await goToFrame(20);
   await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
   await page.getByLabel('Layer stepping').selectOption('2');
-  await expect(page.getByText('Pip is on twos from frame 41.')).toBeVisible();
+  await expect(page.getByText('Pip is on twos from frame 21.')).toBeVisible();
   const steppingPoses = await page.evaluate(() => {
     const s = (window as any).__nyah.store.getState();
     const root = s.project.scene.layers.find((l: any) => l.name === 'Pip').root.id;
@@ -1210,9 +1211,25 @@ test('a layer can repeat as a cycle, and change its stepping over time', async (
   });
   expect(steppingPoses).toEqual([
     [0, 1],
-    [40, 2],
+    [20, 2],
   ]);
-  await expect(page.getByTestId('tl-layer').filter({ hasText: 'Pip' }).locator('.tl-mark[data-frame="40"]')).toHaveCount(1);
+  await expect(page.getByTestId('tl-layer').filter({ hasText: 'Pip' }).locator('.tl-mark[data-frame="20"]')).toHaveCount(1);
+  const c = await hand(44);
+  const d = await hand(45);
+  expect(d.x).toBeCloseTo(c.x, 1);
+  expect(d.y).toBeCloseTo(c.y, 1);
+
+  // Posing on a repeated frame would never show, so it isn't recorded; the status bar says why.
+  await page.evaluate(() => {
+    const nyah = (window as any).__nyah;
+    nyah.store.set({ frame: 40, selection: [nyah.part('Torso').id] });
+  });
+  const tracksBefore = await page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks));
+  await page.getByLabel('Rotation', { exact: true }).fill('20');
+  await page.getByLabel('Rotation', { exact: true }).press('Enter');
+  await expect(page.locator('.topbar .status')).toContainText('repeats frame 17 of Pip');
+  expect(await page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks))).toBe(tracksBefore);
+  await page.getByLabel('Rotation', { exact: true }).press('Escape');
 });
 
 test('shape tools: union, subtract, intersect and exclude', async () => {

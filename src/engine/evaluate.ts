@@ -250,6 +250,20 @@ export function evaluateRestPose(project: Project): ResolvedScene {
   return evaluateScene({ ...project, scene: { ...project.scene, tracks: [] } }, 0);
 }
 
+/**
+ * Cycles (docs/DESIGN.md CY1): after a layer's cycle ends, its animation
+ * repeats from the cycle's first frame. Returns the frame whose animation a
+ * layer shows on `frame`, and `laps`, how many repeats have finished (for
+ * cycles that travel, CY2). Lip sync doesn't cycle (CY3).
+ */
+export function cycleFrameOf(layer: Pick<Layer, 'cycle'>, frame: number): { frame: number; laps: number } {
+  const cycle = layer.cycle;
+  if (!cycle || cycle.to <= cycle.from || frame <= cycle.to) return { frame, laps: 0 };
+  const period = cycle.to - cycle.from;
+  const laps = Math.floor((frame - cycle.from) / period);
+  return { frame: frame - laps * period, laps };
+}
+
 function evaluateLayer(
   layer: Layer,
   frame: number,
@@ -258,16 +272,8 @@ function evaluateLayer(
   tracks: TrackIndex,
   mouthSets: ReadonlySet<string>,
 ): ResolvedPart[] {
-  // Cycles (CY1): after the cycle's last frame, the animation repeats from
-  // its first. `laps` counts the repeats, for cycles that travel (CY2).
-  let cycleFrame = frame;
-  let laps = 0;
+  const { frame: cycleFrame, laps } = cycleFrameOf(layer, frame);
   const cycle = layer.cycle;
-  if (cycle && cycle.to > cycle.from && frame > cycle.to) {
-    const period = cycle.to - cycle.from;
-    laps = Math.floor((frame - cycle.from) / period);
-    cycleFrame = frame - laps * period;
-  }
 
   // Ones, twos or threes, which can change over time on the layer's root (ST7).
   const steppingTrack = tracks.get(layer.root.id)?.get('stepping');

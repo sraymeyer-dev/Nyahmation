@@ -31,6 +31,7 @@ import { packProject, unpackProject } from '../../../io/projectFile';
 import { importSvg } from '../../../io/svg/importSvg';
 import type { OpenedFile } from '../../../preload/api';
 import { createDemoProject } from '../demo';
+import { canPoseOnFrame } from './animate';
 import { store, type EditorState, type ToolId } from './store';
 import { fitView, zoomAt } from './view';
 
@@ -229,6 +230,7 @@ export function arrange(how: ArrangeHow): void {
     return;
   }
   // Animate mode: a draw-order swap from this frame on (docs/DESIGN.md R9).
+  if (!canPoseOnFrame(s.selection)) return;
   const { project, moved } = arrangeOnFrame(s.project, s.frame, s.selection, how);
   if (!moved.length) {
     store.set({ status: s.selection.length ? 'Already there.' : 'Select a part to move in front or behind.' });

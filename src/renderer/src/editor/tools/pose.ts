@@ -4,7 +4,7 @@ import { applyToPoint, invert } from '../../../../engine/math';
 import { dragPoseChanges, ikChainIds, moveChanges, rotateChanges } from '../../../../engine/rig';
 import type { Project, Vec2 } from '../../../../engine/types';
 import { resolvedScene, select } from '../actions';
-import { editAccess } from '../animate';
+import { canPoseOnFrame, editAccess } from '../animate';
 import { hitTopPart } from '../hitTest';
 import { drawSkeleton } from '../overlay';
 import { store } from '../store';
@@ -52,6 +52,7 @@ export const poseTool: Tool = {
       return;
     }
     select([hit.id]);
+    if (!canPoseOnFrame([hit.id], s)) return;
     const loc = locatePart(s.project, hit.id)!;
     const access = editAccess(s);
     store.beginGesture();

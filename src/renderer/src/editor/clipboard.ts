@@ -1,8 +1,10 @@
 import { channelValueAt, recordValue, type PartChannel } from '../../../engine/access';
 import { isLayerRoot, locatePart, topLevelSelection } from '../../../engine/edit';
+import { cycleFrameOf } from '../../../engine/evaluate';
 import type { Layer, Part, Project } from '../../../engine/types';
 import { insertLibraryItem, itemFromLayer, itemFromParts, type LibraryItem } from '../../../io/libraryItem';
 import { activeLayer, containerForNewPart, deleteSelection } from './actions';
+import { canPoseOnFrame } from './animate';
 import { store } from './store';
 
 // Cut, copy and paste (docs/DESIGN.md A13, ED1–ED3).
@@ -144,8 +146,10 @@ function copyPose(): boolean {
   const entries: PoseEntry[] = [];
   roots.forEach((rootId, root) => {
     const loc = locatePart(s.project, rootId)!;
+    // Past a cycle's end, the pose shown is the cycle's (CY1).
+    const frame = cycleFrameOf(loc.layer, s.frame).frame;
     const visit = (p: Part, path: string[]) => {
-      const values = Object.fromEntries(POSE_CHANNELS.map((c) => [c, channelValueAt(s.project, p.id, c, s.frame)!])) as Record<PartChannel, number>;
+      const values = Object.fromEntries(POSE_CHANNELS.map((c) => [c, channelValueAt(s.project, p.id, c, frame)!])) as Record<PartChannel, number>;
       entries.push({ root, path, id: p.id, values });
       for (const c of p.children) visit(c, [...path, c.name]);
     };
@@ -191,6 +195,7 @@ function pastePose(): void {
   }
   const s = get();
   const targets = poseTargets(s.project, clip, s.selection);
+  if (!canPoseOnFrame(targets.values())) return;
   let project = s.project;
   let changed = 0;
   for (const [entry, id] of targets) {

@@ -1,6 +1,7 @@
 import { applyToPoint, invert } from '../../../../engine/math';
 import { activePin, pinPart, unpinPart } from '../../../../engine/pins';
 import { resolvedScene, select } from '../actions';
+import { canPoseOnFrame } from '../animate';
 import { hitTopPart } from '../hitTest';
 import { store } from '../store';
 import { GRAB_PX, pixel } from './common';
@@ -23,6 +24,7 @@ export const pinTool: Tool = {
       return;
     }
     select([hit.id]);
+    if (!canPoseOnFrame([hit.id], s)) return;
     if (activePin(s.project, hit.id, s.frame)) {
       store.commit(unpinPart(s.project, hit.id, s.frame), { status: `Unpinned “${hit.name}” from frame ${s.frame + 1}.` });
       return;

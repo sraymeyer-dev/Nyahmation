@@ -372,7 +372,7 @@ The camera works like a rostrum camera over a cutout table: moving it changes wh
 - **CY1** A layer can **Repeat frames** *from* to *to* (Layer properties): after frame *to*, its animation plays frames *from*…*to* again and again. Frame *to* counts as frame *from* of the next repeat, so pose them the same.
 - **CY2** **Keep moving**: each repeat starts where the last one ended. The layer's root, and anything pinned to the stage, moves on by the distance one cycle covers, so a walk walks, with its feet still planted.
 - **CY3** Lip sync is never repeated: mouth shapes follow the dialogue. Everything else in the layer repeats, including eyes, draw-order swaps, pins and stepping changes.
-- **CY4** The timeline outlines the cycle on the layer's row, shades the frames that repeat it, and dims poses after the cycle's end, which don't play while the cycle is on.
+- **CY4** The timeline outlines the cycle on the layer's row, shades the frames that repeat it, and dims poses after the cycle's end, which don't play while the cycle is on. Posing the layer on a frame that repeats the cycle (with any tool, its Properties, effects, stepping, mirroring or pasting a pose) is refused with a note in the status bar saying which cycle frame is showing, since the pose would never play. Copying a pose there copies the pose that is showing.
 
 ---
 

@@ -1,5 +1,6 @@
 import { frameAccess, restAccess, type TransformAccess } from '../../../engine/access';
 import { locatePart, topLevelSelection, walkParts } from '../../../engine/edit';
+import { cycleFrameOf } from '../../../engine/evaluate';
 import { mirrorPose, type MirrorMode } from '../../../engine/mirror';
 import { deletePoses, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from '../../../engine/retime';
 import { CAMERA_ID, type Ease, type Project, type Track } from '../../../engine/types';
@@ -13,6 +14,33 @@ const get = () => store.getState();
 /** How edits are applied right now: the rest pose (Build) or poses on the current frame (Animate). */
 export function editAccess(s: EditorState, project: Project = s.project): TransformAccess {
   return s.mode === 'animate' ? frameAccess(project, s.frame) : restAccess(project);
+}
+
+/**
+ * Animate mode: whether poses for these parts can be recorded on this frame.
+ * After a layer's cycle ends its earlier frames repeat (docs/DESIGN.md CY1),
+ * so a pose there would never show; the status bar says why instead.
+ */
+export function canPoseOnFrame(ids: Iterable<string>, s: EditorState = get()): boolean {
+  if (s.mode !== 'animate') return true;
+  for (const id of ids) {
+    const layer = id === CAMERA_ID ? undefined : locatePart(s.project, id)?.layer;
+    const cycle = layer?.cycle;
+    if (!layer || !cycle) continue;
+    const shown = cycleFrameOf(layer, s.frame);
+    if (shown.laps === 0) continue;
+    store.set({
+      status: `Frame ${s.frame + 1} repeats frame ${shown.frame + 1} of ${layer.name}'s cycle (frames ${cycle.from + 1}–${cycle.to + 1}), so a pose here wouldn't show. Pose within the cycle, or change it in the layer's Properties.`,
+    });
+    return false;
+  }
+  return true;
+}
+
+/** The frame whose animation a part shows on `frame`: earlier, past its layer's cycle (CY1). */
+export function shownFrame(project: Project, partId: string, frame: number): number {
+  const layer = locatePart(project, partId)?.layer;
+  return layer ? cycleFrameOf(layer, frame).frame : frame;
 }
 
 /** The parts a timeline row stands for. The scene row includes the camera (CAMERA_ID); the Camera row is a part row. */
@@ -135,6 +163,7 @@ export function mirrorSelected(mode: MirrorMode): void {
     store.set({ status: 'Select a character (or some of its parts) to mirror.' });
     return;
   }
+  if (!canPoseOnFrame(roots)) return;
   const r = mirrorPose(s.project, roots, s.frame, mode);
   const what = mode === 'mirror' ? 'Mirrored' : 'Swapped the sides of';
   store.commit(r.project, {

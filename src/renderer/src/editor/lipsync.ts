@@ -15,7 +15,7 @@ import type { DrawingSet, Part, Project } from '../../../engine/types';
 import { readImageInfo } from '../../../io/imageInfo';
 import { importSvg } from '../../../io/svg/importSvg';
 import { select } from './actions';
-import { setFrame } from './animate';
+import { canPoseOnFrame, setFrame } from './animate';
 import { store, type EditorState } from './store';
 
 // Switch layers and lip sync (docs/DESIGN.md §8).
@@ -39,6 +39,8 @@ export function enterDrawing(key: string, advance = true): void {
   const s = get();
   const active = activeSwitch(s);
   if (!active || !active.set.drawings.some((d) => d.key === key)) return;
+  // Mouths follow the dialogue; other switch layers repeat with their layer's cycle.
+  if (active.set.vocabulary !== 'mouth' && !canPoseOnFrame([active.part.id])) return;
   const project = setDrawingAt(s.project, active.part.id, s.frame, key);
   if (project !== s.project) store.commit(project);
   if (advance && active.set.vocabulary === 'mouth') setFrame(s.frame + s.lipSyncStep);
