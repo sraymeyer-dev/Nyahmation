@@ -4,6 +4,38 @@ import { NumberField } from './fields';
 
 // The strip above the canvas: options for the current tool, grid and zoom.
 
+const isMac = navigator.platform.toLowerCase().includes('mac');
+const ALT = isMac ? 'Option' : 'Alt';
+const MOD = isMac ? 'Cmd' : 'Ctrl';
+
+/** A one-line reminder of how the tool works, with its modifier keys. */
+function toolHint(tool: string, mode: 'build' | 'animate'): string | null {
+  switch (tool) {
+    case 'pen':
+      return 'Click for corners, drag for curves. Click the first point to close; Enter to finish.';
+    case 'points':
+      return 'Drag points, handles or curves. Double-click a curve to add a point, a point to make it smooth or sharp.';
+    case 'joint':
+      return 'Drag a joint to move it; the drawing stays put. Double-click a joint to make it a chain root, where bending stops.';
+    case 'rect':
+    case 'ellipse':
+    case 'polygon':
+    case 'star':
+    case 'line':
+      return `Drag to draw. Shift keeps it even; ${ALT} draws from the middle.`;
+    case 'pose':
+      return `Drag a part and its parents bend to follow. Shift: turn it at its joint · ${ALT}: move it · ${MOD}: move the whole character.${mode === 'animate' ? ' Each change is a pose on this frame.' : ''}`;
+    case 'pin':
+      return 'Click a part to pin that spot to the stage from this frame (a planted foot). Click it again on a later frame to let go.';
+    case 'camera':
+      return `Drag to pan · Shift-drag to turn · ${ALT}-drag up or down to zoom. Each change is a camera pose on this frame.`;
+    case 'select':
+      return mode === 'animate' ? 'Moving, turning or resizing a part makes a pose on this frame.' : null;
+    default:
+      return null;
+  }
+}
+
 export function ToolOptions() {
   const tool = useEditor((s) => s.tool);
   const mode = useEditor((s) => s.mode);
@@ -38,8 +70,11 @@ export function ToolOptions() {
           </label>
         </>
       )}
-      {mode === 'build' && tool === 'pen' && <span className="hint">Click for corners, drag for curves. Click the first point to close; Enter to finish.</span>}
-      {mode === 'build' && tool === 'points' && <span className="hint">Drag points, handles or curves. Double-click a curve to add a point, a point to make it smooth or sharp.</span>}
+      {toolHint(tool, mode) && (
+        <span className="hint" data-testid="tool-hint" title={toolHint(tool, mode)!}>
+          {toolHint(tool, mode)}
+        </span>
+      )}
       <div className="spacer" />
       <label className="check">
         <input type="checkbox" checked={grid.show} onChange={toggleGrid} /> Grid

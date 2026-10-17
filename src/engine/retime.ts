@@ -207,3 +207,30 @@ export function stretchPoses(
   }
   return { project: withTracks(project, replaced), moved };
 }
+
+/**
+ * Changes the scene's frame rate keeping timing in seconds: every pose, lip
+ * sync entry, sound start and cycle moves to the frame at the same moment,
+ * so motion keeps its speed and lip sync stays on the dialogue. Going to a
+ * lower rate, poses that land on the same frame keep the later one.
+ */
+export function changeFrameRate(project: Project, fps: number): Project {
+  const old = project.scene.fps;
+  if (!(fps > 0) || fps === old) return project;
+  const k = fps / old;
+  const at = (f: number) => Math.round(f * k);
+  const tracks = project.scene.tracks.map((track) => {
+    const byFrame = new Map<number, Pose<unknown>>();
+    for (const pose of track.poses) byFrame.set(at(pose.frame), { ...pose, frame: at(pose.frame) });
+    return { ...track, poses: [...byFrame.values()].sort((a, b) => a.frame - b.frame) } as Track;
+  });
+  const layers = project.scene.layers.map((layer) => {
+    if (!layer.cycle) return layer;
+    const from = at(layer.cycle.from);
+    return { ...layer, cycle: { ...layer.cycle, from, to: Math.max(from + 1, at(layer.cycle.to)) } };
+  });
+  const audio = project.scene.audio.map((clip) => ({ ...clip, startFrame: at(clip.startFrame) }));
+  const scaled = { ...project, scene: { ...project.scene, fps, layers, audio, durationFrames: Math.max(1, Math.round(project.scene.durationFrames * k)) } };
+  // withTracks also lengthens the scene if rounding put a pose past its end.
+  return withTracks(scaled, new Map(project.scene.tracks.map((t, i) => [t, tracks[i]!])));
+}

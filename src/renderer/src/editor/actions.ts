@@ -21,7 +21,7 @@ import {
 import { booleanShapes, type BooleanOp } from '../../../engine/boolean';
 import { arrangeOnFrame } from '../../../engine/drawOrder';
 import { evaluateRestPose, evaluateScene, type ResolvedScene } from '../../../engine/evaluate';
-import { invert } from '../../../engine/math';
+import { invert, type Mat2D } from '../../../engine/math';
 import { deletePoints, movePoints } from '../../../engine/pathEdit';
 import { createId, createPart, createProject } from '../../../engine/project';
 import type { AudioClip, Layer, LayerKind, Project, Vec2 } from '../../../engine/types';
@@ -31,6 +31,7 @@ import { packProject, unpackProject } from '../../../io/projectFile';
 import { importSvg } from '../../../io/svg/importSvg';
 import type { OpenedFile } from '../../../preload/api';
 import { createDemoProject } from '../demo';
+import { canPoseOnFrame } from './animate';
 import { store, type EditorState, type ToolId } from './store';
 import { fitView, zoomAt } from './view';
 
@@ -210,7 +211,13 @@ export function booleanOp(op: BooleanOp): void {
     return;
   }
   const count = s.selection.filter((id) => locatePart(s.project, id)?.part.kind === 'shape').length;
-  const r = booleanShapes(s.project, s.selection, op);
+  let r: ReturnType<typeof booleanShapes>;
+  try {
+    r = booleanShapes(s.project, s.selection, op);
+  } catch (err) {
+    store.set({ notice: { title: "Couldn't combine the shapes", lines: [(err as Error).message] } });
+    return;
+  }
   if (!r.shapeId && !r.empty) {
     store.set({ status: 'Select two or more shapes (not groups) first.' });
     return;
@@ -229,6 +236,7 @@ export function arrange(how: ArrangeHow): void {
     return;
   }
   // Animate mode: a draw-order swap from this frame on (docs/DESIGN.md R9).
+  if (!canPoseOnFrame(s.selection)) return;
   const { project, moved } = arrangeOnFrame(s.project, s.frame, s.selection, how);
   if (!moved.length) {
     store.set({ status: s.selection.length ? 'Already there.' : 'Select a part to move in front or behind.' });
@@ -275,10 +283,19 @@ function nextLayerName(project: Project, base: string): string {
 
 // ---- View ------------------------------------------------------------------------
 
+/** The view the last Fit produced, so it can be kept fitted while the canvas changes size. */
+let fittedView: EditorState['view'] | null = null;
+
 export function zoomToFit(): void {
   const s = get();
   const { width, height } = s.viewportSize;
-  store.set({ view: fitView(s.project.scene.width, s.project.scene.height, width, height) });
+  fittedView = fitView(s.project.scene.width, s.project.scene.height, width, height);
+  store.set({ view: fittedView });
+}
+
+/** True while the view is still the fitted one: nobody has zoomed or panned since. */
+export function isViewFitted(s: EditorState): boolean {
+  return s.view === fittedView;
 }
 
 export function zoomBy(factor: number): void {
@@ -334,17 +351,22 @@ export async function openProject(): Promise<void> {
   }
 }
 
-/** Opens a project's bytes, e.g. a .nyah file double-clicked in Finder. */
-export function openProjectFile(opened: OpenedFile, confirm = true): void {
+/**
+ * Opens a project's bytes, e.g. a .nyah file double-clicked in Finder. An
+ * empty path opens it as a new, unsaved project. Returns whether it opened.
+ */
+export function openProjectFile(opened: OpenedFile, confirm = true): boolean {
   if (confirm) {
-    if (get().file?.path === opened.path) return; // already open: the window just comes to the front
-    if (!confirmDiscard()) return;
+    if (opened.path && get().file?.path === opened.path) return false; // already open: the window just comes to the front
+    if (!confirmDiscard()) return false;
   }
   try {
     const bundle = unpackProject(opened.bytes);
-    loadProject(bundle.project, bundle.assets, { path: opened.path, name: opened.name });
+    loadProject(bundle.project, bundle.assets, opened.path ? { path: opened.path, name: opened.name } : null);
+    return true;
   } catch (err) {
     store.set({ notice: { title: `Couldn't open ${opened.name}`, lines: [(err as Error).message] } });
+    return false;
   }
 }
 
@@ -364,19 +386,20 @@ export async function save(saveAs = false): Promise<void> {
     const saved = await api.saveProject(packForSave(s), saveAs ? undefined : s.file?.path);
     if (!saved) return;
     // Anything changed while the file was being written stays unsaved.
-    const unchanged = get().project === s.project && get().assets === s.assets;
-    store.set({ file: saved, dirty: !unchanged, status: `Saved ${saved.name}` });
+    store.markSaved(s.project, { file: saved, status: `Saved ${saved.name}` });
   } catch (err) {
     store.set({ notice: { title: "Couldn't save", lines: [(err as Error).message] } });
   }
 }
 
-/** Imports an SVG or PNG/JPEG file into the active layer, centred in the scene. */
+/** File → Import: SVG, PNG or JPEG art into the active layer, centred in the scene, and sounds onto the Sound row. */
 export async function importFile(): Promise<void> {
   const api = window.nyah;
   if (!api) return;
-  const file = await api.importFile();
-  if (file) importBytes(file.name, file.bytes);
+  for (const file of await api.importFile()) {
+    if (isSoundFile(file.name)) await importAudio(file.name, file.bytes);
+    else importBytes(file.name, file.bytes);
+  }
 }
 
 const AUDIO_TYPES: Record<string, string> = {
@@ -390,10 +413,11 @@ const AUDIO_TYPES: Record<string, string> = {
 };
 
 /**
- * Adds a sound file as an audio clip starting on the current frame (Animate
- * mode) or frame 1. The scene gets longer if the sound runs past its end.
+ * Adds a sound file as an audio clip starting on `startFrame`, or the
+ * current frame (Animate mode) or frame 1. The scene gets longer if the
+ * sound runs past its end.
  */
-export async function importAudio(name: string, bytes: Uint8Array): Promise<void> {
+export async function importAudio(name: string, bytes: Uint8Array, startFrame?: number): Promise<void> {
   const ext = name.split('.').pop()!.toLowerCase();
   let duration: number;
   try {
@@ -409,7 +433,7 @@ export async function importAudio(name: string, bytes: Uint8Array): Promise<void
     id: createId(),
     assetId,
     name: name.replace(/\.[^.]+$/, ''),
-    startFrame: s.mode === 'animate' ? s.frame : 0,
+    startFrame: startFrame ?? (s.mode === 'animate' ? s.frame : 0),
     duration,
     volume: 1,
   };
@@ -444,8 +468,15 @@ export function removeClip(id: string): void {
   );
 }
 
-export function importBytes(name: string, bytes: Uint8Array): void {
-  if (AUDIO_TYPES[name.split('.').pop()!.toLowerCase()]) {
+/** Whether a file name is a sound Nyahmation can import. */
+export const isSoundFile = (name: string) => !!AUDIO_TYPES[name.split('.').pop()!.toLowerCase()];
+
+/**
+ * Imports art (SVG, PNG, JPEG) into the active layer with its middle at `at`
+ * (a stage position; the middle of the scene by default), or a sound.
+ */
+export function importBytes(name: string, bytes: Uint8Array, at?: Vec2): void {
+  if (isSoundFile(name)) {
     void importAudio(name, bytes);
     return;
   }
@@ -453,12 +484,12 @@ export function importBytes(name: string, bytes: Uint8Array): void {
   const target = containerForNewPart(s);
   if (!target) return;
   const { project: base, containerId, layerId } = target;
-  const { width: W, height: H } = s.project.scene;
+  const middle = at ?? { x: s.project.scene.width / 2, y: s.project.scene.height / 2 };
   try {
     if (/\.svg$/i.test(name)) {
       const result = importSvg(new TextDecoder().decode(bytes), name);
-      const at: [number, number, number, number, number, number] = [1, 0, 0, 1, (W - result.width) / 2, (H - result.height) / 2];
-      const { project, partId } = insertPartAtScene(base, containerId, result.root, at);
+      const place: Mat2D = [1, 0, 0, 1, middle.x - result.width / 2, middle.y - result.height / 2];
+      const { project, partId } = insertPartAtScene(base, containerId, result.root, place);
       const assets = new Map(s.assets);
       for (const a of result.assets) assets.set(a.id, a.bytes);
       const withAssets: Project = {
@@ -484,8 +515,8 @@ export function importBytes(name: string, bytes: Uint8Array): void {
       joint: { pivot: { x: info.width / 2, y: info.height / 2 } },
       image: { assetId, width: info.width, height: info.height },
     });
-    const at: [number, number, number, number, number, number] = [1, 0, 0, 1, (W - info.width) / 2, (H - info.height) / 2];
-    const { project, partId } = insertPartAtScene(base, containerId, part, at);
+    const place: Mat2D = [1, 0, 0, 1, middle.x - info.width / 2, middle.y - info.height / 2];
+    const { project, partId } = insertPartAtScene(base, containerId, part, place);
     const assets = new Map(s.assets).set(assetId, bytes);
     store.commit(
       { ...project, assets: [...project.assets, { id: assetId, name, mimeType: info.mimeType }] },

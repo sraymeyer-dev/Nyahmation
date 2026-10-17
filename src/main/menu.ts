@@ -1,5 +1,8 @@
-import { BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { existsSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import type { MenuCommand } from '../preload/api';
+import { clearRecentProjects, recentProjects } from './recent';
 
 // The native menu. Items send a command to the focused window; the renderer
 // decides what it means (e.g. Undo inside a text field undoes the typing).
@@ -14,7 +17,64 @@ const item = (label: string, command: MenuCommand, accelerator?: string): MenuIt
   click: () => send(command),
 });
 
-export function buildMenu(): void {
+/** A right-click menu from the page: shows it at the mouse and resolves to the chosen id (null if dismissed). */
+export function showContextMenu(win: BrowserWindow, items: unknown): Promise<string | null> {
+  return new Promise((resolve) => {
+    let chosen: string | null = null;
+    const template: MenuItemConstructorOptions[] = (Array.isArray(items) ? items : []).map((raw) => {
+      const i = raw as { id?: unknown; label?: unknown; checked?: unknown; enabled?: unknown; separator?: unknown };
+      if (i.separator) return { type: 'separator' as const };
+      const id = String(i.id);
+      return {
+        label: String(i.label),
+        type: typeof i.checked === 'boolean' ? ('checkbox' as const) : ('normal' as const),
+        checked: i.checked === true,
+        enabled: i.enabled !== false,
+        click: () => {
+          chosen = id;
+        },
+      };
+    });
+    if (!template.length) return resolve(null);
+    // The click handler runs before the menu reports it has closed.
+    Menu.buildFromTemplate(template).popup({ window: win, callback: () => setTimeout(() => resolve(chosen), 0) });
+  });
+}
+
+/** The illustrated user manual: bundled with the app, or in docs/ when running from the source. */
+function manualPath(): string {
+  const name = 'Nyahmation-User-Manual.pdf';
+  return app.isPackaged ? join(process.resourcesPath, name) : join(app.getAppPath(), 'docs', 'manual', name);
+}
+
+export function openManual(): void {
+  const path = manualPath();
+  if (!existsSync(path)) {
+    dialog.showErrorBox("Couldn't find the user manual", `It should be at ${path}.`);
+    return;
+  }
+  void shell.openPath(path).then((error) => {
+    if (error) dialog.showErrorBox("Couldn't open the user manual", error);
+  });
+}
+
+/** File → Open Recent: each project by name (with its folder when two share a name), then Clear Menu. */
+function recentMenu(openRecent: (path: string) => void): MenuItemConstructorOptions[] {
+  const paths = recentProjects();
+  if (!paths.length) return [{ label: 'No Recent Projects', enabled: false }];
+  const names = paths.map((p) => basename(p));
+  return [
+    ...paths.map((path, i): MenuItemConstructorOptions => ({
+      label: names.indexOf(names[i]!) !== names.lastIndexOf(names[i]!) ? `${names[i]} — ${basename(dirname(path))}` : names[i]!,
+      click: () => openRecent(path),
+    })),
+    { type: 'separator' },
+    { label: 'Clear Menu', click: clearRecentProjects },
+  ];
+}
+
+/** Builds the menu bar; call again when the recent projects change. */
+export function buildMenu(openRecent: (path: string) => void): void {
   const isMac = process.platform === 'darwin';
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
@@ -23,12 +83,14 @@ export function buildMenu(): void {
       submenu: [
         item('New', 'new', 'CmdOrCtrl+N'),
         item('Open…', 'open', 'CmdOrCtrl+O'),
+        { label: 'Open Recent', submenu: recentMenu(openRecent) },
         item('Open Demo Puppet', 'openDemo'),
         { type: 'separator' },
         item('Save', 'save', 'CmdOrCtrl+S'),
         item('Save As…', 'saveAs', 'Shift+CmdOrCtrl+S'),
         { type: 'separator' },
         item('Import Art or Sound…', 'import', 'CmdOrCtrl+I'),
+        item('Record Dialogue…', 'recordDialogue', 'Shift+CmdOrCtrl+R'),
         item('Export Video…', 'export', 'CmdOrCtrl+E'),
         ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'quit' as const }]),
       ],
@@ -75,6 +137,7 @@ export function buildMenu(): void {
         { type: 'separator' },
         item('Mirror Pose (flip left and right)', 'mirrorPose', 'Alt+CmdOrCtrl+M'),
         item('Swap Sides (for walks)', 'swapSides', 'Alt+Shift+CmdOrCtrl+M'),
+        item('Add Blinks…', 'addBlinks', 'Alt+CmdOrCtrl+B'),
         { type: 'separator' },
         item('Mark Branch Joints as Chain Roots', 'autoChainRoots'),
         item('Save Selection to Library…', 'saveToLibrary', 'Shift+CmdOrCtrl+L'),
@@ -91,6 +154,10 @@ export function buildMenu(): void {
         item('Show Grid', 'toggleGrid', "CmdOrCtrl+'"),
         item('Snap to Grid', 'toggleSnap', "Shift+CmdOrCtrl+'"),
         { type: 'separator' },
+        {
+          label: 'Interface Size',
+          submenu: [item('Smaller', 'interfaceSmaller'), item('Normal', 'interfaceNormal'), item('Larger', 'interfaceLarger'), item('Largest', 'interfaceLargest')],
+        },
         item('Measure Preview Speed', 'measurePreview'),
         { type: 'separator' },
         { role: 'toggleDevTools' },
@@ -98,6 +165,13 @@ export function buildMenu(): void {
       ],
     },
     { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Nyahmation User Manual', click: openManual },
+        item('Keyboard Shortcuts', 'shortcuts', 'CmdOrCtrl+/'),
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

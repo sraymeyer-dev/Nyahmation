@@ -1,7 +1,7 @@
 # Nyahmation — Design Document
 
-> **Status:** v1.6. Every phase in the roadmap is built: 0–4 (the MVP), 4.5 (hardening), 5a–5c and 6. Next is a full review and test. See §16.
-> **Last updated:** 2026-09-26
+> **Status:** v1.7. Every phase in the roadmap is built: 0–4 (the MVP), 4.5 (hardening), 5a–5c and 6. The full review is under way; checking on the reference machine is still to do. See §16.
+> **Last updated:** 2026-10-17
 
 ---
 
@@ -196,6 +196,7 @@ This refines §6.2: IK is a posing tool **except** for pinned chains, which are 
 - **L4** Subfolders for organizing, such as `Mouths/Round style` or `Hands/Cartoon`.
 - **L5** Proposed: when you use a library item, the **project gets its own copy**. The project never breaks if the library changes later. An "update from library" command could come later. (Built in phase 6: a character or background added from the library remembers the item and how its part ids map to the project's (also through copies and pastes of the layer). Its Layer properties say where it came from, note when the library has a newer version, and offer **Update from library**: the library's drawings and rig come in, parts that are in both versions keep their ids and so their poses, new parts are added, and parts the new version no longer has are removed with their poses. The layer keeps its name, place in the scene and settings. Saving such a layer to the library offers to save it **as a new version** of its item: it replaces the file and keeps the item's own part ids, so every project using the item can still update.)
 - **L6** (Built in phase 2) Save the selected layer or parts from the Library tab with a name and tags; a thumbnail is drawn automatically. Items appear with their subfolder; the list can be searched; **Add** puts a copy in the scene; × moves the file to the Trash. Subfolders are made in Finder or Explorer (**Folder** opens the library).
+- **L7** (Built in the review) **Built in** items, listed under the library's own: **Pip** (the demo character, rigged, with mouths for lip sync) and **Sunny hills** (the demo scenery), without their animation. **Add** puts a fresh copy in the project, like a library item but with no link to the library (nothing is written to the library folder).
 
 ---
 
@@ -239,7 +240,7 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 - **LS5** Select a phrase and nudge it earlier or later. Lip sync often reads better 1–2 frames ahead of the audio.
 - **LS6** Proposed: **the lane stores sounds, not drawings.** The mouth set maps each sound to a drawing, so you can change a character's mouth art, or switch to a side-view mouth set, without redoing the lip sync.
 - **LS8** (Built in phase 4) While a switch layer is selected in Animate mode, a **palette** above the timeline shows its drawings. Mouth sets: type the letter (A–H, X; these win over tool keys such as H for Hand) and the playhead moves on. Other sets: press 1–9 or click a drawing; the playhead stays. The switch layer's row shows **coloured blocks**, one colour per mouth shape, from each change to the next.
-- **LS9** (Built in phase 4) Blocks are retimed by dragging the marks on the switch layer's own row, like any pose (§9.1c): Shift ripples a phrase, and several selected marks move together (LS5). Dragging block edges directly (LS4) is not built yet.
+- **LS9** (Built in phase 4) Blocks are retimed by dragging the marks on the switch layer's own row, like any pose (§9.1c): Shift ripples a phrase, and several selected marks move together (LS5). Block edges can be dragged too (LS4, phase 5c).
 - **LS7** (Could) **Automatic lip sync**: run Rhubarb Lip Sync (offline, open source) on the audio, optionally with the script, to fill the lane. Then fix it by hand. (Built in phase 6: `npm run setup` downloads Rhubarb Lip Sync 1.14.0 (MIT) for the computer into `vendor/rhubarb` (about 90 MB: the program, its speech models and licence); it's optional, and the packaged app carries it. **Auto lip sync…** on a mouth's lip-sync palette: choose the dialogue clip, optionally type the words (much more accurate), English or another language (by sound). It runs offline in the main process with progress and Cancel; a 15-second line takes about as long. The cues become mouth changes for the length of the sound in one undoable step; lip sync outside the sound is kept, and the mouth returns to what followed the sound. Shapes the mouth set doesn't have use the nearest one it has. On Apple Silicon Macs Rhubarb runs through Rosetta.)
 
 ### 8.4 Sound
@@ -248,6 +249,7 @@ Custom sets are allowed, for example the 10-shape Preston Blair set.
 - **AU3** **Picture follows sound.** While playing, the frame shown is worked out from the sound card's clock, not a separate timer, so picture and sound can't drift apart, even on a slow computer (frames are skipped rather than the sound slowing down). Without sound it falls back to the ordinary clock.
 - **AU4** **Sound while scrubbing** (LS2, a timeline checkbox, on by default): stepping or dragging the playhead plays a short slice (about one and a half frames, with tiny fades so it doesn't click) of the sound under it.
 - **AU5** Sound is decoded without waking the sound card, at 48 kHz, the same rate used for export.
+- **AU6** (Built in the review) **Record dialogue** (Record… on the timeline, or File → Record Dialogue…, Shift+Cmd/Ctrl+R): records from the microphone, showing its level and the time, without the noise suppression and echo cancelling meant for calls. Listen to it, then Keep it or Try again. **Play the scene while I record** plays the picture (and the other sounds) from the playhead, with the window moved aside, to speak in time with animation that's already there; the take still starts at the playhead. The silence before and after the words is trimmed (the start in whole frames, so a take recorded with the scene playing moves by exactly that much and keeps its timing). A kept recording is stored as a one-channel 48 kHz WAV and becomes a clip like an imported sound (AU1), named Line 1, Line 2…, starting at the playhead. When the scene has a mouth, **Keep and lip sync…** keeps the take and opens Auto lip sync (LS7) for that mouth (the selected one, or the first) with the take chosen. On a Mac, the system asks once whether Nyahmation may use the microphone; if not allowed, the dialog says where to turn it on.
 
 ---
 
@@ -272,7 +274,7 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 - **FX1** Each part, group or layer can have an **effects stack**:
   - **Drop shadow**: color, opacity, offset (angle and distance), blur.
   - **Outer glow**: color, opacity, size, strength.
-  - (Could) **Inner shadow** and **inner glow**.
+  - (Could) **Inner shadow** and **inner glow**. (Built: see FX12.)
 - **FX2** **Effects on a group apply to the group as a whole.** A shadow on a character's root casts one shadow of the whole character. If each part cast its own shadow, the shadows would double up and look darker wherever parts overlap, such as the arm over the torso. Technically, the group is drawn to an off-screen image first and the effect is applied to that image.
 - **FX3** Effect settings are **animatable** like any other value, such as a glow that pulses or a shadow that lengthens.
 - **FX4** **Blend modes** per part or layer: Normal, Multiply (for shading), Screen and Add (for light and glows), Overlay.
@@ -285,7 +287,7 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 - **FX9** In Animate mode, changing an effect's number records a pose on that frame (FX3), with the first-pose rule (A2a); effect poses show as marks on the part's timeline row and retime like any other. Colours don't animate. Effect settings step with the character on twos (ST3).
 - **FX10** Blend modes inside a unit mix with the unit's other members only (the unit is isolated); on an ordinary part they mix with everything behind it.
 - **FX11** Each finished unit is kept with a note of everything that decides its pixels (the view, each member's position, artwork, opacity, effects and whether its images are loaded); if the next frame's note is identical, the kept picture is reused. Onion skins skip effects.
-- Not built: inner shadow and inner glow (Could).
+- **FX12** **Inner shadow** (colour, opacity, direction, distance, softness) and **inner glow** (colour, opacity, size) shade the inside of a unit's picture along its edges: the area outside the silhouette is tinted, blurred (and, for the shadow, moved), kept only where it falls on the picture and drawn over it. They come after blur and haze and before the effects drawn behind. Where a unit is cut off by the edge of the canvas, beyond the cut counts as inside, so a cut is never shaded like an edge. The inner shadow is the shadow of a hole's rim, as in a pressed button or a carved letter; the inner glow is light caught along the edge, as in a glass bead or rim light.
 
 ## 9. Animation
 
@@ -350,6 +352,7 @@ Hand-drawn animation often changes the picture only every 2nd frame ("on twos"):
 - **A11** **Camera**: pan, zoom and rotate the view, animated like any part. (Built in phase 5a; see §9.3.)
 - **A12** Multiple characters per scene (the layer stack, §8a).
 - **A13** Copy and paste poses between frames and characters. Mirror a pose (swap left and right). (Mirroring built in phase 6, see §9.4. Copy and paste built in phase 5c: in Animate mode, Copy takes the selected parts' own values on this frame (position, turn, scale, opacity, for the part and everything inside it) and Paste records them as poses on the current frame, only where they differ, with the first-pose rule. They paste onto the same parts, or, with one other part or character selected, onto the parts below it with the same names, so a pose moves between two copies of a rig. Mouth shapes aren't included.)
+- **A14** **Blinks.** Object → **Add Blinks…** (Animate mode, one part selected: the eyes) scatters blinks over the scene or the loop range, every few seconds on average but unevenly (60–140% of the chosen gap, the first not before 30% of it, and about one in seven a double blink), as ordinary poses that can be moved, retimed or deleted. A switch layer shows a chosen drawing (one named closed, shut or blink is picked first) and goes back to what it showed; any other part is squashed to 10% of its height toward its joint. A blink takes about 1/24 s to close, 1/24 s shut and 2/24 s to open, in whole frames at any frame rate. Every blink's frames are poses, so stepping (on twos) still shows it. A blink is skipped where the part already has poses of that kind within a frame of it (the animator's own blinks win), and nothing is added after a layer's cycle ends. The placement is the same every time for the same part.
 
 ### 9.3 The camera (built in phase 5a)
 The camera works like a rostrum camera over a cutout table: moving it changes what the picture shows, never the artwork under it (D-48).
@@ -361,6 +364,7 @@ The camera works like a rostrum camera over a cutout table: moving it changes wh
 - **CAM5** **Fixed to the camera** (a layer option, depth 0): the layer stays put on screen at the same size whatever the camera does: titles, a narrator in the corner.
 - **CAM6** **Follows a part**: a fixed layer can ride along with a part in another layer, such as a speech bubble or name tag on a head. It keeps its own size and angle on screen. Its middle stays where it was drawn relative to the part's joint (in Build mode), and that distance grows or shrinks with how big the part is shown, so a bubble above a head stays above it when the camera zooms in rather than overlapping it. Deleting the part leaves the layer fixed to the camera.
 - **CAM7** The export dialog's enlarged-PNG warning (S6) includes the camera's closest zoom, since zooming in enlarges pictures.
+- **CAM8** **Camera shake** (the camera's Properties): Gentle, Medium or Strong (6, 16 or 36 pixels of the picture) for a length in seconds, from the current frame. A camera pose on every frame jolts the picture in alternating directions with a slight turn, fading away with the square of the time left; the first and last frames are exactly where the camera was, so a held camera holds again. Jolts are measured in the picture, so they look the same when zoomed in. Being ordinary poses, it is undone in one step, and works best while the camera holds still (a moving camera eases into and out of it).
 
 ### 9.4 Mirrored poses (built in phase 6)
 - **MR1** Parts pair up by name: left/right, front/back, or a lone L/R ("Arm L", "leg_R"), keeping capitals. Parts inside a pair's two parts pair up in order when both have the same number of children, so "Hand" inside "Forearm (front)" pairs with "Hand (back)" inside "Forearm (back)".
@@ -372,7 +376,7 @@ The camera works like a rostrum camera over a cutout table: moving it changes wh
 - **CY1** A layer can **Repeat frames** *from* to *to* (Layer properties): after frame *to*, its animation plays frames *from*…*to* again and again. Frame *to* counts as frame *from* of the next repeat, so pose them the same.
 - **CY2** **Keep moving**: each repeat starts where the last one ended. The layer's root, and anything pinned to the stage, moves on by the distance one cycle covers, so a walk walks, with its feet still planted.
 - **CY3** Lip sync is never repeated: mouth shapes follow the dialogue. Everything else in the layer repeats, including eyes, draw-order swaps, pins and stepping changes.
-- **CY4** The timeline outlines the cycle on the layer's row, shades the frames that repeat it, and dims poses after the cycle's end, which don't play while the cycle is on.
+- **CY4** The timeline outlines the cycle on the layer's row, shades the frames that repeat it, and dims poses after the cycle's end, which don't play while the cycle is on. Posing the layer on a frame that repeats the cycle (with any tool, its Properties, effects, stepping, mirroring or pasting a pose) is refused with a note in the status bar saying which cycle frame is showing, since the pose would never play. Copying a pose there copies the pose that is showing.
 
 ---
 
@@ -421,7 +425,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 | **E3** | **MOV (ProRes 4444, with transparency)** | Should | For layering characters over footage in a video editor. (Built in phase 5c: 10-bit 4:4:4 with its see-through channel when "See-through" is ticked, and uncompressed PCM sound.) |
 | **E4** | WebM (VP9), H.265/HEVC | Could | (Built in phase 6: **MP4 (H.265)**, about half the size of H.264, tagged so Apple devices play it; **WebM** with VP9 and Opus, optionally see-through.) |
 
-- **E5** Resolution presets 720p, 1080p, 1440p and 4K; vertical 1080×1920; custom sizes. Frame rates 24 (default), 25, 30 and 60.
+- **E5** Resolution presets 720p, 1080p, 1440p and 4K; vertical 1080×1920; custom sizes. Frame rates 24 (default), 25, 30 and 60. (Built: the scene's **Shape** offers widescreen 1920×1080, tall 1080×1920, square, 4:5, 4:3 and 4K; Width and Height take any size. A new size keeps what was in the middle of the picture in the middle: everything on the stage (each layer, its position poses, pins and camera poses) moves by half the change, so nothing changes relative to anything else. Export offers the scene size and heights from 720 to 2160.)
 - **E6** Export renders **offline, frame by frame, at full quality**, so frames are never dropped however slow the computer is. The output is deterministic.
 - **E7** Export the whole scene or a marked range, with a progress bar and a cancel button.
 - **E8** The audio is combined into the video file (muxed) with correct sync. (Built in phase 4: the app mixes all unmuted clips for the exported frames into one 48 kHz stereo track, clips and volumes applied, and FFmpeg adds it to the MP4 as AAC at 192 kbit/s. A PNG export saves it as `soundtrack.wav` beside the frames. The sound starts exactly at the first exported frame, so a loop-range export stays in sync.)
@@ -458,6 +462,7 @@ Angles are interpolated as plain numbers, so multi-turn spins (0° → 720°) wo
 - **N8** **Reference machine:** 2020 MacBook Air (Intel, 1.2 GHz quad-core i7, integrated Intel Iris Plus graphics, macOS 15 Sequoia). This is the slowest machine Nyahmation targets. Performance goals are measured on it, and every phase is checked on it.
 - **N9** **Preview quality setting** (Full / Half / Quarter resolution). If playback can't keep up on the reference machine, the preview can be drawn at lower resolution to stay smooth. Export always renders at full quality. (Built in phase 4.5: **Preview** in the top bar, remembered per computer. The scene is drawn into a smaller canvas and scaled up; handles and outlines stay sharp. On a Retina screen, Half is still one image pixel per screen point.)
 - **N11** (Built in phase 4.5) **Measuring speed.** While playing, the timeline shows how many frames a second are really shown ("Showing 17 of 24 fps"), in orange when frames are being skipped. **View → Measure Preview Speed** draws frames of the open scene as fast as it can at each quality, reports the time per frame (and how much of it is working out poses), and recommends the sharpest quality that keeps up with a quarter of each frame's time to spare. This is how N2 is checked on the reference machine.
+- **N12** (Built in the review) **View → Interface Size**: Smaller, Normal, Larger or Largest (90–130%), for small screens and young or tired eyes; everything in the window scales, and the scene refits. A per-computer preference, like preview quality.
 - **N10** Minimum OS: whatever the chosen Electron version supports (currently about macOS 12 and Windows 10). macOS 15 on the reference machine is well within that.
 
 ---
@@ -556,7 +561,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **5b** ✅ | Look | **Off-screen group rendering** (FX8). On top of it: drop shadow and outer glow (FX1), effects on a whole group (FX2), animatable effect settings (FX3), blend modes (FX4), layer blur and haze (BG6), clipping masks (D12). Unchanged groups are reused from frame to frame (FX6, FX11). |
 | **5c** ✅ | Craft | Draw-order swaps in Animate mode (R9); easing curve editor (A10); MOV ProRes 4444 export (E3); copy and paste poses (A13, without mirror); **cut, copy and paste parts in Build mode** (D9a); stretching a range of poses (A6); dragging lip-sync block edges (LS4). |
 | **6** ✅ | Stretch | Automatic lip sync with Rhubarb (LS7); mirror poses and swap sides (§9.4); animation cycles (§9.5); boolean operations (D11); stepping that changes over time (ST7); contact shadows (FX5); WebM and H.265 (E4); swatches and eyedropper (D13); update from library (L5). |
-| **Next** | Review | A full review and test of the whole app, on the reference machine too. |
+| **Review** | Review | A full review and test of the whole app, on the reference machine too. Under way: see v1.7 in the revision history. Still to do: the reference machine (N2, N8). |
 
 **Why phase 5 is split, and in this order.** Several phase 5 features rest on the same foundations, so those come first. The camera is what gives parallax, scrolling and haze any meaning. Off-screen group rendering is what whole-group shadows, blend modes, blur and clipping masks all need. Preview quality (built in 4.5) has to exist before blur, the most expensive thing Nyahmation will draw (FX6). Each sub-phase ends usable, and changes the file format at most once.
 
@@ -633,6 +638,8 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-64 | Boolean operations flatten outlines, combine polygons and fit curves back, rather than working on the curves directly (D11) | Proposed |
 | D-65 | Stepping changes over time are a discrete `stepping` channel on the layer's root (ST7) | Proposed |
 | D-66 | Layers from the library keep a link with an id map, so they can be updated keeping their animation (L5) | Proposed |
+| D-67 | Changing the scene's frame rate keeps timing in seconds: poses, lip sync, sound starts, cycles, the length and the loop range move to the frame at the same moment (when two poses meet, the later one is kept). Undo restores the frame numbers | Proposed |
+| D-68 | Poses aren't recorded on frames that repeat a layer's cycle, where they would never play; the status bar explains instead (CY4) | Proposed |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
@@ -665,6 +672,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.7 (2026-10-17):** Review, first part. Fixed: the scene sat partly under the timeline in Animate mode (a fitted view now stays fitted); poses recorded on frames a cycle repeats never showed (now refused with an explanation, D-68, CY4); changing the frame rate left lip sync off the dialogue (D-67); undoing back to the saved state still counted as unsaved; shape tools could fail where outlines nearly touch (D11, retried on a fine grid); a layer saved as a new library version lost track of parts added since, so a later update dropped their animation, and a part moved in from the item's original layer could give two parts one id, making the item unreadable (L5); a project file damaged in one place could open and crash later (validation now checks everything drawing relies on, F2). Added: drag and drop of files onto the window (and the window can no longer be navigated away from), File → Open Recent, Help → Keyboard Shortcuts and User Manual, a hint for every tool, onion skin settings, Show in Finder and time left when exporting, Shift+Enter and pose jumps into groups in Animate mode, timeline zoom with Cmd/Ctrl+scroll, several files at once in File → Import. The timeline no longer rebuilds its rows every frame while playing. Seeded fuzz tests now run random edits (checking the project stays valid, artwork doesn't move when rearranged, retiming keeps every pose, and a layer updates to its own new version unchanged), random SVG files, and randomly damaged project files.
 - **v1.6 (2026-09-27):** Phase 6 built: automatic lip sync with Rhubarb (LS7), mirrored poses and swap sides (§9.4), animation cycles (§9.5), stepping over time (ST7), boolean shape tools (D11), swatches and eyedropper (D13), contact shadows (FX5), WebM and H.265 export (E4), update from library (L5). Added D-61 to D-66. The roadmap is complete; a full review is next.
 - **v1.5 (2026-09-27):** Phase 5c built: draw-order swaps in Animate mode (R9), the easing curve editor (A10), ProRes 4444 MOV export (E3), copy and paste of poses (A13) and of parts in Build mode (D9a), stretching a range (A6), lip-sync block edges (LS4). Added D-58 to D-60.
 - **v1.4 (2026-09-26):** Phase 5b built: effects on parts and layers (§8b: drop shadow, outer glow, blur, haze), applied to groups as a whole off-screen (FX8), animatable (FX9), blend modes (FX4), clipping (D12), reuse of unchanged groups (FX11). Added D-55 to D-57.

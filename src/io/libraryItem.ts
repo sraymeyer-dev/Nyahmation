@@ -156,31 +156,79 @@ export function unpackLibraryItem(bytes: Uint8Array): LibraryItem {
 
 // ---- Updating from the library (L5) -------------------------------------------------
 
+/** Library id → this project's id, for a layer's parts and drawing sets. */
+export interface LibraryIds {
+  parts: Record<string, string>;
+  sets: Record<string, string>;
+}
+
 /**
  * For saving a new version of a library item over the old one: the layer's
  * parts and drawing sets get back the ids they have in the library, so every
  * project linked to the item can still update and keep its animation. Parts
- * and sets added since keep this project's ids.
+ * and sets added since keep this project's ids, unless that id is already
+ * one of the item's (a part moved in from the layer the item was first
+ * saved from), when they get a new one. Returns the ids used, for
+ * linkAfterSaving.
  */
-export function withLibraryIds(item: LibraryItem, source: LayerSource): LibraryItem {
+export function withLibraryIds(item: LibraryItem, source: LayerSource): { item: LibraryItem; ids: LibraryIds } {
+  const ids: LibraryIds = { parts: {}, sets: {} };
   const layer = item.doc.layer;
-  if (!layer) return item;
-  const partBack = new Map(Object.entries(source.parts).map(([lib, here]) => [here, lib]));
-  const setBack = new Map(Object.entries(source.sets).map(([lib, here]) => [here, lib]));
+  if (!layer) return { item, ids };
+  // Each id in this project → its id in the library: the linked ones first, then the rest without clashing.
+  const choose = (hereIds: readonly string[], link: Record<string, string>): Map<string, string> => {
+    const back = new Map(Object.entries(link).map(([lib, here]) => [here, lib]));
+    const out = new Map<string, string>();
+    const taken = new Set<string>();
+    for (const here of hereIds) {
+      const lib = back.get(here);
+      if (lib !== undefined && !taken.has(lib)) {
+        out.set(here, lib);
+        taken.add(lib);
+      }
+    }
+    for (const here of hereIds) {
+      if (out.has(here)) continue;
+      const lib = taken.has(here) ? createId() : here;
+      out.set(here, lib);
+      taken.add(lib);
+    }
+    return out;
+  };
+  const partIds = [...walkParts(layer.root)].map((p) => p.id);
+  const setIds = [...new Set([...item.doc.drawingSets.map((s) => s.id), ...[...walkParts(layer.root)].flatMap((p) => (p.drawingSetId ? [p.drawingSetId] : []))])];
+  const partLib = choose(partIds, source.parts);
+  const setLib = choose(setIds, source.sets);
+  for (const [here, lib] of partLib) ids.parts[lib] = here;
+  for (const [here, lib] of setLib) ids.sets[lib] = here;
   const back = (p: Part): Part => {
-    const next: Part = { ...p, id: partBack.get(p.id) ?? p.id, children: p.children.map(back) };
-    if (p.drawingSetId) next.drawingSetId = setBack.get(p.drawingSetId) ?? p.drawingSetId;
+    const next: Part = { ...p, id: partLib.get(p.id)!, children: p.children.map(back) };
+    if (p.drawingSetId) next.drawingSetId = setLib.get(p.drawingSetId) ?? p.drawingSetId;
     return next;
   };
   const { source: _link, ...plain } = layer;
   return {
-    ...item,
-    doc: {
-      ...item.doc,
-      layer: { ...plain, root: back(layer.root) },
-      drawingSets: item.doc.drawingSets.map((s) => ({ ...s, id: setBack.get(s.id) ?? s.id })),
+    item: {
+      ...item,
+      doc: {
+        ...item.doc,
+        layer: { ...plain, root: back(layer.root) },
+        drawingSets: item.doc.drawingSets.map((s) => ({ ...s, id: setLib.get(s.id) ?? s.id })),
+      },
     },
+    ids,
   };
+}
+
+/**
+ * The link a layer has once it has been saved as a new version of its item
+ * (with withLibraryIds, which gives `ids`): every part and drawing set it
+ * has now is in the library. Without this, parts added since the layer came
+ * from the library would count as new on the next update, and lose their
+ * animation.
+ */
+export function linkAfterSaving(layer: Layer, savedAt: number, ids: LibraryIds): LayerSource | undefined {
+  return layer.source ? { ...layer.source, savedAt, parts: ids.parts, sets: ids.sets } : undefined;
 }
 
 /**

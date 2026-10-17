@@ -88,3 +88,53 @@ export function maxZoomForDepth(project: Project, depth: number): number {
 export function resetCamera(project: Project): Project {
   return { ...project, scene: { ...project.scene, tracks: project.scene.tracks.filter((t) => t.partId !== CAMERA_ID) } };
 }
+
+export interface ShakeOptions {
+  /** How many frames the shake lasts. */
+  frames: number;
+  /** How far the picture jolts at first, in pixels of the picture (at the scene's size). */
+  strength: number;
+  /** Changes the jolts. */
+  seed?: number;
+}
+
+/**
+ * A camera shake from `start` (docs/DESIGN.md CAM8): a jolt every frame, in
+ * alternating directions, dying away to stillness, recorded as ordinary
+ * camera poses on top of wherever the camera is. It begins and ends exactly
+ * where the camera was, so a held camera holds again afterwards.
+ */
+export function shakeCamera(project: Project, start: number, options: ShakeOptions): Project {
+  const end = Math.min(project.scene.durationFrames - 1, start + Math.round(options.frames));
+  if (start < 0 || end - start < 2 || !(options.strength > 0)) return project;
+  let s = (options.seed ?? start * 7919 + 1) >>> 0 || 1;
+  const rand = () => {
+    s ^= s << 13;
+    s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    s >>>= 0;
+    return s / 4294967296;
+  };
+  const base = Array.from({ length: end - start + 1 }, (_, i) => cameraAt(project, start + i));
+  const home = defaultCamera(project.scene);
+  let next = project;
+  const channels = ['x', 'y', 'rotation'] as const;
+  // The first camera pose after frame 0 keeps where the camera started (A2a).
+  for (const channel of channels) {
+    const track = findTrack(next.scene.tracks, CAMERA_ID, channel);
+    if ((!track || track.poses.length === 0) && start > 0) next = setPartPose(next, CAMERA_ID, channel, 0, home[channel]);
+  }
+  const ySign = rand() < 0.5 ? 1 : -1;
+  for (let i = 0; i < base.length; i++) {
+    const cam = base[i]!;
+    // Strongest at once, fading away (and nothing on the first and last frames).
+    const fade = i === 0 || i === base.length - 1 ? 0 : (1 - i / (base.length - 1)) ** 2;
+    const side = i % 2 ? 1 : -1;
+    const jolt = (options.strength * fade) / cam.zoom;
+    next = setPartPose(next, CAMERA_ID, 'x', start + i, cam.x + side * jolt * (0.5 + 0.5 * rand()));
+    next = setPartPose(next, CAMERA_ID, 'y', start + i, cam.y + ySign * -side * jolt * (0.3 + 0.7 * rand()));
+    next = setPartPose(next, CAMERA_ID, 'rotation', start + i, cam.rotation + side * fade * options.strength * 0.04 * rand());
+  }
+  return next;
+}

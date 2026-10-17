@@ -63,12 +63,18 @@ export interface EditorState {
   /** Increments when decoded images become available, so the canvas redraws. */
   imagesVersion: number;
   sidebarTab: 'layers' | 'library';
+  /** The Library tab's Save form is open. */
+  librarySaving: boolean;
   /** Playback loops between these frames (inclusive) when set. */
   loop: { in: number; out: number } | null;
   onion: { enabled: boolean; before: number; after: number; step: number };
   /** Timeline zoom (pixels per frame) and selected pose marks. */
   timeline: { zoom: number; marks: readonly MarkRef[] };
   exportOpen: boolean;
+  /** The Record dialogue window is open (AU6). */
+  recordOpen: boolean;
+  /** Help → Keyboard Shortcuts is showing. */
+  shortcutsOpen: boolean;
   /** Play a snippet of sound when stepping or scrubbing (LS2). */
   audioScrub: boolean;
   /** The audio clip selected on the timeline. */
@@ -88,6 +94,8 @@ export interface EditorState {
   cameraSelected: boolean;
   /** The mouth the Auto lip sync dialog is open for (LS7), or null. */
   lipSyncDialogFor: string | null;
+  /** The part (eyes) the Add Blinks window is open for. */
+  blinkDialogFor: string | null;
   /** Autosaved work from a session that didn't close normally, offered back (F3). */
   recoveries: readonly RecoveryEntry[];
 }
@@ -136,10 +144,13 @@ function initialState(): EditorState {
     status: '',
     imagesVersion: 0,
     sidebarTab: 'layers',
+    librarySaving: false,
     loop: null,
     onion: { enabled: false, before: 2, after: 2, step: 2 },
     timeline: { zoom: 14, marks: [] },
     exportOpen: false,
+    shortcutsOpen: false,
+    recordOpen: false,
     audioScrub: true,
     selectedClip: null,
     lipSyncStep: 1,
@@ -150,6 +161,7 @@ function initialState(): EditorState {
     cameraView: true,
     cameraSelected: false,
     lipSyncDialogFor: null,
+    blinkDialogFor: null,
     recoveries: [],
   };
 }
@@ -163,6 +175,11 @@ export class EditorStore {
   private listeners = new Set<Listener>();
   /** Project at the start of a drag, so the whole drag is one undo step. */
   private gestureBase: Project | null = null;
+  /**
+   * The project as last saved or opened, or null if that isn't anywhere in
+   * memory (restored work). Undoing back to it means nothing is unsaved.
+   */
+  private saved: Project | null = this.state.project;
 
   getState = (): EditorState => this.state;
 
@@ -193,7 +210,7 @@ export class EditorStore {
     const merge = coalesceKey !== undefined && this.lastCoalesce?.key === coalesceKey && now - this.lastCoalesce.time < 1000;
     if (!this.gestureBase && !merge) this.pushHistory(this.state.project);
     this.lastCoalesce = coalesceKey !== undefined ? { key: coalesceKey, time: now } : null;
-    this.set({ project, dirty: true, ...extra });
+    this.set({ project, dirty: project !== this.saved, ...extra });
   }
 
   /** Starts a drag: changes until endGesture() become a single undo step. */
@@ -211,7 +228,7 @@ export class EditorStore {
     this.gestureBase = null;
     if (base && base !== this.state.project) {
       this.pushHistory(base);
-      this.set({ dirty: true });
+      this.set({ dirty: this.state.project !== this.saved });
     }
   }
 
@@ -239,14 +256,14 @@ export class EditorStore {
     const previous = this.past.pop();
     if (!previous) return;
     this.future.push(this.state.project);
-    this.set((s) => ({ project: previous, dirty: true, ...this.pruneSelection(previous, s) }));
+    this.set((s) => ({ project: previous, dirty: previous !== this.saved, ...this.pruneSelection(previous, s) }));
   }
 
   redo(): void {
     const next = this.future.pop();
     if (!next) return;
     this.past.push(this.state.project);
-    this.set((s) => ({ project: next, dirty: true, ...this.pruneSelection(next, s) }));
+    this.set((s) => ({ project: next, dirty: next !== this.saved, ...this.pruneSelection(next, s) }));
   }
 
   private pruneSelection(project: Project, s: EditorState): Partial<EditorState> {
@@ -254,11 +271,24 @@ export class EditorStore {
     return { selection, points: selection.length === s.selection.length ? s.points : [] };
   }
 
+  /** The file now holds `project` (it was just saved); changes made since stay unsaved. */
+  markSaved(project: Project, extra: Partial<EditorState> = {}): void {
+    this.saved = project;
+    this.set({ dirty: this.state.project !== project, ...extra });
+  }
+
+  /** What's open isn't saved anywhere (e.g. restored after a crash), even if every change is undone. */
+  markUnsaved(extra: Partial<EditorState> = {}): void {
+    this.saved = null;
+    this.set({ dirty: true, ...extra });
+  }
+
   /** Loads a different document, clearing history. */
   load(project: Project, assets: ReadonlyMap<string, Uint8Array>, file: EditorState['file']): void {
     this.past = [];
     this.future = [];
     this.gestureBase = null;
+    this.saved = project;
     this.set({
       project,
       assets,

@@ -59,6 +59,56 @@ describe('EditorStore history', () => {
   });
 });
 
+describe('EditorStore unsaved changes', () => {
+  it('undoing back to the opened project leaves nothing unsaved; redo makes it unsaved again', () => {
+    const store = new EditorStore();
+    store.load(p(5), new Map(), null);
+    store.commit(p(6));
+    store.commit(p(7));
+    expect(store.getState().dirty).toBe(true);
+    store.undo();
+    store.undo();
+    expect(store.getState().dirty).toBe(false);
+    store.redo();
+    expect(store.getState().dirty).toBe(true);
+  });
+
+  it('after saving, the saved state is the clean one', () => {
+    const store = new EditorStore();
+    store.commit(p(1));
+    store.markSaved(store.getState().project);
+    expect(store.getState().dirty).toBe(false);
+    store.beginGesture();
+    store.preview(p(2));
+    store.endGesture();
+    expect(store.getState().dirty).toBe(true);
+    store.undo();
+    expect(store.getState().dirty).toBe(false);
+    store.undo();
+    expect(store.getState().dirty).toBe(true);
+  });
+
+  it('a save that finishes after more changes leaves them unsaved', () => {
+    const store = new EditorStore();
+    const written = p(1);
+    store.commit(written);
+    store.commit(p(2));
+    store.markSaved(written);
+    expect(store.getState().dirty).toBe(true);
+    store.undo();
+    expect(store.getState().dirty).toBe(false);
+  });
+
+  it('restored work stays unsaved even when every change is undone', () => {
+    const store = new EditorStore();
+    store.load(p(5), new Map(), null);
+    store.markUnsaved();
+    store.commit(p(6));
+    store.undo();
+    expect(store.getState().dirty).toBe(true);
+  });
+});
+
 describe('EditorStore loading', () => {
   it('forgets the old project’s loop range and selected marks', () => {
     const store = new EditorStore();

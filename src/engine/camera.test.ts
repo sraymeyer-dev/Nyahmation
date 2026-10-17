@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cameraAt, cameraMatrix, defaultCamera, maxZoomForDepth, recordCamera } from './camera';
+import { cameraAt, cameraMatrix, defaultCamera, maxZoomForDepth, recordCamera, shakeCamera } from './camera';
 import { removeParts } from './edit';
 import { evaluateScene, type ResolvedScene } from './evaluate';
 import { applyToPoint, multiply } from './math';
@@ -192,5 +192,47 @@ describe('scrolling and repeating layers', () => {
     const r = evaluateScene(project, 5);
     const copies = r.repeats.get('other')!;
     expect(copies.length).toBeGreaterThanOrEqual(W / 40 - 1);
+  });
+});
+
+describe('camera shake', () => {
+  it('jolts the picture back and forth, dying away, and ends where the camera was', () => {
+    let { project } = scene();
+    project = recordCamera(project, 30, { x: 600 });
+    const before = Array.from({ length: 60 }, (_, f) => cameraAt(project, f));
+    const shaken = shakeCamera(project, 40, { frames: 12, strength: 20 });
+    const after = Array.from({ length: 60 }, (_, f) => cameraAt(shaken, f));
+    // Untouched before the shake (the move to 600 still arrives on frame 30) and after it.
+    for (const f of [0, 15, 30, 40, 52, 59]) {
+      expect(after[f]!.x).toBeCloseTo(before[f]!.x);
+      expect(after[f]!.y).toBeCloseTo(before[f]!.y);
+      expect(after[f]!.rotation).toBeCloseTo(before[f]!.rotation);
+    }
+    const offsets = after.slice(41, 52).map((c, i) => c.x - before[41 + i]!.x);
+    // Alternating directions, strongest first, within the strength.
+    for (let i = 1; i < offsets.length; i++) expect(Math.sign(offsets[i]!)).toBe(-Math.sign(offsets[i - 1]!));
+    expect(Math.abs(offsets[0]!)).toBeGreaterThan(Math.abs(offsets[offsets.length - 1]!));
+    for (const o of offsets) expect(Math.abs(o)).toBeLessThanOrEqual(20);
+  });
+
+  it('shakes the same number of picture pixels when zoomed in', () => {
+    let { project } = scene();
+    project = recordCamera(project, 0, { zoom: 2 });
+    const shaken = shakeCamera(project, 10, { frames: 10, strength: 20, seed: 3 });
+    const plain = shakeCamera(scene().project, 10, { frames: 10, strength: 20, seed: 3 });
+    expect(cameraAt(shaken, 11).x - 500).toBeCloseTo((cameraAt(plain, 11).x - 500) / 2);
+  });
+
+  it('keeps the camera still before a shake later in the scene', () => {
+    const { project } = scene();
+    const shaken = shakeCamera(project, 50, { frames: 8, strength: 10 });
+    expect(cameraAt(shaken, 0)).toEqual(defaultCamera(project.scene));
+    expect(cameraAt(shaken, 49)).toEqual(defaultCamera(project.scene));
+    expect(cameraAt(shaken, 51).x).not.toBeCloseTo(500);
+  });
+
+  it('does nothing past the end of the scene', () => {
+    const { project } = scene();
+    expect(shakeCamera(project, project.scene.durationFrames - 1, { frames: 10, strength: 10 })).toBe(project);
   });
 });

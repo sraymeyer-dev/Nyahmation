@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -11,7 +11,8 @@ let page: Page;
 const dir = mkdtempSync(join(tmpdir(), 'nyah-'));
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery') } });
+  // A pretend microphone (a beep), allowed without asking, for recording dialogue.
+  app = await electron.launch({ args: ['.', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery'), NYAH_RECENT_FILE: join(dir, 'recent.json') } });
   page = await app.firstWindow();
   page.on('pageerror', (err) => console.error('Page error:', err.message));
   await page.setViewportSize({ width: 1400, height: 860 });
@@ -61,6 +62,15 @@ async function menu(command: string) {
   await page.waitForFunction((n) => ((window as any).__nyahMenuCount ?? 0) > n, before);
 }
 
+/**
+ * Switches mode and waits until the canvas has its new size: the timeline
+ * opens or closes, and a fitted view refits, before the next paint.
+ */
+async function switchMode(mode: 'Build' | 'Animate') {
+  await page.getByRole('tab', { name: mode }).click();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
 /** Canvas-relative mouse helpers. */
 async function canvasBox() {
   return (await page.getByTestId('stage').boundingBox())!;
@@ -83,6 +93,14 @@ test('starts with an empty scene and one background layer', async () => {
   expect(await page.evaluate(() => typeof window.nyah?.importFile)).toBe('function');
   await expect(page.getByTestId('layer-row')).toHaveCount(1);
   await expect(page.getByTestId('layer-row')).toContainText('Background');
+  // A first step for the empty scene, which goes once something is drawn.
+  await expect(page.getByTestId('empty-scene')).toContainText('Open the demo puppet');
+  // It also offers the video's shape, easiest to choose before drawing.
+  const size = () => page.evaluate(() => (({ width, height }) => `${width}×${height}`)((window as any).__nyah.store.getState().project.scene));
+  await page.getByLabel('Shape of the video').selectOption({ label: 'Tall (Shorts, Reels, TikTok)' });
+  expect(await size()).toBe('1080×1920');
+  await page.getByLabel('Shape of the video').selectOption({ label: 'Widescreen (YouTube, TV)' });
+  expect(await size()).toBe('1920×1080');
 });
 
 test('draws a rectangle, then undo and redo it', async () => {
@@ -90,6 +108,7 @@ test('draws a rectangle, then undo and redo it', async () => {
   await drag([300, 200], [460, 320]);
   let s = await state();
   expect(s.names).toContain('Rectangle 1');
+  await expect(page.getByTestId('empty-scene')).toHaveCount(0);
   expect(s.selection).toHaveLength(1);
   await expect(page.getByTestId('properties')).toContainText('Fill & stroke');
 
@@ -172,15 +191,17 @@ test('imports an SVG with its layers, and reports what it skipped', async () => 
   await page.screenshot({ path: 'test-results/editor.png' });
 });
 
-test('imports a PNG as an image part', async () => {
+test('imports PNGs as image parts, several at once', async () => {
   const pngPath = join(dir, 'dot.png');
+  const pngPath2 = join(dir, 'spot.png');
   // A 1×1 PNG.
   writeFileSync(pngPath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
-  await app.evaluate(({ dialog }, p) => {
-    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [p] })) as typeof dialog.showOpenDialog;
-  }, pngPath);
+  copyFileSync(pngPath, pngPath2);
+  await app.evaluate(({ dialog }, paths) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: paths })) as typeof dialog.showOpenDialog;
+  }, [pngPath2, pngPath]);
   await menu('import');
-  await expect.poll(async () => (await state()).names).toContain('dot');
+  await expect.poll(async () => (await state()).names).toEqual(expect.arrayContaining(['dot', 'spot']));
   await expect(page.getByTestId('properties')).toContainText('1 × 1 pixels');
 });
 
@@ -197,6 +218,19 @@ test('will not draw on a locked layer', async () => {
   await layer.getByRole('button', { name: 'Unlock' }).click();
 });
 
+test('a save that fails says why, in plain words', async () => {
+  const path = join(dir, 'no such folder', 'Drawing.nyah');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath })) as typeof dialog.showSaveDialog;
+  }, path);
+  await menu('saveAs');
+  const notice = page.getByTestId('notice');
+  await expect(notice).toContainText("Couldn't save");
+  await expect(notice).toContainText("That file or folder isn't there");
+  await expect(notice).not.toContainText('invoking remote method');
+  await notice.getByRole('button', { name: 'Dismiss' }).click();
+});
+
 test('saves and reopens a project', async () => {
   const path = join(dir, 'Drawing.nyah');
   await app.evaluate(({ dialog }, filePath) => {
@@ -210,6 +244,24 @@ test('saves and reopens a project', async () => {
   await menu('open');
   await expect(page.getByText('Opened Drawing.nyah')).toBeVisible();
   expect((await state()).names).toEqual(before);
+
+  // File → Open Recent lists it, and opens it again.
+  const recent = () =>
+    app.evaluate(({ Menu }) => {
+      const file = Menu.getApplicationMenu()!.items.find((i) => i.label === 'File')!.submenu!;
+      return file.items.find((i) => i.label === 'Open Recent')!.submenu!.items.map((i) => i.label);
+    });
+  expect(await recent()).toEqual(['Drawing.nyah', '', 'Clear Menu']);
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('new');
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()!.items.find((i) => i.label === 'File')!.submenu!;
+    file.items.find((i) => i.label === 'Open Recent')!.submenu!.items[0]!.click();
+  });
+  await expect.poll(async () => (await state()).names).toEqual(before);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().file?.name)).toBe('Drawing.nyah');
 });
 
 test('the demo plays in Animate mode, on ones and on twos', async () => {
@@ -218,7 +270,7 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   });
   await menu('openDemo');
   await expect(page.getByTestId('layer-row')).toHaveCount(2);
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await expect(page.getByTestId('frame')).toHaveText('1 / 72');
   const signature = () =>
     page.evaluate(() => {
@@ -237,10 +289,10 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   await page.screenshot({ path: 'test-results/animate.png' });
 
   // On twos: frame 22 is a pose, 23 repeats it, 24 moves on.
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('Escape');
   await page.getByLabel('Animate on').selectOption('2');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.keyboard.press('Home');
   for (let i = 0; i < 22; i++) await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('frame')).toHaveText('23 / 72');
@@ -266,7 +318,7 @@ const debug = <T,>(fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as any).__nyah[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
 
 test('the Pose tool bends the arm to follow a dragged hand', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('Escape');
   await page.keyboard.press('k');
   const torsoBefore = await debug<{ rest: object }>('part', 'Torso');
@@ -323,9 +375,8 @@ test('saves a character to the library and adds a copy', async () => {
   });
   await page.getByRole('button', { name: 'Update from library' }).click();
   await expect(page.getByText(/Updated “Pip the puppet” from the library: \d+ parts kept their animation, 0 new, 0 removed\./)).toBeVisible();
-  // Saving it again offers to replace the item as a new version, rather than adding a copy.
-  await page.getByRole('tab', { name: 'Library' }).click();
-  await page.getByRole('button', { name: 'Save to library…' }).click();
+  // Saving it again (here from the Object menu) offers to replace the item as a new version, rather than adding a copy.
+  await menu('saveToLibrary');
   await expect(page.getByLabel('Replace the library version')).toBeChecked();
   await expect(page.getByLabel('Library item name')).toHaveValue('Pip the puppet');
   await page.locator('.save-form').getByRole('button', { name: 'Save' }).click();
@@ -377,7 +428,7 @@ test('posing on a frame in Animate mode records poses and shows marks', async ()
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.keyboard.press('k');
   await goToFrame(33);
   // Drag the hand as drawn on this frame.
@@ -554,6 +605,21 @@ test('auto lip sync fills in mouth shapes from the dialogue', async () => {
   await menu('undo');
   expect(await drawingPoses('Mouth')).not.toEqual(poses);
   await menu('redo');
+
+  // If Rhubarb can't start at all, the dialog says why (rather than the app crashing).
+  const fake = join(dir, 'fake-rhubarb');
+  mkdirSync(fake, { recursive: true });
+  writeFileSync(join(fake, process.platform === 'win32' ? 'rhubarb.exe' : 'rhubarb'), 'not a program', { mode: 0o644 });
+  await app.evaluate((_electron, path) => {
+    process.env.NYAH_RHUBARB_DIR = path;
+  }, fake);
+  await page.getByRole('button', { name: 'Auto lip sync…' }).click();
+  await dialogBox.getByRole('button', { name: 'Start' }).click();
+  await expect(dialogBox).toContainText(/Lip sync failed: Rhubarb Lip Sync couldn't start/);
+  await app.evaluate(() => {
+    delete process.env.NYAH_RHUBARB_DIR;
+  });
+  await dialogBox.getByRole('button', { name: 'Close' }).click();
   await page.keyboard.press('Escape');
 });
 
@@ -569,6 +635,10 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
     dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
   }, [pngDir, mp4]);
 
+  // Frames left by an earlier, longer export are cleared; other files are left alone.
+  mkdirSync(pngDir, { recursive: true });
+  writeFileSync(join(pngDir, 'frame_00099.png'), 'old');
+  writeFileSync(join(pngDir, 'notes.txt'), 'mine');
   await menu('export');
   const dialogBox = page.getByRole('dialog', { name: 'Export video' });
   await dialogBox.getByLabel('Export format').selectOption('png');
@@ -577,6 +647,8 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   await dialogBox.getByRole('button', { name: 'Export…' }).click();
   await expect(dialogBox.getByTestId('export-done')).toBeVisible({ timeout: 30_000 });
   expect(readdirSync(pngDir).filter((f) => f.endsWith('.png'))).toHaveLength(12);
+  expect(existsSync(join(pngDir, 'frame_00099.png'))).toBe(false);
+  expect(existsSync(join(pngDir, 'notes.txt'))).toBe(true);
 
   await dialogBox.getByLabel('Export format').selectOption('mp4');
   await dialogBox.getByRole('button', { name: 'Export again…' }).click();
@@ -585,6 +657,13 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   // The video has the sound in it, and the PNG folder has it as a WAV.
   expect(await streams(mp4)).toEqual(expect.arrayContaining(['Video: h264', 'Audio: aac']));
   expect(existsSync(join(pngDir, 'soundtrack.wav'))).toBe(true);
+  // Show in Finder / Explorer.
+  await app.evaluate(({ shell }) => {
+    (globalThis as any).revealed = [];
+    shell.showItemInFolder = (p: string) => (globalThis as any).revealed.push(p);
+  });
+  await dialogBox.getByRole('button', { name: /Show in (Finder|folder)/ }).click();
+  await expect.poll(() => app.evaluate(() => (globalThis as any).revealed)).toEqual([mp4]);
 
   // MOV with ProRes 4444, see-through, for video editors (E3).
   const mov = join(dir, 'clip.mov');
@@ -619,6 +698,19 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   }
   // The WebM keeps its see-through channel.
   expect(spawnSync(ffmpeg, ['-hide_banner', '-c:v', 'libvpx-vp9', '-i', webm], { encoding: 'utf8' }).stderr).toContain('yuva420p');
+
+  // If the encoder can't start at all, the export says why (rather than the app crashing or hanging).
+  const broken = join(dir, 'not-a-program');
+  writeFileSync(broken, 'not a program', { mode: 0o644 });
+  await app.evaluate((_electron, path) => {
+    process.env.NYAH_FFMPEG = path;
+  }, broken);
+  await dialogBox.getByLabel('Export format').selectOption('mp4');
+  await dialogBox.getByRole('button', { name: 'Export again…' }).click();
+  await expect(dialogBox.getByText(/Export failed: .*couldn't start/)).toBeVisible({ timeout: 30_000 });
+  await app.evaluate(() => {
+    delete process.env.NYAH_FFMPEG;
+  });
   await dialogBox.getByRole('button', { name: 'Close' }).click();
 });
 
@@ -630,7 +722,7 @@ async function streams(file: string): Promise<string[]> {
 }
 
 test('makes a mouth switch layer from shapes named after mouth shapes', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate(() => {
     window.confirm = () => true;
   });
@@ -677,7 +769,7 @@ test('the camera zooms and pans on the timeline, and only changes what you see',
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const partPoses = () => page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks.filter((t: any) => t.partId !== 'camera')));
   const posesBefore = await partPoses();
   const headBefore = await debug<Pt>('framePartScreen', 'Head');
@@ -718,7 +810,7 @@ test('the camera zooms and pans on the timeline, and only changes what you see',
 
 test('a layer fixed to the camera follows a part, keeping its size', async () => {
   // Draw a name tag above Pip's head on a new layer (Build mode).
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await menu('newBackgroundLayer');
   await page.keyboard.press('m');
   const head = (await debug<Pt>('partScreen', 'Head'))!;
@@ -734,7 +826,7 @@ test('a layer fixed to the camera follows a part, keeping its size', async () =>
   await page.getByLabel('Follows part').selectOption({ label: 'Head' });
 
   // Animate: the camera zooms (from the previous test) and Pip walks right.
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const tagAt = (f: number) =>
     page.evaluate(([n, frame]) => {
       const nyah = (window as any).__nyah;
@@ -756,7 +848,7 @@ test('a layer fixed to the camera follows a part, keeping its size', async () =>
 
 test('a sky, a gradient fill, parallax depth and a scrolling layer', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.getByRole('tab', { name: 'Layers' }).click();
   const pixel = (at: Pt) =>
     page.evaluate((p) => {
@@ -795,7 +887,7 @@ test('a sky, a gradient fill, parallax depth and a scrolling layer', async () =>
   await speed.press('Enter');
   await page.getByLabel('Repeat sideways').check();
 
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const sunAt = (f: number) =>
     page.evaluate((frame) => {
       const nyah = (window as any).__nyah;
@@ -888,7 +980,7 @@ test('a drop shadow on a group is one shadow of the whole group', async () => {
   await page.evaluate(() => {
     window.confirm = () => true;
   });
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
   await page.getByRole('tab', { name: 'Layers' }).click();
   expect(near(await stagePixel(420, 250), [255, 255, 255])).toBe(true);
@@ -912,6 +1004,53 @@ test('a drop shadow on a group is one shadow of the whole group', async () => {
   // One shadow of the whole group: no darker patch where the squares overlap.
   expect(near(overlap, single, 6)).toBe(true);
   await page.screenshot({ path: 'test-results/effects-shadow.png' });
+});
+
+test('inner shadow and inner glow stay inside the artwork', async () => {
+  await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  // The red square (200–300) shows from 200 to 250; the green one covers the rest.
+  await outlineRow('Red').click();
+  await page.getByLabel('Add effect').selectOption('innerShadow');
+  for (const [label, value] of [
+    ['Inner shadow direction', '0'], // falling to the right: the shade lies inside the left edge
+    ['Inner shadow distance', '15'],
+    ['Inner shadow softness', '0'],
+    ['Inner shadow opacity', '50'],
+  ]) {
+    await page.getByLabel(label).fill(value);
+    await page.getByLabel(label).press('Enter');
+  }
+  expect(near(await stagePixel(206, 250), [128, 0, 0], 20)).toBe(true); // shaded, inside the left edge
+  expect(near(await stagePixel(235, 250), [255, 0, 0])).toBe(true); // further in: untouched
+  expect(near(await stagePixel(190, 250), [255, 255, 255])).toBe(true); // nothing outside
+  await page.getByRole('button', { name: 'Remove Inner shadow' }).click();
+
+  await page.getByLabel('Add effect').selectOption('innerGlow');
+  await page.getByLabel('Inner glow colour').fill('#ffffff');
+  await page.getByLabel('Inner glow size').fill('20');
+  await page.getByLabel('Inner glow size').press('Enter');
+  const edge = await stagePixel(202, 250);
+  expect(edge[1]!).toBeGreaterThan(60); // lighter just inside the edge
+  expect(near(await stagePixel(235, 250), [255, 0, 0], 20)).toBe(true);
+  expect(near(await stagePixel(190, 250), [255, 255, 255])).toBe(true);
+  await page.screenshot({ path: 'test-results/inner-effects.png' });
+
+  // Half off the canvas, the edge of the canvas isn't an edge of the square: no glow along it.
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
+  await page.evaluate((z) => {
+    const s = (window as any).__nyah.store;
+    s.set({ view: { ...s.getState().view, panX: -230 * z } });
+  }, zoom);
+  await page.waitForTimeout(100);
+  const atCut = await page.evaluate(() => {
+    const p = (window as any).__nyah.stageScreen({ x: 230, y: 250 });
+    const c = document.querySelector<HTMLCanvasElement>('[data-testid="stage"]')!;
+    const dpr = window.devicePixelRatio || 1;
+    return [...c.getContext('2d')!.getImageData(Math.round((p.x + 1) * dpr), Math.round(p.y * dpr), 1, 1).data.slice(0, 3)];
+  });
+  expect(near(atCut, [255, 0, 0], 20)).toBe(true);
+  await menu('zoomFit');
 });
 
 test('blend modes, clipping, haze and an animated glow', async () => {
@@ -940,7 +1079,7 @@ test('blend modes, clipping, haze and an animated glow', async () => {
   // Animate a glow on the eye: bigger on frame 10.
   await outlineRow('Eye').click();
   await page.getByLabel('Add effect').selectOption('glow');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(10);
   await page.getByLabel('Outer glow size').fill('60');
   await page.getByLabel('Outer glow size').press('Enter');
@@ -981,7 +1120,7 @@ test('copies, cuts and pastes parts in Build mode', async () => {
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.getByRole('tab', { name: 'Layers' }).click();
   const count = (name: string) => state().then((s) => s.names.filter((n) => n === name).length);
   const selectedAt = () => page.evaluate(() => (window as any).__nyah.selectedScreen());
@@ -1040,11 +1179,11 @@ test('copies, cuts and pastes parts in Build mode', async () => {
 
 test('copies a pose onto another frame and onto a copy of the character', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
   await menu('copy');
   await menu('paste'); // a second Pip, with no animation
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const ids = await page.evaluate(() => {
     const layers = (window as any).__nyah.store.getState().project.scene.layers.filter((l: any) => l.name === 'Pip');
     const forearm = (root: any) => {
@@ -1076,7 +1215,7 @@ test('copies a pose onto another frame and onto a copy of the character', async 
 
 test('in Animate mode, sending a part back is a draw-order swap from that frame', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(30);
   await page.evaluate(() => {
     const nyah = (window as any).__nyah;
@@ -1090,13 +1229,13 @@ test('in Animate mode, sending a part back is a draw-order swap from that frame'
   expect(await order(29)).toEqual(before);
   await expect(row('Upper arm (front)').locator('.tl-mark[data-frame="30"]')).toHaveCount(1);
   // The rest pose isn't touched.
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   expect((await order(0))[0]).not.toBe('Upper arm (front)');
 });
 
 test('a custom easing curve, and stretching a range of poses', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   // Select Torso's first pose mark and give it a custom curve.
   await row('Torso').locator('.tl-mark').first().click();
   await page.getByLabel('Pose easing').selectOption('custom');
@@ -1148,7 +1287,7 @@ test('mirrors a pose, and swaps sides for a walk', async () => {
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(20);
   const ids = await page.evaluate(() => {
     const nyah = (window as any).__nyah;
@@ -1175,7 +1314,7 @@ test('mirrors a pose, and swaps sides for a walk', async () => {
 
 test('a layer can repeat as a cycle, and change its stepping over time', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
   await page.getByLabel('Repeat as a cycle').check();
@@ -1198,11 +1337,12 @@ test('a layer can repeat as a cycle, and change its stepping over time', async (
   expect(b.y).toBeCloseTo(a.y, 1);
   await page.screenshot({ path: 'test-results/cycle.png' });
 
-  // From frame 41, Pip is on twos: a mark on the layer row, and frames 42 and 43 show the same step.
-  await goToFrame(40);
+  // From frame 21, Pip is on twos: a mark on the layer row. Like the rest of
+  // the cycle, it repeats: frames 45 and 46 (repeating 21 and 22) show the same step.
+  await goToFrame(20);
   await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
   await page.getByLabel('Layer stepping').selectOption('2');
-  await expect(page.getByText('Pip is on twos from frame 41.')).toBeVisible();
+  await expect(page.getByText('Pip is on twos from frame 21.')).toBeVisible();
   const steppingPoses = await page.evaluate(() => {
     const s = (window as any).__nyah.store.getState();
     const root = s.project.scene.layers.find((l: any) => l.name === 'Pip').root.id;
@@ -1210,13 +1350,29 @@ test('a layer can repeat as a cycle, and change its stepping over time', async (
   });
   expect(steppingPoses).toEqual([
     [0, 1],
-    [40, 2],
+    [20, 2],
   ]);
-  await expect(page.getByTestId('tl-layer').filter({ hasText: 'Pip' }).locator('.tl-mark[data-frame="40"]')).toHaveCount(1);
+  await expect(page.getByTestId('tl-layer').filter({ hasText: 'Pip' }).locator('.tl-mark[data-frame="20"]')).toHaveCount(1);
+  const c = await hand(44);
+  const d = await hand(45);
+  expect(d.x).toBeCloseTo(c.x, 1);
+  expect(d.y).toBeCloseTo(c.y, 1);
+
+  // Posing on a repeated frame would never show, so it isn't recorded; the status bar says why.
+  await page.evaluate(() => {
+    const nyah = (window as any).__nyah;
+    nyah.store.set({ frame: 40, selection: [nyah.part('Torso').id] });
+  });
+  const tracksBefore = await page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks));
+  await page.getByLabel('Rotation', { exact: true }).fill('20');
+  await page.getByLabel('Rotation', { exact: true }).press('Enter');
+  await expect(page.locator('.topbar .status')).toContainText('repeats frame 17 of Pip');
+  expect(await page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks))).toBe(tracksBefore);
+  await page.getByLabel('Rotation', { exact: true }).press('Escape');
 });
 
 test('shape tools: union, subtract, intersect and exclude', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
   await page.getByRole('tab', { name: 'Layers' }).click();
   // Red and Green overlap in 250–300; subtract Green from Red (Red is behind).
@@ -1265,8 +1421,8 @@ test('colour swatches and the eyedropper', async () => {
       }
     };
   });
-  await page.getByRole('tab', { name: 'Animate' }).click();
-  await page.getByRole('tab', { name: 'Build' }).click(); // re-render so the button appears
+  await switchMode('Animate');
+  await switchMode('Build'); // re-render so the button appears
   await outlineRow('Pupil').click();
   await page.getByLabel('Pick fill colour from the screen').click();
   await expect.poll(() => page.evaluate(() => (window as any).__nyah.part('Pupil').style.fill)).toBe('#123456');
@@ -1276,7 +1432,7 @@ test('colour swatches and the eyedropper', async () => {
 });
 
 test('a contact shadow sits on the ground under a group, and shrinks as it rises', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
   await page.getByRole('tab', { name: 'Layers' }).click();
   await outlineRow('Squares').click();
@@ -1288,7 +1444,7 @@ test('a contact shadow sits on the ground under a group, and shrinks as it rises
   const under = await stagePixel(275, 305);
   expect(under[0]!).toBeLessThan(235);
   // Lift the squares 150 px (in Animate mode): the oval stays on the ground, fainter and smaller.
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(5);
   await page.getByLabel('Y', { exact: true }).fill('-150');
   await page.getByLabel('Y', { exact: true }).press('Enter');
@@ -1334,17 +1490,445 @@ test('measures preview speed and shows the playback rate', async () => {
   await expect(page.getByTestId('notice')).toContainText('Quarter:');
   await page.getByTestId('notice').getByRole('button', { name: 'Dismiss' }).click();
 
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.getByRole('button', { name: 'Play' }).click();
   await expect(page.getByTestId('playback-rate')).toContainText(/Showing \d+ of 24 fps/);
   await page.getByRole('button', { name: 'Pause' }).click();
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
+});
+
+test('the scene stays fitted when the timeline opens, until you zoom', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  const bottom = async () => {
+    const corner = (await debug<Pt>('stageScreen', { x: 1920, y: 1080 }))!;
+    return { corner, height: (await canvasBox()).height };
+  };
+  await switchMode('Animate');
+  await expect.poll(async () => {
+    const b = await bottom();
+    return b.corner.y <= b.height;
+  }).toBe(true);
+  // After zooming by hand, the view is left alone.
+  await menu('zoomIn');
+  const zoomed = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
+  await switchMode('Build');
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom)).toBe(zoomed);
+  await menu('zoomFit');
+});
+
+test('in Animate mode, Shift+Enter selects the parent and Shift+→ finds poses inside a group', async () => {
+  await switchMode('Animate');
+  const selectNamed = (name: string) =>
+    page.evaluate((n) => {
+      const nyah = (window as any).__nyah;
+      nyah.store.set({ selection: [nyah.part(n).id] });
+    }, name);
+  const selectedName = () => page.evaluate(() => (window as any).__nyah.nameOf((window as any).__nyah.store.getState().selection[0]));
+  await selectNamed('Hand');
+  await page.keyboard.press('Shift+Enter');
+  expect(await selectedName()).toBe('Forearm (front)');
+  // The torso's own next pose is on frame 17; its raised arm's is on frame 15.
+  await selectNamed('Torso');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(page.getByTestId('frame')).toHaveText('15 / 72');
+  await page.keyboard.press('Escape');
+  await switchMode('Build');
+});
+
+test('changing the frame rate keeps the timing of poses and lip sync', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Build');
+  await page.keyboard.press('Escape');
+  const mouthFrames = () =>
+    page.evaluate(() => {
+      const nyah = (window as any).__nyah;
+      const id = nyah.part('Mouth').id;
+      return nyah.store.getState().project.scene.tracks.find((t: any) => t.partId === id && t.channel === 'drawing').poses.map((p: any) => p.frame);
+    });
+  expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
+  await page.getByLabel('Frame rate').selectOption('30');
+  await expect(page.locator('.topbar .status')).toContainText('keep their timing');
+  expect(await mouthFrames()).toEqual([0, 20, 23, 28, 33, 55, 58]);
+  await expect(page.getByLabel('Length in frames')).toHaveValue('90');
+  await menu('undo');
+  expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
+});
+
+test('a part picked on the canvas is shown in the Layers list and the timeline', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Animate');
+  await page.keyboard.press('Escape');
+  const named = (testId: string) => page.getByTestId(testId).filter({ has: page.locator('.name', { hasText: /^Sun$/ }) });
+  const sunRows = () => [named('part-row'), named('tl-part')];
+  // Background layers start closed on the timeline.
+  await expect(sunRows()[1]!).toHaveCount(0);
+  // Scroll both lists to the top, so the Sun is out of sight in the Layers list.
+  await page.evaluate(() => document.querySelectorAll('.outline-list, .timeline-body').forEach((e) => (e.scrollTop = 0)));
+  // Click the sun.
+  const sun = await page.evaluate(() => {
+    const n = (window as any).__nyah;
+    const s = n.store.getState();
+    return { x: 1560 * s.view.zoom + s.view.panX, y: 220 * s.view.zoom + s.view.panY };
+  });
+  const b = await canvasBox();
+  await page.mouse.click(b.x + sun.x, b.y + sun.y);
+  expect((await state()).selection).toEqual([await page.evaluate(() => (window as any).__nyah.part('Sun').id)]);
+  for (const row of sunRows()) await expect(row).toBeInViewport();
+});
+
+test('Add Blinks scatters short blinks over the scene as poses', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Build');
+  await page.evaluate(() => { const n = (window as any).__nyah; n.store.set({ selection: [n.part('Eyes').id] }); });
+  // Blinks are poses: Build mode says so.
+  await menu('addBlinks');
+  await expect(page.locator('.topbar .status')).toContainText('switch to Animate mode');
+  await switchMode('Animate');
+  await page.evaluate(() => { const n = (window as any).__nyah; n.store.set({ selection: [n.part('Eyes').id] }); });
+  const eyePoses = () => page.evaluate(() => { const n = (window as any).__nyah; return JSON.stringify(n.store.getState().project.scene.tracks.find((t: any) => t.partId === n.part('Eyes').id && t.channel === 'scaleY')); });
+  // The demo has one blink of its own, on frames 53–55.
+  const before = await eyePoses();
+  await menu('addBlinks');
+  const dialog = page.getByTestId('blink-dialog');
+  await expect(dialog).toContainText('Add blinks to “Eyes”');
+  // Pip's eyes are a shape, so they squash.
+  await expect(dialog.getByLabel('Blink with')).toHaveValue('');
+  await dialog.getByLabel('Seconds between blinks').fill('1');
+  await dialog.getByLabel('Seconds between blinks').press('Enter');
+  await dialog.getByRole('button', { name: 'Add blinks' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.topbar .status')).toContainText(/Added \d+ blinks? to Eyes/);
+  const shutFrames = await page.evaluate(() => {
+    const n = (window as any).__nyah;
+    const id = n.part('Eyes').id;
+    const frames = n.store.getState().project.scene.durationFrames;
+    return Array.from({ length: frames }, (_, f) => f).filter((f) => n.channelValue(id, 'scaleY', f) < 0.5);
+  });
+  expect(shutFrames.length).toBeGreaterThan(0);
+  // The demo's own blink is kept, and Undo removes the new ones all at once.
+  expect(shutFrames).toContain(52);
+  await menu('undo');
+  expect(await eyePoses()).toBe(before);
+});
+
+test('the camera shakes from the playhead and settles where it was', async () => {
+  await switchMode('Animate');
+  await page.evaluate(() => (window as any).__nyah.store.set({ frame: 20, cameraSelected: true, selection: [] }));
+  const camX = (f: number) => page.evaluate((frame) => { const s = (window as any).__nyah.store; const was = s.getState().frame; s.set({ frame }); const x = (window as any).__nyah.camera().x; s.set({ frame: was }); return x; }, f);
+  const still = await camX(20);
+  await page.getByLabel('Shake strength').selectOption('strong');
+  await page.getByRole('button', { name: 'Shake from this frame' }).click();
+  await expect(page.locator('.topbar .status')).toContainText('Camera shake on frames 21–33');
+  expect(await camX(21)).not.toBeCloseTo(still);
+  expect(await camX(32)).toBeCloseTo(still);
+  await menu('undo');
+  expect(await camX(21)).toBeCloseTo(still);
+});
+
+test('a new scene shape keeps the characters in the middle', async () => {
+  await switchMode('Build');
+  await page.keyboard.press('Escape');
+  const state = () =>
+    page.evaluate(() => {
+      const s = (window as any).__nyah.store.getState();
+      const pip = s.project.scene.layers.find((l: any) => l.name === 'Pip').root;
+      return { w: s.project.scene.width, h: s.project.scene.height, x: pip.rest.x, y: pip.rest.y };
+    });
+  const before = await state();
+  await page.getByLabel('Scene shape').selectOption({ label: 'Tall (Shorts, Reels, TikTok)' });
+  const after = await state();
+  expect(after).toEqual({ w: 1080, h: 1920, x: before.x + (1080 - before.w) / 2, y: before.y + (1920 - before.h) / 2 });
+  await expect(page.getByLabel('Scene width')).toHaveValue('1080');
+  // Typing a size that isn't one of the shapes shows it as Custom.
+  await page.getByLabel('Scene width').fill('1000');
+  await page.getByLabel('Scene width').press('Enter');
+  await expect(page.getByLabel('Scene shape').locator('option:checked')).toHaveText('Custom');
+  // Out of the field, so Undo is the project's rather than the field's.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await menu('undo');
+  await menu('undo');
+  expect(await state()).toEqual(before);
+});
+
+test('a shorter scene keeps the playhead inside it; Ctrl+scroll zooms the timeline', async () => {
+  await switchMode('Animate');
+  await page.evaluate(() => (window as any).__nyah.store.set({ frame: 60, loop: { in: 50, out: 70 } }));
+  await page.keyboard.press('Escape');
+  await page.getByLabel('Length in frames').fill('55');
+  await page.getByLabel('Length in frames').press('Enter');
+  await expect(page.getByTestId('frame')).toHaveText('55 / 55');
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().loop)).toEqual({ in: 50, out: 54 });
+
+  const zoom = () => page.evaluate(() => (window as any).__nyah.store.getState().timeline.zoom);
+  const before = await zoom();
+  const box = (await page.getByTestId('timeline').boundingBox())!;
+  await page.mouse.move(box.x + 400, box.y + 60);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -200);
+  await page.keyboard.up('Control');
+  await expect.poll(zoom).toBeGreaterThan(before);
+  await menu('undo');
+});
+
+test('Help: keyboard shortcuts, and the user manual', async () => {
+  await menu('shortcuts');
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(sheet).toContainText('Play and pause');
+  await expect(sheet).toContainText('Pose K');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+
+  await app.evaluate(({ shell }) => {
+    (globalThis as any).opened = [];
+    shell.openPath = async (p: string) => {
+      (globalThis as any).opened.push(p);
+      return '';
+    };
+  });
+  await app.evaluate(({ Menu }) => {
+    const help = Menu.getApplicationMenu()!.items.find((i) => i.role === 'help')!.submenu!;
+    help.items.find((i) => i.label === 'Nyahmation User Manual')!.click();
+  });
+  const opened = await app.evaluate(() => (globalThis as any).opened as string[]);
+  expect(opened).toHaveLength(1);
+  expect(opened[0]).toMatch(/docs[\\/]manual[\\/]Nyahmation-User-Manual\.pdf$/);
+});
+
+test('records dialogue from the microphone onto the Sound row', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Animate');
+  await goToFrame(4);
+  await page.getByRole('button', { name: 'Record…' }).click();
+  const box = page.getByTestId('record-dialog');
+  await expect(box).toContainText('from frame 5');
+  await box.getByRole('button', { name: 'Start recording' }).click();
+  await expect(box.getByTestId('record-time')).toContainText(/Recording… 1\.\d s/, { timeout: 10_000 });
+  await box.getByRole('button', { name: 'Stop' }).click();
+  await box.getByRole('button', { name: 'Keep it' }).click();
+  await expect(box).toHaveCount(0);
+  const clip = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[0]);
+  expect(clip.name).toBe('Line 1');
+  expect(clip.startFrame).toBe(4);
+  expect(clip.duration).toBeGreaterThan(0); // (the pretend microphone is mostly silence, which is trimmed)
+  await expect(page.getByTestId('audio-clip')).toContainText('Line 1');
+  // It's kept as a WAV file, like an imported one.
+  const mime = await page.evaluate(() => (window as any).__nyah.store.getState().project.assets.at(-1).mimeType);
+  expect(mime).toBe('audio/wav');
+
+  // Again, playing the scene while talking: it plays, and the take keeps its timing (from the playhead, less the silence trimmed).
+  await goToFrame(10);
+  await page.getByRole('button', { name: 'Record…' }).click();
+  await box.getByLabel('Play the scene while recording').check();
+  await box.getByRole('button', { name: 'Start recording' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__nyah.store.getState().frame)).toBeGreaterThan(14);
+  await box.getByRole('button', { name: 'Stop' }).click();
+  await expect(page.getByTestId('frame')).toHaveText('11 / 72');
+  await box.getByRole('button', { name: 'Keep it' }).click();
+  await expect(box).toHaveCount(0);
+  const second = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[1]);
+  expect(second.name).toBe('Line 2');
+  expect(second.startFrame).toBeGreaterThanOrEqual(10);
+
+  // Pip has a mouth, so a take can go straight on to lip sync, with that take chosen.
+  await goToFrame(30);
+  await page.getByRole('button', { name: 'Record…' }).click();
+  await box.getByRole('button', { name: 'Start recording' }).click();
+  await expect(box.getByTestId('record-time')).toContainText(/Recording… [1-9]\./, { timeout: 10_000 });
+  await box.getByRole('button', { name: 'Stop' }).click();
+  await box.getByRole('button', { name: 'Keep and lip sync…' }).click();
+  const lipSync = page.getByTestId('lipsync-dialog');
+  await expect(lipSync).toContainText('Auto lip sync for “Mouth”');
+  const third = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[2].id);
+  await expect(lipSync.getByLabel('Dialogue sound')).toHaveValue(third);
+  await lipSync.getByRole('button', { name: 'Close' }).click();
+});
+
+test('adds the built-in Pip and scenery to a new project', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await switchMode('Build');
+  await menu('new');
+  await page.getByRole('tab', { name: 'Library' }).click();
+  const pip = page.getByTestId('builtin-item').filter({ hasText: 'Pip' });
+  await expect(pip.locator('img')).toBeVisible(); // its picture
+  await pip.getByRole('button', { name: 'Add' }).click();
+  await pip.getByRole('button', { name: 'Add' }).click();
+  const s = await state();
+  // Two independent Pips, each with a mouth for lip sync, and no animation.
+  expect(s.names.filter((n) => n === 'Mouth')).toHaveLength(2);
+  expect(new Set(await page.evaluate(() => (window as any).__nyah.store.getState().project.drawingSets.map((d: any) => d.id))).size).toBe(2);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.tracks.length)).toBe(0);
+  await page.getByRole('tab', { name: 'Layers' }).click();
+});
+
+test('the interface can be made bigger, and is remembered', async () => {
+  const ratio = () => page.evaluate(() => window.devicePixelRatio);
+  const normal = await ratio();
+  await menu('interfaceLarger');
+  await expect.poll(ratio).toBeCloseTo(normal * 1.15, 2);
+  expect(await page.evaluate(() => localStorage.getItem('nyah.interfaceSize'))).toBe('larger');
+  // The scene is still all in view.
+  const corner = (await debug<Pt>('stageScreen', { x: 1920, y: 1080 }))!;
+  expect(corner.y).toBeLessThanOrEqual((await canvasBox()).height);
+  await menu('interfaceNormal');
+  await expect.poll(ratio).toBeCloseTo(normal, 2);
+});
+
+/**
+ * Right-clicks `target` (an element, or a point on the canvas) and picks
+ * `label` from the menu that opens (native menus can't be clicked here, so
+ * the main process picks it). Returns the menu's labels.
+ */
+async function contextPick(target: import('@playwright/test').Locator | Pt, label: string): Promise<string[]> {
+  await app.evaluate(({ Menu }, pick) => {
+    const g = globalThis as any;
+    g.realBuild ??= Menu.buildFromTemplate;
+    Menu.buildFromTemplate = (template: any[]) => {
+      const menu = g.realBuild(template);
+      menu.popup = (options: any) => {
+        g.menuLabels = template.map((i) => i.label ?? '—');
+        template.find((i) => i.label === pick)?.click?.();
+        options?.callback?.();
+      };
+      return menu;
+    };
+  }, label);
+  if ('x' in target) {
+    const b = await canvasBox();
+    await page.mouse.click(b.x + target.x, b.y + target.y, { button: 'right' });
+  } else await target.click({ button: 'right' });
+  await expect.poll(() => app.evaluate(() => (globalThis as any).menuLabels ?? null)).not.toBeNull();
+  const labels = await app.evaluate(() => {
+    const g = globalThis as any;
+    const l = g.menuLabels;
+    g.menuLabels = null;
+    return l as string[];
+  });
+  return labels;
+}
+
+test('right-click menus on pose marks and layer rows', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Animate');
+  await goToFrame(5);
+  // A torso pose: its easing, a copy at the playhead, delete.
+  const mark = row('Torso').locator('.tl-mark[data-frame="16"]');
+  const labels = await contextPick(mark, 'Motion out: Linear (steady)');
+  expect(labels).toEqual(expect.arrayContaining(['Motion out: Smooth (flows through)', 'Copy to frame 6 (the playhead)', 'Delete pose']));
+  expect(await page.evaluate(() => {
+    const n = (window as any).__nyah;
+    const t = n.store.getState().project.scene.tracks.find((x: any) => x.partId === n.part('Torso').id && x.channel === 'rotation');
+    return t.poses.find((p: any) => p.frame === 16).ease;
+  })).toBe('linear');
+  await contextPick(mark, 'Copy to frame 6 (the playhead)');
+  await expect(row('Torso').locator('.tl-mark[data-frame="5"]')).toHaveCount(1);
+  await contextPick(row('Torso').locator('.tl-mark[data-frame="5"]'), 'Delete pose');
+  await expect(row('Torso').locator('.tl-mark[data-frame="5"]')).toHaveCount(0);
+
+  // A layer row: hide it, then show it again.
+  await switchMode('Build');
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  const scenery = page.getByTestId('layer-row').filter({ hasText: 'Scenery' });
+  expect(await contextPick(scenery, 'Hide')).toEqual(expect.arrayContaining(['Rename', 'Hide', 'Lock', 'Save to Library…', 'Delete Layer']));
+  expect((await debug<{ visible: boolean }>('part', 'Scenery')).visible).toBe(false);
+  await contextPick(scenery, 'Show');
+  expect((await debug<{ visible: boolean }>('part', 'Scenery')).visible).toBe(true);
+  // A part: rename it from the menu.
+  await contextPick(page.getByTestId('part-row').filter({ hasText: /^.?Hand$/ }).first(), 'Rename');
+  await page.locator('.outliner input.rename').fill('Left hand');
+  await page.locator('.outliner input.rename').press('Enter');
+  expect(await debug<object | null>('part', 'Left hand')).not.toBeNull();
+
+  // On the canvas: the part under the mouse, with what fits the mode.
+  await page.keyboard.press('Escape');
+  const hand = (await debug<Pt>('partScreen', 'Left hand', { x: 0, y: 18 }))!;
+  const inBuild = await contextPick(hand, 'Duplicate');
+  expect(inBuild).toEqual(expect.arrayContaining(['Cut', 'Copy', 'Group', 'Bring Forward', 'Edit Points', 'Select Parent', 'Delete']));
+  await expect.poll(async () => (await state()).names).toContain('Left hand copy');
+  await menu('undo');
+  await switchMode('Animate');
+  await goToFrame(3);
+  const handNow = (await debug<Pt>('framePartScreen', 'Left hand', { x: 0, y: 18 }))!;
+  const inAnimate = await contextPick(handNow, 'Pin Here from Frame 4');
+  expect(inAnimate).toEqual(expect.arrayContaining(['Copy Pose', 'Paste Pose', 'Mirror Pose', 'Swap Sides', 'Send Backward from Here']));
+  expect(await trackFrames('Left hand', 'pin')).toEqual([3]);
+  await app.evaluate(({ Menu }) => {
+    Menu.buildFromTemplate = (globalThis as any).realBuild;
+  });
+  await switchMode('Build');
+});
+
+/** Drops files on the window at a canvas point, as if dragged from Finder. */
+async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
+  const b = await canvasBox();
+  await page.evaluate(
+    ({ files, x, y }) => {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0))], f.name, { type: f.type ?? '' }));
+      const target = document.elementFromPoint(x, y)!;
+      target.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    },
+    { files, x: b.x + at[0], y: b.y + at[1] },
+  );
+}
+
+test('files dropped on the window are imported where they land, or opened', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await switchMode('Build');
+  await menu('new');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60"><rect id="Box" width="100" height="60" fill="#e5484d"/></svg>`;
+  await dropFiles([{ name: 'box.svg', base64: Buffer.from(svg).toString('base64'), type: 'image/svg+xml' }], [250, 180]);
+  await expect.poll(async () => (await state()).names).toContain('Box');
+  const middle = (await debug<Pt>('frameMiddleScreen', 'Box'))!;
+  expect(middle.x).toBeCloseTo(250, 0);
+  expect(middle.y).toBeCloseTo(180, 0);
+
+  await dropFiles([{ name: 'notes.txt', base64: Buffer.from('hello').toString('base64') }], [250, 180]);
+  await expect(page.getByTestId('notice')).toContainText("Couldn't import notes.txt");
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+
+  // A project opens (it wasn't dropped from disk here, so it opens unsaved).
+  const path = join(dir, 'Dropped.nyah');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath })) as typeof dialog.showSaveDialog;
+  }, path);
+  await menu('saveAs');
+  await expect.poll(() => existsSync(path)).toBe(true);
+  await menu('new');
+  expect((await state()).names).not.toContain('Box');
+  await dropFiles([{ name: 'Dropped.nyah', base64: readFileSync(path).toString('base64') }], [250, 180]);
+  await expect.poll(async () => (await state()).names).toContain('Box');
+  expect(await page.evaluate(() => location.protocol)).not.toBe('data:');
 });
 
 test('autosaves unsaved work, and deletes the autosave once saved', async () => {
   const recovery = join(dir, 'recovery');
   const autosaves = () => (existsSync(recovery) ? readdirSync(recovery).filter((f) => f.endsWith('.nyah')) : []);
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('m');
   await drag([300, 300], [360, 350]);
   expect((await state()).dirty).toBe(true);

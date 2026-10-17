@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLayer, createPart, createProject } from './project';
-import { deletePoses, poseEaseAt, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from './retime';
+import { changeFrameRate, deletePoses, poseEaseAt, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from './retime';
 import { findTrack, setPartPose } from './tracks';
 import type { Project } from './types';
 
@@ -131,5 +131,29 @@ describe('stretching a range (A6)', () => {
   it('leaves tracks out of scope alone', () => {
     const { p } = project();
     expect(stretchPoses(p, 10, 20, 30, () => false).project).toBe(p);
+  });
+});
+
+describe('changeFrameRate', () => {
+  it('keeps every pose, sound start and cycle at the same moment', () => {
+    let p = scene(); // 24 fps
+    p = { ...p, scene: { ...p.scene, audio: [{ id: 'c', assetId: 'a', name: 'Hi', startFrame: 12, duration: 1, volume: 1 }] } };
+    p = { ...p, scene: { ...p.scene, layers: [{ ...createLayer('character', 'Pip'), cycle: { from: 0, to: 24, travel: false } }] } };
+    const q = changeFrameRate(p, 30);
+    expect(q.scene.fps).toBe(30);
+    expect(frames(q, 'arm')).toEqual([0, 13, 25, 38]); // 10/24 s → 12.5 frames → 13
+    expect(frames(q, 'mouth', 'drawing')).toEqual([13]);
+    expect(q.scene.audio[0]!.startFrame).toBe(15);
+    expect(q.scene.layers[0]!.cycle).toEqual({ from: 0, to: 30, travel: false });
+    expect(q.scene.durationFrames).toBe(50);
+    expect(changeFrameRate(p, 24)).toBe(p);
+  });
+
+  it('at a lower rate, poses that meet keep the later one', () => {
+    let p = createProject({ fps: 60, durationFrames: 10 });
+    p = setPartPose(setPartPose(p, 'arm', 'rotation', 4, 1), 'arm', 'rotation', 5, 2);
+    const q = changeFrameRate(p, 24); // 4 → 1.6 → 2, 5 → 2
+    expect(findTrack(q.scene.tracks, 'arm', 'rotation')!.poses).toEqual([{ frame: 2, value: 2 }]);
+    expect(q.scene.durationFrames).toBe(4);
   });
 });

@@ -105,7 +105,12 @@ export interface ExportApi {
   frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
   end(session: number): Promise<{ path: string }>;
   cancel(session: number): Promise<void>;
+  /** Shows an exported video in Finder / Explorer, or opens a folder of PNG frames. */
+  reveal(path: string): Promise<void>;
 }
+
+/** One entry in a right-click menu: a choice (with an id), or a separator. */
+export type ContextMenuItem = { id: string; label: string; checked?: boolean; enabled?: boolean } | { separator: true };
 
 /** Commands sent from the native menu (see src/main/menu.ts). */
 export type MenuCommand =
@@ -145,18 +150,25 @@ export type MenuCommand =
   | 'paste'
   | 'mirrorPose'
   | 'swapSides'
+  | 'addBlinks'
   | 'boolUnion'
   | 'boolSubtract'
   | 'boolIntersect'
-  | 'boolExclude';
+  | 'boolExclude'
+  | 'shortcuts'
+  | 'recordDialogue'
+  | 'interfaceSmaller'
+  | 'interfaceNormal'
+  | 'interfaceLarger'
+  | 'interfaceLargest';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
   openProject(): Promise<OpenedFile | null>;
   /** Saves to `path`, or shows a Save dialog when no path is given. Null if cancelled. */
   saveProject(bytes: Uint8Array, path?: string): Promise<SavedFile | null>;
-  /** Shows an Import dialog for SVG, PNG, JPEG and sound files. Null if cancelled. */
-  importFile(): Promise<ImportedFile | null>;
+  /** Shows an Import dialog for SVG, PNG, JPEG and sound files; several can be chosen. Empty if cancelled. */
+  importFile(): Promise<ImportedFile[]>;
   /** Picks several SVG/PNG/JPEG files at once (for adding drawings to a switch layer). */
   importFiles(): Promise<ImportedFile[]>;
   /** Subscribes to native menu commands. Returns an unsubscribe function. */
@@ -168,12 +180,22 @@ export interface NyahApi {
    */
   onOpenFile(listener: (file: OpenedFile) => void): () => void;
   readyForFiles(): void;
+  /** Where a file dropped on the window is on disk (null if it isn't a file on disk). */
+  pathForFile(file: File): string | null;
   /** Cut, copy or paste text in the focused text field (the menu's shortcuts come to the app first). */
   editText(command: 'cut' | 'copy' | 'paste'): void;
   library: LibraryApi;
   export: ExportApi;
   recovery: RecoveryApi;
   lipSync: LipSyncApi;
+  /** Asks the system to let Nyahmation use the microphone (macOS asks the user once). Resolves to whether it may. */
+  askForMicrophone(): Promise<boolean>;
+  /** Shows a right-click menu at the mouse; resolves to the chosen item's id, or null. */
+  showContextMenu(items: ContextMenuItem[]): Promise<string | null>;
+  /** Draws the whole window bigger or smaller (1 is normal). */
+  setInterfaceSize(factor: number): void;
+  /** Opens the illustrated user manual (a PDF) in the system's viewer. */
+  openManual(): void;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }

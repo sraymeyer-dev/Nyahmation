@@ -142,6 +142,10 @@ function parseLength(value: string | null | undefined, reference = 0): number | 
   }
 }
 
+/** Art further out than this (pixels) can never be seen; it comes from extreme sizes or transforms. */
+const FAR = 1e7;
+const withinReach = (b: Bounds) => isEmptyBounds(b) || [b.minX, b.minY, b.maxX, b.maxY].every((v) => Number.isFinite(v) && Math.abs(v) < FAR);
+
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/\s+/g, ''));
   const bytes = new Uint8Array(bin.length);
@@ -335,6 +339,10 @@ class SvgImporter {
       }
       const baked = paths.map((p) => transformPath(p, matrix));
       bounds = pathsBounds(baked);
+      if (!withinReach(bounds)) {
+        this.warn('Shapes millions of pixels away (from extreme sizes or transforms) were skipped.');
+        return null;
+      }
       const c = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
       part = createPart({
         name: this.nameOf(el, tag === 'path' ? 'Path' : tag[0]!.toUpperCase() + tag.slice(1)),
@@ -516,7 +524,7 @@ class SvgImporter {
     }
     const width = parseLength(el.getAttribute('width'));
     const height = parseLength(el.getAttribute('height'));
-    if (!width || !height) {
+    if (!width || !height || width < 0 || height < 0) {
       this.warn('Images without a width and height were skipped.');
       return null;
     }
@@ -538,7 +546,13 @@ class SvgImporter {
       { x: width, y: height },
       { x: 0, y: height },
     ].map((p) => applyToPoint(m, p));
-    return { part, bounds: boundsOfPoints(corners) };
+    const bounds = boundsOfPoints(corners);
+    if (!withinReach(bounds)) {
+      this.assets.pop();
+      this.warn('Shapes millions of pixels away (from extreme sizes or transforms) were skipped.');
+      return null;
+    }
+    return { part, bounds };
   }
 }
 

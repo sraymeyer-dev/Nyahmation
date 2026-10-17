@@ -182,6 +182,10 @@ button:focus-visible {
 
 .tool-options .hint {
   color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .divider {
@@ -1266,4 +1270,144 @@ input[type='color'] {
   width: 22px;
   height: 20px;
   padding: 0;
+}
+
+/* Help → Keyboard Shortcuts */
+.modal.shortcuts {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.shortcut-columns {
+  columns: 2 360px;
+  column-gap: 24px;
+}
+
+.shortcut-columns section {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+
+.shortcut-columns h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.shortcut-columns table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.shortcut-columns td {
+  padding: 2px 0;
+  vertical-align: top;
+}
+
+.shortcut-columns td.keys {
+  white-space: nowrap;
+  padding-right: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The first step for an empty scene. */
+.empty-scene {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90%);
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.empty-scene p {
+  margin: 6px 0 10px;
+  color: var(--muted);
+}
+
+.empty-scene .shape {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+
+.empty-scene .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.empty-scene .link {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+}
+
+/* Record dialogue */
+.record-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e5484d;
+  vertical-align: baseline;
+}
+
+.record-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-status .record-dot {
+  animation: record-pulse 1s ease-in-out infinite;
+}
+
+@keyframes record-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.level {
+  height: 8px;
+  border-radius: 4px;
+  background: #1f2023;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.level .bar {
+  height: 100%;
+  background: #30a46c;
+  transition: width 60ms linear;
+}
+
+.modal.record audio {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.modal-backdrop.aside {
+  background: none;
+  place-items: end center;
+  padding-bottom: 12px;
+  pointer-events: none;
+}
+
+.modal-backdrop.aside .modal {
+  pointer-events: auto;
 }

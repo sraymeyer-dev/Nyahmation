@@ -9,8 +9,11 @@ files:
 # FFmpeg is a program the app runs, so it must stay outside the asar archive.
 asarUnpack:
   - node_modules/ffmpeg-static/**
-# Rhubarb Lip Sync (automatic lip sync), downloaded by npm run setup, if present.
+# Rhubarb Lip Sync (automatic lip sync), downloaded by npm run setup, if
+# present; and the user manual (Help → Nyahmation User Manual).
 extraResources:
+  - from: docs/manual/Nyahmation-User-Manual.pdf
+    to: Nyahmation-User-Manual.pdf
   - from: vendor/rhubarb
     to: rhubarb
     filter:
@@ -21,6 +24,9 @@ fileAssociations:
     role: Editor
 mac:
   category: public.app-category.graphics-design
+  # Shown when macOS asks whether Nyahmation may use the microphone (Record Dialogue).
+  extendInfo:
+    NSMicrophoneUsageDescription: Nyahmation records dialogue for your animations.
   # Built for the Mac it's made on (Intel or Apple Silicon): the bundled
   # FFmpeg is downloaded for that chip only, so a universal app can't carry it.
   target:

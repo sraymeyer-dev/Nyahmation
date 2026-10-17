@@ -7,15 +7,18 @@ import type { LibraryEntry } from '../../../preload/api';
 import {
   insertLibraryItem,
   itemFromLayer,
+  linkAfterSaving,
   itemFromParts,
   packLibraryItem,
   unpackLibraryItem,
   updateLayerFromLibrary,
   withLibraryIds,
+  type LibraryIds,
   type LibraryItem,
 } from '../../../io/libraryItem';
 import { getImage } from '../render/images';
 import { renderThumbnail } from '../render/thumbnail';
+import { createDemoProject } from '../demo';
 import { activeLayer, assetMimeType, containerForNewPart } from './actions';
 import { store, type EditorState } from './store';
 
@@ -41,6 +44,16 @@ export function libraryCandidate(s: EditorState): { label: string; defaultName: 
     return { label: `The part “${part?.name ?? ''}”`, defaultName: part?.name ?? 'Shape' };
   }
   return { label: `${s.selection.length} selected parts`, defaultName: 'Shape' };
+}
+
+/** Object → Save Selection to Library…: the Library tab, with its Save form open. */
+export function openLibrarySave(): void {
+  const s = get();
+  if (!libraryCandidate(s)) {
+    store.set({ sidebarTab: 'library', status: 'Select a character layer (click its row in Layers) or some parts, then save them to the library.' });
+    return;
+  }
+  store.set({ sidebarTab: 'library', librarySaving: true });
 }
 
 export async function refreshLibrary(): Promise<void> {
@@ -75,14 +88,15 @@ export async function saveSelectionToLibrary(name: string, tags: string[], repla
     const layer = s.selection.length === 1 ? s.project.scene.layers.find((l) => l.root.id === s.selection[0]) : undefined;
     const source = replace ? layer?.source : undefined;
     let item = layer ? itemFromLayer(s.project, s.assets, layer.id, name, tags) : itemFromParts(s.project, s.assets, s.selection, name, tags);
-    if (source) item = withLibraryIds(item, source);
+    let ids: LibraryIds | null = null;
+    if (source) ({ item, ids } = withLibraryIds(item, source));
     const thumbnail = await renderThumbnail(previewProject(item), (id) => getImage(id, s.assets.get(id), assetMimeType(s, id)));
     const relPath = await api.library.save(name, packLibraryItem(item, thumbnail ?? undefined), source?.relPath);
     await refreshLibrary();
-    if (layer && source) {
+    if (layer && ids) {
       // This layer now matches the library's version.
       const modified = get().library.items.find((e) => e.relPath === relPath)?.modified ?? Date.now();
-      store.commit(updateLayer(get().project, layer.id, (l) => (l.source ? { ...l, source: { ...l.source, savedAt: modified } } : l)));
+      store.commit(updateLayer(get().project, layer.id, (l) => (l.source ? { ...l, source: linkAfterSaving(l, modified, ids!)! } : l)));
     }
     store.set({ status: source ? `Saved a new version of “${name}” to the library. Other projects using it can now Update from library.` : `Saved “${name}” to the library (${relPath}).` });
     return true;
@@ -140,10 +154,54 @@ export async function updateFromLibrary(layerId: string): Promise<void> {
   }
 }
 
+// ---- Built in ---------------------------------------------------------------------
+
+/** Characters and scenery that come with Nyahmation (the demo's), ready to add to any project. */
+export interface BuiltinItem {
+  id: string;
+  name: string;
+  kind: 'character' | 'background';
+  description: string;
+}
+
+export const BUILT_IN: readonly BuiltinItem[] = [
+  { id: 'pip', name: 'Pip', kind: 'character', description: 'Rigged, with mouths for lip sync' },
+  { id: 'scenery', name: 'Sunny hills', kind: 'background', description: 'Sun, hills and ground' },
+];
+
+/** A fresh library item for a built-in: the demo's layer, without its animation. */
+function builtinItem(b: BuiltinItem): LibraryItem {
+  return itemFromLayer(createDemoProject(), new Map(), b.id, b.name);
+}
+
+const builtinThumbs = new Map<string, Promise<string | null>>();
+/** A picture of a built-in item for the library list (an object URL), made once. */
+export function builtinThumbnail(b: BuiltinItem): Promise<string | null> {
+  let url = builtinThumbs.get(b.id);
+  if (!url) {
+    url = renderThumbnail(previewProject(builtinItem(b)), () => null).then((png) => (png ? URL.createObjectURL(new Blob([png as BlobPart], { type: 'image/png' })) : null));
+    builtinThumbs.set(b.id, url);
+  }
+  return url;
+}
+
+/** Adds a copy of a built-in item as a new layer above the active one. */
+export function addBuiltin(b: BuiltinItem): void {
+  const s = get();
+  const active = activeLayer(s);
+  const index = active ? s.project.scene.layers.indexOf(active) + 1 : undefined;
+  const result = insertLibraryItem(s.project, s.assets, builtinItem(b), { layerIndex: index });
+  store.commit(result.project, { assets: result.assets, selection: result.partIds, points: [], activeLayerId: result.layerId, status: `Added ${b.name}.` });
+}
+
 export async function removeFromLibrary(entry: LibraryEntry): Promise<void> {
   const api = window.nyah;
   if (!api || !window.confirm(`Move “${entry.name}” to the Trash?`)) return;
-  await api.library.remove(entry.relPath);
+  try {
+    await api.library.remove(entry.relPath);
+  } catch (err) {
+    store.set({ notice: { title: `Couldn't move “${entry.name}” to the Trash`, lines: [(err as Error).message, 'You can delete it from the library folder yourself (Folder, above the list).'] } });
+  }
   await refreshLibrary();
 }
 

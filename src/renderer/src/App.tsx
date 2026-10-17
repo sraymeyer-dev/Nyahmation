@@ -7,14 +7,20 @@ import * as library from './editor/library';
 import * as lipsync from './editor/lipsync';
 import { measurePreviewSpeed } from './editor/measure';
 import { startAutosave } from './editor/recovery';
+import { acceptDroppedFiles } from './editor/dropFiles';
+import { restoreInterfaceSize, setInterfaceSize } from './editor/interfaceSize';
 import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
-import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
+import { deleteSelectedMarks, jumpToPose, mirrorSelected, openBlinks, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
+import { EmptyScene } from './components/EmptyScene';
 import { ExportDialog } from './components/ExportDialog';
 import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
+import { RecordDialog } from './components/RecordDialog';
+import { BlinkDialog } from './components/BlinkDialog';
 import { RecoveryPrompt } from './components/RecoveryPrompt';
+import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { Sidebar } from './components/Sidebar';
 import { ToolOptions } from './components/ToolOptions';
 import { Toolbar } from './components/Toolbar';
@@ -66,7 +72,7 @@ const MENU: Record<MenuCommand, () => void> = {
   zoom100: actions.zoomActualSize,
   toggleGrid: actions.toggleGrid,
   toggleSnap: actions.toggleSnap,
-  saveToLibrary: () => store.set({ sidebarTab: 'library' }),
+  saveToLibrary: library.openLibrarySave,
   autoChainRoots: library.autoChainRootsForActiveLayer,
   export: () => store.set({ exportOpen: true }),
   makeSwitchLayer: lipsync.makeSwitchLayerFromSelection,
@@ -80,6 +86,13 @@ const MENU: Record<MenuCommand, () => void> = {
   boolExclude: () => actions.booleanOp('exclude'),
   mirrorPose: () => mirrorSelected('mirror'),
   swapSides: () => mirrorSelected('swap'),
+  addBlinks: () => openBlinks(),
+  shortcuts: () => store.set({ shortcutsOpen: true }),
+  recordDialogue: () => store.set({ recordOpen: true, playing: false }),
+  interfaceSmaller: () => setInterfaceSize('smaller'),
+  interfaceNormal: () => setInterfaceSize('normal'),
+  interfaceLarger: () => setInterfaceSize('larger'),
+  interfaceLargest: () => setInterfaceSize('largest'),
 };
 
 let menuCommandsHandled = 0;
@@ -114,7 +127,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.exportOpen || s.lipSyncDialogFor) return;
+  if (s.exportOpen || s.lipSyncDialogFor || s.blinkDialogFor || s.shortcutsOpen || s.recordOpen) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (lipSyncKey(e, s)) {
       e.preventDefault();
@@ -159,7 +172,10 @@ function onKeyDown(e: KeyboardEvent): void {
         else deleteSelectedMarks();
         return;
       case 'Escape':
-        store.set((st) => ({ selection: [], selectedClip: null, timeline: { ...st.timeline, marks: [] } }));
+        store.set((st) => ({ selection: [], selectedClip: null, cameraSelected: false, timeline: { ...st.timeline, marks: [] } }));
+        return;
+      case 'Enter':
+        if (e.shiftKey) actions.selectParent();
         return;
     }
     return;
@@ -218,9 +234,12 @@ export function App() {
     const unsubscribe = window.nyah?.onOpenFile((file) => actions.openProjectFile(file));
     window.nyah?.readyForFiles();
     const stopAutosave = startAutosave();
+    const stopDrops = acceptDroppedFiles();
+    restoreInterfaceSize();
     return () => {
       unsubscribe?.();
       stopAutosave();
+      stopDrops();
     };
   }, []);
 
@@ -267,6 +286,7 @@ export function App() {
           <div className="stage">
             <Viewport />
             <Notice />
+            <EmptyScene />
             <RecoveryPrompt />
           </div>
           {mode === 'animate' && <Timeline />}
@@ -274,6 +294,9 @@ export function App() {
         <Sidebar />
         <ExportDialog />
         <LipSyncDialog />
+        <ShortcutsDialog />
+        <RecordDialog />
+        <BlinkDialog />
       </div>
     </div>
   );

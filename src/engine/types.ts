@@ -117,6 +117,18 @@ export type Effect =
       width: number;
       softness: number;
     }
+  | {
+      id: string;
+      /** Shade inside the artwork along the edge the light doesn't reach (FX1). */
+      kind: 'innerShadow';
+      color: string;
+      opacity: number;
+      /** Direction the shadow falls, as for a drop shadow: the shade lies inside the opposite edge. */
+      angle: number;
+      distance: number;
+      softness: number;
+    }
+  | { id: string; kind: 'innerGlow'; color: string; opacity: number; /** How far in from the edge it reaches. */ size: number }
   | { id: string; kind: 'blur'; amount: number }
   | { id: string; kind: 'haze'; color: string; /** 0 none .. 1 all haze colour. */ amount: number };
 
@@ -127,6 +139,8 @@ export const EFFECT_SETTINGS = {
   shadow: ['opacity', 'angle', 'distance', 'softness'],
   glow: ['opacity', 'size', 'strength'],
   contact: ['opacity', 'ground', 'width', 'softness'],
+  innerShadow: ['opacity', 'angle', 'distance', 'softness'],
+  innerGlow: ['opacity', 'size'],
   blur: ['amount'],
   haze: ['amount'],
 } as const satisfies Record<EffectKind, readonly string[]>;
@@ -156,7 +170,7 @@ export interface Part {
   restDrawing?: string;
   /** kind === 'image': drawn with its top-left corner at the part's (0, 0). */
   image?: ImageRef;
-  /** Effects, applied in the order haze, blur, then shadows and glows behind (FX1). */
+  /** Effects, applied in the order haze, blur, inner shadows and glows, then shadows and glows behind (FX1). */
   effects?: Effect[];
   /** Default 'normal'. */
   blend?: BlendMode;

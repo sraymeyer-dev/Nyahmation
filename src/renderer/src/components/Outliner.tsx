@@ -1,9 +1,11 @@
-import { useState, type DragEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactElement } from 'react';
 import { locatePart, moveLayer, reparentPart, restackPart, updateLayer, updatePart } from '../../../engine/edit';
 import type { Layer, Part, Project } from '../../../engine/types';
-import { newLayer, select } from '../editor/actions';
+import { deleteSelection, duplicate, newLayer, select } from '../editor/actions';
+import { openLibrarySave } from '../editor/library';
 import { store, useEditor } from '../editor/store';
 import { EyeIcon, LockIcon } from './icons';
+import { revealRow } from './reveal';
 
 // The Layers panel. Layers are listed front to back; inside each, parts show
 // their parent/child tree, with siblings listed front to back by stacking
@@ -37,6 +39,18 @@ export function Outliner() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; at: DropAt } | null>(null);
   const selected = new Set(selection);
+  const list = useRef<HTMLDivElement>(null);
+
+  // A part selected on the canvas is shown here: the groups around it open,
+  // and its row scrolls into view.
+  useEffect(() => {
+    const around = new Set(selection.flatMap((id) => locatePart(store.getState().project, id)?.ancestors.map((a) => a.id) ?? []));
+    setCollapsed((c) => ([...c].some((id) => around.has(id)) ? new Set([...c].filter((id) => !around.has(id))) : c));
+  }, [selection]);
+  useEffect(() => {
+    const row = list.current?.querySelector('.outline-row.selected');
+    if (row) revealRow(list.current!, row);
+  }, [selection, collapsed]);
 
   const toggle = (id: string) =>
     setCollapsed((c) => {
@@ -86,6 +100,36 @@ export function Outliner() {
     store.commit(next);
   };
 
+  /** Right-click on a row: the usual things to do with a part or layer. */
+  const rowMenu = async (part: Part, isLayerRow: boolean) => {
+    const api = window.nyah;
+    if (!api) return;
+    if (!selected.has(part.id)) select([part.id]);
+    const many = store.getState().selection.length > 1;
+    const build = store.getState().mode === 'build';
+    const chosen = await api.showContextMenu([
+      ...(many ? [] : [{ id: 'rename', label: 'Rename' }]),
+      { id: 'visible', label: part.visible ? 'Hide' : 'Show' },
+      { id: 'lock', label: part.locked ? 'Unlock' : 'Lock' },
+      { separator: true },
+      ...(build && !isLayerRow ? [{ id: 'duplicate', label: 'Duplicate' }] : []),
+      { id: 'library', label: 'Save to Library…' },
+      { separator: true },
+      { id: 'delete', label: isLayerRow ? 'Delete Layer' : many ? 'Delete Parts' : 'Delete', enabled: build },
+    ]);
+    if (chosen === 'rename') setRenaming(part.id);
+    else if (chosen === 'visible' || chosen === 'lock') {
+      // Every selected row the same way as the one clicked, in one undo step.
+      const key = chosen === 'visible' ? 'visible' : 'locked';
+      const value = chosen === 'visible' ? !part.visible : !part.locked;
+      let project = store.getState().project;
+      for (const id of store.getState().selection) project = updatePart(project, id, (p) => ({ ...p, [key]: value }));
+      store.commit(project);
+    } else if (chosen === 'duplicate') duplicate();
+    else if (chosen === 'library') openLibrarySave();
+    else if (chosen === 'delete') deleteSelection();
+  };
+
   const renderName = (part: Part, layer?: Layer) =>
     renaming === part.id ? (
       <input
@@ -128,6 +172,10 @@ export function Outliner() {
         onDragLeave={() => setDropHint(null)}
         onDrop={(e) => onDrop(e, part, layer, isLayerRow)}
         onClick={(e) => select([part.id], e.shiftKey || e.metaKey || e.ctrlKey)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          void rowMenu(part, isLayerRow);
+        }}
         data-testid={isLayerRow ? 'layer-row' : 'part-row'}
       >
         <button
@@ -167,7 +215,7 @@ export function Outliner() {
         <button onClick={() => newLayer('character')} title="New character layer">+ Character</button>
         <button onClick={() => newLayer('background')} title="New background layer">+ Background</button>
       </div>
-      <div className="outline-list" role="tree">
+      <div className="outline-list" role="tree" ref={list}>
         {layers.length === 0 && <p className="empty">No layers yet. Draw something, or add a layer.</p>}
         {layers.map((layer) => [renderRow(layer.root, layer, 0, true), ...renderTree(layer.root, layer, 1)])}
       </div>

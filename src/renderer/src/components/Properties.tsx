@@ -1,13 +1,15 @@
 import { locatePart, restWorldMatrix, updateLayer, updatePart, type PartLocation } from '../../../engine/edit';
 import { channelValueAt, frameAccess, recordValue } from '../../../engine/access';
 import { applyToPoint } from '../../../engine/math';
-import { poseEaseAt } from '../../../engine/retime';
-import { deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
+import { changeFrameRate, poseEaseAt } from '../../../engine/retime';
+import { resizeScene, SCENE_SIZES } from '../../../engine/stage';
+import { canPoseOnFrame, shownFrame, deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
 import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
 import { store, useEditor } from '../editor/store';
 import { updateFromLibrary } from '../editor/library';
+import { isViewFitted, zoomToFit } from '../editor/actions';
 import { NumberField, PaintField, Row, Section, toHex } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
@@ -113,25 +115,72 @@ function StyleEditor({ style, onChange }: { style: ShapeStyle; onChange: (patch:
 function SceneProperties({ project }: { project: Project }) {
   const scene = project.scene;
   const style = useEditor((s) => s.style);
+  const mode = useEditor((s) => s.mode);
   const set = (patch: Partial<Scene>, key: string) => store.commit({ ...project, scene: { ...scene, ...patch } }, {}, key);
+  // Poses, lip sync and sounds keep their timing in seconds, so the playhead and loop range move with them.
+  const setFrameRate = (fps: number) => {
+    const s = store.getState();
+    const k = fps / scene.fps;
+    const at = (f: number) => Math.round(f * k);
+    const next = changeFrameRate(project, fps);
+    const last = next.scene.durationFrames - 1;
+    store.commit(next, {
+      frame: Math.min(at(s.frame), last),
+      loop: s.loop ? { in: Math.min(at(s.loop.in), last), out: Math.min(at(s.loop.out), last) } : null,
+      status: `Now ${fps} frames a second. Poses, lip sync and sounds keep their timing: the scene is ${next.scene.durationFrames} frames (${(next.scene.durationFrames / fps).toFixed(1)} s).`,
+    });
+  };
+  // A shorter scene keeps the playhead and loop range inside it. Poses after the end are kept.
+  const setLength = (durationFrames: number) => {
+    const s = store.getState();
+    const last = durationFrames - 1;
+    const loop = s.loop && s.loop.in <= last ? { in: s.loop.in, out: Math.min(s.loop.out, last) } : null;
+    store.commit({ ...project, scene: { ...scene, durationFrames } }, { frame: Math.min(s.frame, last), loop }, 'dur');
+  };
+  // A new scene size keeps what was in the middle of the picture in the middle
+  // (E5), and the whole scene in view if it was fitted (always, for a new shape).
+  const resize = (width: number, height: number, key: string, refit = false) => {
+    const fitted = refit || isViewFitted(store.getState());
+    store.commit(resizeScene(project, width, height), {}, key);
+    if (fitted) zoomToFit();
+  };
+  const preset = SCENE_SIZES.findIndex((p) => p.width === scene.width && p.height === scene.height);
   return (
     <>
       <Section title="Scene">
+        <Row label="Shape">
+          <select
+            aria-label="Scene shape"
+            title="Everything stays centred in the new shape."
+            value={preset}
+            onChange={(e) => {
+              const p = SCENE_SIZES[Number(e.target.value)];
+              if (p) resize(p.width, p.height, 'size', true);
+            }}
+          >
+            {preset < 0 && <option value={-1}>Custom</option>}
+            {SCENE_SIZES.map((p, i) => (
+              <option key={i} value={i} title={`${p.width} × ${p.height}, for ${p.use}`}>
+                {p.name} ({p.use})
+              </option>
+            ))}
+          </select>
+        </Row>
         <Row label="Width">
-          <NumberField label="Scene width" value={scene.width} digits={0} min={16} max={8192} onCommit={(v) => set({ width: Math.round(v) }, 'w')} suffix="px" />
+          <NumberField label="Scene width" value={scene.width} digits={0} min={16} max={8192} onCommit={(v) => resize(Math.round(v), scene.height, 'w')} suffix="px" />
         </Row>
         <Row label="Height">
-          <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => set({ height: Math.round(v) }, 'h')} suffix="px" />
+          <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => resize(scene.width, Math.round(v), 'h')} suffix="px" />
         </Row>
         <Row label="Frame rate">
-          <select aria-label="Frame rate" value={scene.fps} onChange={(e) => set({ fps: Number(e.target.value) }, 'fps')}>
+          <select aria-label="Frame rate" value={scene.fps} onChange={(e) => setFrameRate(Number(e.target.value))}>
             {[24, 25, 30, 60].map((f) => (
               <option key={f} value={f}>{f} fps</option>
             ))}
           </select>
         </Row>
         <Row label="Length">
-          <NumberField label="Length in frames" value={scene.durationFrames} digits={0} min={1} onCommit={(v) => set({ durationFrames: Math.round(v) }, 'dur')} suffix={`frames · ${(scene.durationFrames / scene.fps).toFixed(1)} s`} />
+          <NumberField label="Length in frames" value={scene.durationFrames} digits={0} min={1} onCommit={(v) => setLength(Math.round(v))} suffix={`frames · ${(scene.durationFrames / scene.fps).toFixed(1)} s`} />
         </Row>
         <Row label="Background">
           <input type="color" aria-label="Background color" value={scene.background} onChange={(e) => set({ background: e.target.value }, 'bg')} />
@@ -164,9 +213,12 @@ function SceneProperties({ project }: { project: Project }) {
           </select>
         </Row>
       </Section>
-      <Section title="Style for new shapes">
-        <StyleEditor style={style} onChange={(patch) => store.set((s) => ({ style: { ...s.style, ...patch } }))} />
-      </Section>
+      {/* Shapes are drawn in Build mode. */}
+      {mode === 'build' && (
+        <Section title="Style for new shapes">
+          <StyleEditor style={style} onChange={(patch) => store.set((s) => ({ style: { ...s.style, ...patch } }))} />
+        </Section>
+      )}
     </>
   );
 }
@@ -251,7 +303,7 @@ function LayerProperties({ loc }: { loc: PartLocation }) {
             <select
               aria-label="Layer stepping"
               value={layerSteppingAt(project, layer, frame)}
-              onChange={(e) => store.commit(recordStepping(project, layer, frame, Number(e.target.value) as Stepping), { status: `${layer.name} is on ${['', 'ones', 'twos', 'threes'][Number(e.target.value)]} from frame ${frame + 1}.` })}
+              onChange={(e) => canPoseOnFrame([layer.root.id]) && store.commit(recordStepping(project, layer, frame, Number(e.target.value) as Stepping), { status: `${layer.name} is on ${['', 'ones', 'twos', 'threes'][Number(e.target.value)]} from frame ${frame + 1}.` })}
             >
               <option value={1}>Ones</option>
               <option value={2}>Twos</option>
@@ -339,18 +391,20 @@ function PartProperties({ locs }: { locs: PartLocation[] }) {
   const shown = single ? (animate ? frameAccess(project, frame).local(single.id) : single.rest) ?? single.rest : null;
   const setRest = (patch: Partial<Transform>, key: string) => {
     if (animate && single) {
+      if (!canPoseOnFrame([single.id])) return;
       const s = store.getState();
       store.commit(editAccess(s).write(s.project, new Map([[single.id, patch]])), {}, key);
     } else commitParts(ids, (p) => ({ ...p, rest: { ...p.rest, ...patch } }), key);
   };
   const opacity = animate
     ? (() => {
-        const values = locs.map((l) => channelValueAt(project, l.part.id, 'opacity', frame) ?? 1);
+        const values = locs.map((l) => channelValueAt(project, l.part.id, 'opacity', shownFrame(project, l.part.id, frame)) ?? 1);
         return values.every((v) => v === values[0]) ? values[0]! : null;
       })()
     : same((p) => p.opacity);
   const setOpacity = (v: number) => {
     if (!animate) return commitParts(ids, (p) => ({ ...p, opacity: v }), 'opacity');
+    if (!canPoseOnFrame(ids)) return;
     let next = store.getState().project;
     for (const id of ids) next = recordValue(next, id, 'opacity', frame, v);
     store.commit(next, {}, 'opacity');

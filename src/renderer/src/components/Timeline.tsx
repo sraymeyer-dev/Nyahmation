@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { locatePart } from '../../../engine/edit';
 import { pinIntervals } from '../../../engine/pins';
 import type { Project } from '../../../engine/types';
 import { removeClip, select } from '../editor/actions';
-import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint, stretchLoop } from '../editor/animate';
+import { deleteSelectedMarks, jumpToPose, markContextMenu, retimeMarks, rowFrames, setFrame, setLoopPoint, stretchLoop } from '../editor/animate';
 import { NumberField } from './fields';
 import { store, useEditor, type MarkRef } from '../editor/store';
 import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings';
@@ -11,6 +12,7 @@ import { clipPeaks, playbackClock, playFrom, scrubAt, stopPlayback } from '../au
 import { activeSwitch, enterDrawing } from '../editor/lipsync';
 import { playbackStats, resetPlaybackStats } from '../render/perf';
 import { DrawingThumb } from './DrawingThumb';
+import { revealRow } from './reveal';
 
 // The timeline (docs/DESIGN.md A1, A6): one row for the whole scene, one per
 // layer and one per part. Each diamond is a pose mark. Drag a mark to retime
@@ -78,13 +80,26 @@ export function Timeline() {
   const lipSyncStep = useEditor((s) => s.lipSyncStep);
   const viewOnOnes = useEditor((s) => s.viewOnOnes);
   const cameraView = useEditor((s) => s.cameraView);
-  useEditor((s) => s.audioVersion); // redraw waveforms once sound is decoded
+  const audioVersion = useEditor((s) => s.audioVersion); // redraw waveforms once sound is decoded
   const active = useMemo(() => activeSwitch({ ...store.getState(), project, selection }), [project, selection]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(project.scene.layers.filter((l) => l.kind === 'background').map((l) => l.id)),
   );
   const scroller = useRef<HTMLDivElement>(null);
   const { durationFrames: duration, fps } = project.scene;
+
+  // A part selected on the canvas is shown here too: its layer opens, and its row scrolls into view.
+  useEffect(() => {
+    const layers = new Set(
+      selection.map((id) => locatePart(store.getState().project, id)).flatMap((loc) => (loc?.parent ? [loc.layer.id] : [])), // not for a layer's own row
+    );
+    setCollapsed((c) => ([...c].some((id) => layers.has(id)) ? new Set([...c].filter((id) => !layers.has(id))) : c));
+  }, [selection]);
+  useEffect(() => {
+    const body = scroller.current;
+    const row = body?.querySelector('.tl-row.active');
+    if (body && row) revealRow(body, row, body.querySelector('.tl-ruler-row')?.getBoundingClientRect().height ?? 0);
+  }, [selection, cameraSelected, collapsed]);
 
   const rows = useMemo(() => buildRows(project, collapsed), [project, collapsed]);
   const stepped = project.scene.stepping !== 1 || project.scene.layers.some((l) => (l.stepping ?? 1) !== 1);
@@ -124,6 +139,26 @@ export function Timeline() {
       last = s.frame;
       if (!s.playing && s.audioScrub && s.project.scene.audio.length) scrubAt(s.project, s.frame);
     });
+  }, []);
+
+  // Pinch, or Cmd/Ctrl+scroll, zooms the timeline around the mouse; plain scrolling scrolls.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const z = store.getState().timeline.zoom;
+      const next = Math.max(3, Math.min(48, z * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0025))));
+      const x = e.clientX - el.getBoundingClientRect().left - NAME_W;
+      const frameUnder = (el.scrollLeft + x) / z;
+      store.set((s) => ({ timeline: { ...s.timeline, zoom: next } }));
+      requestAnimationFrame(() => {
+        el.scrollLeft = Math.max(0, frameUnder * next - x);
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   // Keep the playhead in view while playing or stepping.
@@ -232,81 +267,11 @@ export function Timeline() {
     window.addEventListener('pointerup', up);
   };
 
-  return (
-    <section className="timeline" aria-label="Timeline" style={{ height }}>
-      <div className="timeline-resize" onPointerDown={resize} title="Drag to resize the timeline" />
-      <div className="timeline-bar">
-        <button onClick={() => setFrame(frame - 1)} aria-label="Previous frame" title="Previous frame (←)">◀︎</button>
-        <button className="play" onClick={() => store.set((s) => ({ playing: !s.playing }))}>{playing ? 'Pause' : 'Play'}</button>
-        <button onClick={() => setFrame(frame + 1)} aria-label="Next frame" title="Next frame (→)">▶︎</button>
-        <span className="frame" data-testid="frame">
-          {frame + 1} / {duration}
-        </span>
-        <button onClick={() => jumpToPose(-1)} title="Previous pose (Shift+←)" aria-label="Previous pose">⇤</button>
-        <button onClick={() => jumpToPose(1)} title="Next pose (Shift+→)" aria-label="Next pose">⇥</button>
-        <span className="divider" />
-        <span className="label">Loop</span>
-        <button onClick={() => setLoopPoint('in')} title="Loop from this frame (I)">In</button>
-        <button onClick={() => setLoopPoint('out')} title="Loop to this frame (O)">Out</button>
-        {loop && (
-          <>
-            <span className="value">
-              {loop.in + 1}–{loop.out + 1}
-            </span>
-            <button onClick={() => store.set({ loop: null })} aria-label="Clear loop">×</button>
-            <span className="label" title="Change how long the loop range takes: its poses spread out or squeeze together, and later poses move along. With parts selected, only their animation.">
-              Stretch to
-            </span>
-            <NumberField label="Stretch loop to frames" value={loop.out - loop.in + 1} digits={0} min={1} max={10000} suffix="frames" onCommit={stretchLoop} />
-          </>
-        )}
-        <span className="divider" />
-        <label className="check" title="Play a little sound when stepping or scrubbing">
-          <input type="checkbox" checked={audioScrub} onChange={(e) => store.set({ audioScrub: e.target.checked })} />
-          Sound while scrubbing
-        </label>
-        <label className="check" title="Show faint copies of nearby frames">
-          <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
-          Onion skin
-        </label>
-        <label className="check" title="Show the picture as the camera sees it (as it will be exported). Off: the stage, with the camera's frame on it.">
-          <input type="checkbox" checked={cameraView} onChange={(e) => store.set({ cameraView: e.target.checked })} />
-          Camera view
-        </label>
-        {stepped && (
-          <label className="check" title="Preview every frame smoothly, even for characters animated on twos or threes. Export still uses twos and threes.">
-            <input type="checkbox" checked={viewOnOnes} onChange={(e) => store.set({ viewOnOnes: e.target.checked })} />
-            View on ones
-          </label>
-        )}
-        {playing && <PlaybackRate fps={fps} />}
-        <div className="spacer" />
-        {!active && <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>}
-        <button onClick={() => setZoom(zoom / 1.3)} aria-label="Zoom timeline out">−</button>
-        <button onClick={() => setZoom(zoom * 1.3)} aria-label="Zoom timeline in">+</button>
-        <button className="primary" onClick={() => store.set({ exportOpen: true })}>Export…</button>
-      </div>
-      {active && <DrawingPalette part={active.part} set={active.set} step={lipSyncStep} />}
-      <div
-        className="timeline-body"
-        ref={scroller}
-        tabIndex={0}
-        data-testid="timeline"
-        onKeyDown={(e) => {
-          if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-          const s = store.getState();
-          if (s.selectedClip) {
-            e.preventDefault();
-            e.stopPropagation();
-            removeClip(s.selectedClip);
-          } else if (s.timeline.marks.length) {
-            e.preventDefault();
-            e.stopPropagation();
-            deleteSelectedMarks();
-          }
-        }}
-      >
-        <div className="tl-grid" style={{ width: NAME_W + laneWidth + 40 }}>
+  // Everything but the playhead, rebuilt only when what it shows changes:
+  // not on every frame while playing (docs/DESIGN.md N2).
+  const grid = useMemo(
+    () => (
+      <>
           <div className="tl-row tl-ruler-row">
             <div className="tl-name tl-corner">Frame</div>
             <div className="tl-lane tl-ruler" style={{ width: laneWidth }} onPointerDown={scrub}>
@@ -410,6 +375,10 @@ export function Timeline() {
                         title={unused ? `Frame ${f + 1}: not used while the layer repeats frames ${cycle!.from + 1}–${cycle!.to + 1}` : `Frame ${f + 1}`}
                         data-frame={f}
                         onPointerDown={(e) => markDown(e, mark)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          void markContextMenu(mark);
+                        }}
                       />
                     );
                   })}
@@ -417,6 +386,118 @@ export function Timeline() {
               </div>
             );
           })}
+      </>
+    ),
+    // The handlers inside read the store when called, or depend only on these.
+    [project, rows, zoom, duration, fps, marks, loop, selection, cameraSelected, selectedClip, collapsed, audioVersion],
+  );
+
+  return (
+    <section className="timeline" aria-label="Timeline" style={{ height }}>
+      <div className="timeline-resize" onPointerDown={resize} title="Drag to resize the timeline" />
+      <div className="timeline-bar">
+        <button onClick={() => setFrame(frame - 1)} aria-label="Previous frame" title="Previous frame (←)">◀︎</button>
+        <button className="play" onClick={() => store.set((s) => ({ playing: !s.playing }))}>{playing ? 'Pause' : 'Play'}</button>
+        <button onClick={() => setFrame(frame + 1)} aria-label="Next frame" title="Next frame (→)">▶︎</button>
+        <span className="frame" data-testid="frame">
+          {frame + 1} / {duration}
+        </span>
+        <button onClick={() => jumpToPose(-1)} title="Previous pose (Shift+←)" aria-label="Previous pose">⇤</button>
+        <button onClick={() => jumpToPose(1)} title="Next pose (Shift+→)" aria-label="Next pose">⇥</button>
+        <span className="divider" />
+        <span className="label">Loop</span>
+        <button onClick={() => setLoopPoint('in')} title="Loop from this frame (I)">In</button>
+        <button onClick={() => setLoopPoint('out')} title="Loop to this frame (O)">Out</button>
+        {loop && (
+          <>
+            <span className="value">
+              {loop.in + 1}–{loop.out + 1}
+            </span>
+            <button onClick={() => store.set({ loop: null })} aria-label="Clear loop">×</button>
+            <span className="label" title="Change how long the loop range takes: its poses spread out or squeeze together, and later poses move along. With parts selected, only their animation.">
+              Stretch to
+            </span>
+            <NumberField label="Stretch loop to frames" value={loop.out - loop.in + 1} digits={0} min={1} max={10000} suffix="frames" onCommit={stretchLoop} />
+          </>
+        )}
+        <span className="divider" />
+        <label className="check" title="Play a little sound when stepping or scrubbing">
+          <input type="checkbox" checked={audioScrub} onChange={(e) => store.set({ audioScrub: e.target.checked })} />
+          Sound while scrubbing
+        </label>
+        <label className="check" title="Show faint copies of nearby frames">
+          <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
+          Onion skin
+        </label>
+        {onion.enabled && (
+          <>
+            <select
+              aria-label="Onion skin frames each way"
+              title="How many earlier (red) and later (green) frames to show"
+              value={onion.before}
+              onChange={(e) => store.set((s) => ({ onion: { ...s.onion, before: Number(e.target.value), after: Number(e.target.value) } }))}
+            >
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n} each way
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Onion skin spacing"
+              title="How far apart the faint frames are"
+              value={onion.step}
+              onChange={(e) => store.set((s) => ({ onion: { ...s.onion, step: Number(e.target.value) } }))}
+            >
+              <option value={1}>every frame</option>
+              <option value={2}>every 2nd frame</option>
+              <option value={3}>every 3rd frame</option>
+              <option value={4}>every 4th frame</option>
+            </select>
+          </>
+        )}
+        <label className="check" title="Show the picture as the camera sees it (as it will be exported). Off: the stage, with the camera's frame on it.">
+          <input type="checkbox" checked={cameraView} onChange={(e) => store.set({ cameraView: e.target.checked })} />
+          Camera view
+        </label>
+        {stepped && (
+          <label className="check" title="Preview every frame smoothly, even for characters animated on twos or threes. Export still uses twos and threes.">
+            <input type="checkbox" checked={viewOnOnes} onChange={(e) => store.set({ viewOnOnes: e.target.checked })} />
+            View on ones
+          </label>
+        )}
+        {playing && <PlaybackRate fps={fps} />}
+        <div className="spacer" />
+        {!active && <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>}
+        <button onClick={() => setZoom(zoom / 1.3)} aria-label="Zoom timeline out">−</button>
+        <button onClick={() => setZoom(zoom * 1.3)} aria-label="Zoom timeline in">+</button>
+        <button onClick={() => store.set({ recordOpen: true, playing: false })} title="Record dialogue from the microphone, starting here (Shift+Cmd/Ctrl+R)">
+          <span className="record-dot" aria-hidden /> Record…
+        </button>
+        <button className="primary" onClick={() => store.set({ exportOpen: true })}>Export…</button>
+      </div>
+      {active && <DrawingPalette part={active.part} set={active.set} step={lipSyncStep} />}
+      <div
+        className="timeline-body"
+        ref={scroller}
+        tabIndex={0}
+        data-testid="timeline"
+        onKeyDown={(e) => {
+          if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+          const s = store.getState();
+          if (s.selectedClip) {
+            e.preventDefault();
+            e.stopPropagation();
+            removeClip(s.selectedClip);
+          } else if (s.timeline.marks.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteSelectedMarks();
+          }
+        }}
+      >
+        <div className="tl-grid" style={{ width: NAME_W + laneWidth + 40 }}>
+          {grid}
           <div className="tl-playhead" style={{ left: NAME_W + frame * zoom + zoom / 2 }} />
         </div>
       </div>

@@ -2,6 +2,7 @@ import { updatePart } from '../../../engine/edit';
 import { addEffect, EFFECT_NAMES, effectValueAt, recordEffectValue, removeEffect, updateEffect } from '../../../engine/effects';
 import type { BlendMode, Effect, EffectKind, Part } from '../../../engine/types';
 import { store, useEditor } from '../editor/store';
+import { canPoseOnFrame, shownFrame } from '../editor/animate';
 import { NumberField, Row, Section, toHex } from './fields';
 
 // Effects, blend mode and clipping for a part or a whole layer
@@ -45,6 +46,16 @@ const SETTINGS: Record<EffectKind, Setting[]> = {
     { key: 'width', label: 'Width', min: 0, max: 300, step: 10, suffix: '% of the part', percent: true },
     { key: 'softness', label: 'Softness', min: 0, step: 2, suffix: 'px' },
   ],
+  innerShadow: [
+    { key: 'opacity', label: 'Opacity', min: 0, max: 100, step: 5, suffix: '%', percent: true },
+    { key: 'angle', label: 'Direction', step: 15, suffix: '° (225 = shade bottom right)' },
+    { key: 'distance', label: 'Distance', min: 0, step: 2, suffix: 'px' },
+    { key: 'softness', label: 'Softness', min: 0, step: 2, suffix: 'px' },
+  ],
+  innerGlow: [
+    { key: 'opacity', label: 'Opacity', min: 0, max: 100, step: 5, suffix: '%', percent: true },
+    { key: 'size', label: 'Size', min: 0, step: 2, suffix: 'px' },
+  ],
   blur: [{ key: 'amount', label: 'Amount', min: 0, step: 1, suffix: 'px' }],
   haze: [{ key: 'amount', label: 'Amount', min: 0, max: 100, step: 5, suffix: '%', percent: true }],
 };
@@ -59,7 +70,7 @@ export function EffectsSection({ part, title = 'Effects' }: { part: Part; title?
 
   const setNumber = (effect: Effect, setting: Setting, shown: number) => {
     const value = setting.percent ? shown / 100 : shown;
-    if (animate) commit((p) => recordEffectValue(p, part.id, effect.id, setting.key, store.getState().frame, value), `fx-${effect.id}-${setting.key}`);
+    if (animate) canPoseOnFrame([part.id]) && commit((p) => recordEffectValue(p, part.id, effect.id, setting.key, store.getState().frame, value), `fx-${effect.id}-${setting.key}`);
     else commit((p) => updateEffect(p, part.id, effect.id, { [setting.key]: value }), `fx-${effect.id}-${setting.key}`);
   };
 
@@ -125,7 +136,7 @@ export function EffectsSection({ part, title = 'Effects' }: { part: Part; title?
             </Row>
           )}
           {SETTINGS[effect.kind].map((setting) => {
-            const value = animate ? effectValueAt(project, part.id, effect, setting.key, frame) : (effect as unknown as Record<string, number>)[setting.key]!;
+            const value = animate ? effectValueAt(project, part.id, effect, setting.key, shownFrame(project, part.id, frame)) : (effect as unknown as Record<string, number>)[setting.key]!;
             return (
               <Row key={setting.key} label={setting.label}>
                 <NumberField

@@ -137,6 +137,12 @@ function effectReach(e: Effect): number {
       return Math.max(0, e.amount) * 1.5;
     case 'contact':
       return Math.max(0, e.softness) * 1.5; // the oval itself is added to the bounds separately
+    // Inner effects stay inside, but are worked out from what's around the
+    // artwork, so they need as much room outside it as they reach in.
+    case 'innerShadow':
+      return Math.abs(e.distance) + Math.max(0, e.softness) * 1.5;
+    case 'innerGlow':
+      return Math.max(0, e.size) * 1.5;
     case 'haze':
       return 0;
   }
@@ -368,6 +374,41 @@ function applyEffects(content: OffscreenCanvas, effects: readonly Effect[], w: n
     n.filter = 'none';
     if (picture !== content) release(picture);
     picture = next;
+  }
+
+  // Inner shadows and glows: the outside of the silhouette, blurred (and
+  // moved, for a shadow), kept only where the artwork is. Beyond the
+  // picture's edge (where a unit is cut off by the canvas) there's nothing,
+  // which counts as inside, so a cut is never shaded like an edge.
+  for (const e of effects) {
+    if ((e.kind !== 'innerShadow' && e.kind !== 'innerGlow') || e.opacity <= 0) continue;
+    const outside = acquire(w, h);
+    const o = context(outside);
+    o.fillStyle = e.color;
+    o.fillRect(0, 0, w, h);
+    o.globalCompositeOperation = 'destination-out';
+    blit(o, picture, w, h);
+    o.globalCompositeOperation = 'source-over';
+    const shade = acquire(w, h);
+    const s = context(shade);
+    const radius = ((e.kind === 'innerShadow' ? e.softness : e.size) * k) / 2;
+    s.filter = radius > 0.1 ? `blur(${radius}px)` : 'none';
+    if (e.kind === 'innerShadow') {
+      const a = e.angle * DEG_TO_RAD;
+      blit(s, outside, w, h, Math.cos(a) * e.distance * k, Math.sin(a) * e.distance * k);
+    } else blit(s, outside, w, h);
+    s.filter = 'none';
+    s.globalCompositeOperation = 'destination-in';
+    blit(s, picture, w, h);
+    s.globalCompositeOperation = 'source-over';
+    const p = context(picture);
+    p.globalAlpha = Math.min(1, e.opacity);
+    p.globalCompositeOperation = 'source-atop';
+    blit(p, shade, w, h);
+    p.globalAlpha = 1;
+    p.globalCompositeOperation = 'source-over';
+    release(outside);
+    release(shade);
   }
 
   const behind = effects.filter((e) => (e.kind === 'shadow' || e.kind === 'glow') && e.opacity > 0);

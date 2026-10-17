@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, systemPreferences } from 'electron';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
-import { buildMenu } from './menu';
+import { buildMenu, openManual, showContextMenu } from './menu';
+import { forgetProject, onRecentChange, rememberProject } from './recent';
 import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
 import { registerLipSyncHandlers } from './lipsync';
 
@@ -41,8 +42,11 @@ async function sendProject(win: BrowserWindow, path: string): Promise<void> {
   try {
     const bytes = new Uint8Array(await readFile(path));
     win.webContents.send('project:openFile', { path, name: basename(path), bytes });
+    rememberProject(path);
   } catch (err) {
-    dialog.showErrorBox("Couldn't open the project", `${basename(path)}: ${(err as Error).message}`);
+    const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
+    if (missing) forgetProject(path);
+    dialog.showErrorBox("Couldn't open the project", missing ? `${basename(path)} isn't there any more. It may have been moved, renamed or deleted.` : `${basename(path)}: ${(err as Error).message}`);
   }
 }
 
@@ -82,6 +86,23 @@ ipcMain.on('edit:text', (event, command: unknown) => {
   else if (command === 'paste') event.sender.paste();
 });
 
+ipcMain.on('help:manual', () => openManual());
+
+ipcMain.handle('menu:context', (event, items: unknown) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win ? showContextMenu(win, items) : null;
+});
+
+// Recording dialogue: macOS asks the user once whether Nyahmation may use the
+// microphone (the reason shown comes from NSMicrophoneUsageDescription).
+ipcMain.handle('media:microphone', async () => {
+  if (process.platform !== 'darwin') return true;
+  const status = systemPreferences.getMediaAccessStatus('microphone');
+  if (status === 'granted') return true;
+  if (status === 'not-determined') return systemPreferences.askForMediaAccess('microphone');
+  return false;
+});
+
 ipcMain.on('project:ready', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
@@ -104,6 +125,13 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+
+  // The page is the whole app: never navigate away from it (e.g. to a file
+  // dropped outside the drop handling) or open other windows.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   win.on('close', (event) => {
     if (!dirtyWindows.has(win)) return;
@@ -153,6 +181,7 @@ ipcMain.handle('project:open', async (event) => {
   const path = result.filePaths[0];
   if (result.canceled || !path) return null;
   const bytes = new Uint8Array(await readFile(path));
+  rememberProject(path);
   return { path, name: basename(path), bytes };
 });
 
@@ -167,6 +196,7 @@ ipcMain.handle('project:save', async (event, bytes: unknown, existingPath: unkno
     path = result.filePath.endsWith('.nyah') ? result.filePath : `${result.filePath}.nyah`;
   }
   await writeFileAtomic(path, bytes);
+  rememberProject(path);
   return { path, name: basename(path) };
 });
 
@@ -180,11 +210,10 @@ ipcMain.handle('file:importMany', async (event) => {
 
 ipcMain.handle('file:import', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  const options = { properties: ['openFile' as const], filters: IMPORT_FILTERS };
+  const options = { properties: ['openFile' as const, 'multiSelections' as const], filters: IMPORT_FILTERS };
   const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-  const path = result.filePaths[0];
-  if (result.canceled || !path) return null;
-  return { name: basename(path), bytes: new Uint8Array(await readFile(path)) };
+  if (result.canceled) return [];
+  return Promise.all(result.filePaths.map(async (path) => ({ name: basename(path), bytes: new Uint8Array(await readFile(path)) })));
 });
 
 ipcMain.on('document:state', (event, state: { title?: unknown; path?: unknown; dirty?: unknown }) => {
@@ -207,7 +236,8 @@ void app.whenReady().then(() => {
   registerExportHandlers();
   registerRecoveryHandlers();
   registerLipSyncHandlers();
-  buildMenu();
+  buildMenu(openPath);
+  onRecentChange(() => buildMenu(openPath));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

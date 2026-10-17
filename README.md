@@ -18,7 +18,7 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 5b (look):** done. Drop shadows, glows, blur and haze on parts or whole layers (animatable), blend modes, and clipping (pupils that stay inside the eye).
 - **Phase 5c (craft):** done. Copy and paste of parts and poses, arms that swing behind the body, a custom easing curve, stretching or squashing a section of animation, and ProRes 4444 export for video editors.
 - **Phase 6 (stretch goals):** done. Automatic lip sync, mirrored poses, walk cycles, stepping that changes over time, shape tools (union, subtract…), colour swatches and an eyedropper, contact shadows, WebM and H.265 export, and updating characters from the library.
-- Next: a full review and test of the whole app. See the roadmap in the design document.
+- **Review (in progress):** a review of the whole app found and fixed bugs (the scene hidden under the timeline in Animate mode, poses recorded where a cycle repeats, shape tools failing on some outlines, library updates losing animation of parts added before saving a new version, frame-rate changes breaking lip sync) and added drag and drop, Open Recent, a Help menu, tool hints, onion skin settings and a fuzz test of the engine. Still to do: checking it on the reference machine.
 
 ## Running it on a Mac (step by step)
 
@@ -111,17 +111,28 @@ The app has two modes (top bar). **Build** is for drawing and arranging. **Anima
 
 Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctrl+Y on Windows), Cut / Copy / Paste Cmd+X / C / V, Duplicate Cmd+D, Group Cmd+G, Ungroup Shift+Cmd+G, Combine shapes Cmd+8, Bring forward / send backward Cmd+] / Cmd+[ (add Shift for front/back), Import Cmd+I, Zoom Cmd+= / Cmd+-, Fit Cmd+0, Actual size Cmd+1, Grid Cmd+', Snap Shift+Cmd+'. Arrow keys nudge (Shift: 10 px). Shift+Enter selects the parent of the selected part. Pinch or Cmd+scroll zooms; scroll pans.
 
+**View → Interface Size** makes the whole window's text and buttons bigger (or smaller), remembered on this computer.
+
+**Help → Keyboard Shortcuts** (Cmd+/) shows every shortcut on one sheet, and **Help → Nyahmation User Manual** opens the illustrated manual.
+
+**File → Open Recent** lists the last ten projects you opened or saved.
+
+**Right-click** a part on the canvas for what you can do with it: in Build mode cut, copy, paste, duplicate, group, arrange, edit points, make a switch layer, save to the library or delete; in Animate mode copy or paste its pose, mirror it, add blinks to it, pin it there, or move it in front or behind from this frame.
+
+**Drag and drop:** drag files from Finder or Explorer onto the window. Art (SVG, PNG, JPEG) lands where you drop it on the canvas, sounds go on the Sound row, and a `.nyah` project opens.
+
 **Animating (Animate mode):**
 - Go to a frame (click the timeline, or ← / →), then pose with the **Pose** tool (K) or the **Select** tool (V). Every change is recorded as a pose on that frame; Nyahmation fills in the frames between poses. The first time you change a part, its starting position is kept on frame 1 automatically.
 - **Timeline:** each ◆ is a pose. The **Scene** row covers everything, each **layer** row covers a character, and each part has its own row.
   - **Drag a ◆** to retime it. Pulling the pose on frame 10 to frame 5 makes that move twice as fast.
   - **Shift-drag** moves the ◆ and everything after it on that row, so the rest of the timing is kept.
   - **Option-drag** (Mac) or **Ctrl-drag** copies the pose to another frame: a hold.
-  - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold.
+  - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold. **Right-click** a ◆ for the same choices, and to copy it to the playhead.
   - Mouth sounds only move from the mouth's own row, so lip sync stays matched to the dialogue.
 - **Copy a pose:** select parts (or a whole character) and **Copy** (Cmd+C). Go to another frame, or select another character with the same part names, and **Paste**: the pose is recorded there.
 - **Arm behind the body:** select the arm and choose **Send Backward** (Cmd+[) or **Send to Back**: from this frame on it's drawn behind. Bring it forward again on a later frame.
 - **Custom easing:** click a ◆, then **Motion out → Custom curve…**. Drag the two handles, or pick a preset such as Overshoot (a little bounce into the pose) or Anticipate (a small wind-up first).
+- **Blinks:** select the eyes in Animate mode and choose **Object → Add Blinks…** (Alt+Cmd+B): blinks every few seconds, unevenly like a person's, as ordinary poses you can move or delete. Eyes made as a switch layer show their closed drawing; other eyes squash flat for a moment.
 - **Mirror a pose:** select the character and choose **Object → Mirror Pose** (Alt+Cmd+M): the pose flips side to side. **Swap Sides** (Alt+Shift+Cmd+M) swaps the left and right (or front and back) parts' poses as they are: for a walk, copy the first step's pose, paste it half a step later, and swap sides. Parts pair up by name: "Arm (left)"/"Arm (right)", "Leg (front)"/"Leg (back)", or "Leg L"/"Leg R".
 - **Walk cycles:** select the character's layer and tick **Repeat frames** (Properties): after the last frame of the cycle it plays again and again. Tick **Keep moving** so each step carries on from the last (feet pinned to the floor stay planted). Pose the last frame like the first, moved along. Lip sync isn't repeated.
 - **Ones and twos over time:** with the layer selected, change **Animate on** in Animate mode: it applies from that frame, so a fast action can be on ones and the rest on twos.
@@ -132,6 +143,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 
 **The camera (Animate mode):**
 - Press **C** for the **Camera** tool. Drag to pan, Shift-drag to turn, Option-drag (Alt on Windows) up or down to zoom. Each change is a camera pose on the current frame, and the camera glides between poses like a character does. The **Camera** row on the timeline shows its poses; drag them to retime.
+- **Camera shake:** select the Camera row, choose Gentle, Medium or Strong and a length, then **Shake from this frame**, for landings, slams and big footsteps.
 - **Camera view** (on the timeline) shows the picture as the video will be. Untick it to see the whole stage with the camera's frame drawn on it.
 - The camera only changes what you see: characters, poses and pinned feet stay where they are on the stage.
 - **Layer options** (select a layer, then Properties → Camera and scrolling):
@@ -139,10 +151,11 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - **Follows**: a fixed layer can ride along with a part, such as a speech bubble on Pip's head. Draw the bubble where it should sit above the head in Build mode; it follows the head, keeps its size, and stays clear of the head when the camera zooms in.
   - **Depth**: 1 is the stage. Distant scenery at 0.3 moves less when the camera pans or zooms; foreground at 1.5 moves more.
   - **Scroll** and **Repeat sideways**: slide the layer along (negative speeds go left) and repeat it so it never runs out, for scenery passing a car window or a walk on the spot.
+- **Scene shape:** with nothing selected, Properties sets the scene's **Shape**: widescreen (YouTube), tall (Shorts, Reels, TikTok), square and more, or any width and height. Everything stays centred in the new shape.
 - **Gradients:** select a shape and choose a **Fill type** (straight or round gradient) with two colours and an angle. With nothing selected, the scene's **Sky** option paints a gradient sky behind everything. Gradients in imported SVGs come in too.
 
 **Effects (Properties → Effects, or Layer effects for a whole layer):**
-- **Add an effect…**: **Drop shadow**, **Outer glow**, **Contact shadow** (a soft shadow on the ground under a character, which shrinks as it jumps), **Blur** or **Haze**. Effects on a group or layer apply to it as a whole, so a shadow on Pip is one shadow of all of Pip, not darker where his arm crosses his body. Remove one with ×.
+- **Add an effect…**: **Drop shadow**, **Outer glow**, **Inner shadow** (shading just inside the edge, for a pressed button or carved letters), **Inner glow** (light along the inside of the edge, for glass or rim light), **Contact shadow** (a soft shadow on the ground under a character, which shrinks as it jumps), **Blur** or **Haze**. Effects on a group or layer apply to it as a whole, so a shadow on Pip is one shadow of all of Pip, not darker where his arm crosses his body. Remove one with ×.
 - In **Animate** mode, changing an effect's number (a glow's size, a shadow's distance) records it on that frame, so effects can pulse or grow. The marks appear on that part's timeline row.
 - **Blend**: Multiply for shading, Screen or Add for light, Overlay for contrast.
 - **Clip**: put parts inside a shape (drag the pupil onto the eye in the Layers panel), select the shape and tick **Clip**: the pupil only shows on the eye.
@@ -150,7 +163,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 - Effects are the slowest thing to draw. Groups that don't change from frame to frame are reused rather than redrawn; if playback stutters, try Preview → Half. Exports are always full quality.
 
 **Dialogue and lip sync:**
-1. **Record or get the line** as a WAV, MP3, M4A, OGG or FLAC file. In Animate mode, go to the frame where it should start and **Import Art or Sound…** (Cmd+I). It appears on the **Sound** row with its waveform. Drag it to line it up; click it to set its volume or mute it. The scene gets longer if the sound needs it.
+1. **Record the line**: in Animate mode, go to the frame where it should start, click **Record…** on the timeline (or File → Record Dialogue…, Shift+Cmd+R), and talk. Listen to it, then **Keep it** or **Try again**. Or get it as a WAV, MP3, M4A, OGG or FLAC file and **Import Art or Sound…** (Cmd+I). It appears on the **Sound** row with its waveform. Drag it to line it up; click it to set its volume or mute it. The scene gets longer if the sound needs it.
 2. **Make the mouth** (Build mode). Draw each mouth shape, or import them, and **name each one after its shape**: `A` (M, B, P), `B` (K, S, T, EE), `C` (EH, AE), `D` (AA), `E` (AO, ER), `F` (OO, W), `G` (F, V), `H` (L) and `X` (rest). Names like `rest`, `MBP`, `FV` or `mouth_D` work too. A mouth can be several shapes grouped together (lips, teeth, tongue).
 3. Select all the shapes and choose **Object → Make Switch Layer** (Shift+Cmd+M). They become one **Mouth** layer that shows one shape at a time. Put it inside the head in the Layers panel so it moves with the head, and use the Joints tool to place it. PNG mouths: select the Mouth, then **Add drawings from files…** in Properties; files named `A.png`, `D.png` and so on land on the right letter.
 4. **Automatic lip sync:** click the **Mouth** row on the timeline and choose **Auto lip sync…**. Pick the dialogue, and type the words if you can (it's much more accurate with them). It listens and fills in the mouth shapes for the length of the sound; then play it back and fix anything by typing letters. English works best; for another language choose "Another language (by sound)".
@@ -173,7 +186,7 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 
 **View on ones:** for characters animated on twos or threes, tick **View on ones** on the timeline to see every in-between while you check the motion. It only changes the preview; the export still uses twos and threes.
 
-**Library tab:** select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them. A character added from the library remembers it. Improve it, then save it to the library again: Nyahmation offers to save it **as a new version** of the same item. In any other project using that character, select its layer and click **Update from library** (Properties): the drawings and rig are replaced and the animation is kept.
+**Library tab:** under **Built in**, **Add** puts Pip (rigged, with mouths for lip sync) or the sunny hills scenery into any project. To keep your own, select a character layer (click its row in Layers) or some parts, then **Save to library…** and give it a name and tags. **Add** puts a fresh copy into the current project. Items are files in `Documents/Nyahmation Library`; **Folder** opens it in Finder, where you can make subfolders to organise them. A character added from the library remembers it. Improve it, then save it to the library again: Nyahmation offers to save it **as a new version** of the same item. In any other project using that character, select its layer and click **Update from library** (Properties): the drawings and rig are replaced and the animation is kept.
 
 **Copy and paste (Build mode):** select shapes, groups or a whole layer and **Copy** (Cmd+C) or **Cut** (Cmd+X), then **Paste** (Cmd+V). Copies go into the selected group or the active layer, each a little down and to the right so you can see them. A copied mouth keeps sharing its mouth shapes. You can paste into another project too: open it and paste.
 
@@ -181,12 +194,12 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 
 **Colours:** in Fill & stroke, **Swatches** keep the project's colours: click one for the fill, Shift-click for the outline, Option-click to remove it, + to keep the current fill. The eyedropper next to each colour picks a colour from anywhere on the screen.
 
-**Layers panel:** layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
+**Layers panel:** right-click a row to rename, hide, lock, duplicate, delete or save it to the library. Layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
 
 ## Checks
 
 ```sh
-npm run check     # type-check + unit tests
+npm run check     # type-check, lint (React's rules of hooks) and unit tests (with fuzz tests)
 npm run test:e2e  # builds the app and drives it with Playwright (on Linux, run under xvfb-run)
 ```
 

@@ -273,11 +273,11 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><td>The camera</td><td class="wrap">Pan, zoom and turn the view on the timeline with the Camera tool. The characters don't move; only what you see does.</td><td class="ch" data-ref="camera"></td></tr>
     <tr><td>Depth and scrolling</td><td class="wrap">Far hills that move less than the foreground, a sky gradient, a title fixed to the screen, a speech bubble that follows a head, and scenery that scrolls past forever.</td><td class="ch" data-ref="backgrounds"></td></tr>
     <tr><td>Gradients</td><td class="wrap">Any shape can be filled with a straight or round gradient.</td><td class="ch" data-ref="drawing"></td></tr>
-    <tr><td>Effects</td><td class="wrap">Drop shadow, outer glow, blur, haze and contact shadow; blend modes; clipping (pupils that stay inside the eye). All of the numbers can be animated.</td><td class="ch" data-ref="effects"></td></tr>
+    <tr><td>Effects</td><td class="wrap">Drop shadow, outer glow, inner shadow and glow, blur, haze and contact shadow; blend modes; clipping (pupils that stay inside the eye). All of the numbers can be animated.</td><td class="ch" data-ref="effects"></td></tr>
     <tr><td>Cut, copy and paste</td><td class="wrap">Parts and whole layers in Build mode, even between projects; poses in Animate mode.</td><td class="ch" data-ref="drawing"></td></tr>
     <tr><td>Shape tools</td><td class="wrap">Union, Subtract, Intersect and Exclude combine shapes into new ones.</td><td class="ch" data-ref="drawing"></td></tr>
     <tr><td>Swatches and eyedropper</td><td class="wrap">A palette of the project's colours, and picking a colour from anywhere on the screen.</td><td class="ch" data-ref="drawing"></td></tr>
-    <tr><td>Walks and repeats</td><td class="wrap">Mirror Pose, Swap Sides, and cycles: a layer that repeats a stretch of its animation, optionally moving on each time.</td><td class="ch" data-ref="walks"></td></tr>
+    <tr><td>Walks and repeats</td><td class="wrap">Mirror Pose, Swap Sides, blinks, and cycles: a layer that repeats a stretch of its animation, optionally moving on each time.</td><td class="ch" data-ref="walks"></td></tr>
     <tr><td>Timing tools</td><td class="wrap">A custom easing curve, stretching a range of poses, draw-order changes over time, and switching between ones and twos mid-scene.</td><td class="ch" data-ref="timing"></td></tr>
     <tr><td>Automatic lip sync</td><td class="wrap">Nyahmation listens to the dialogue and fills in the mouth shapes for you to polish.</td><td class="ch" data-ref="lipsync"></td></tr>
     <tr><td>More export formats</td><td class="wrap">H.265, WebM (optionally see-through) and ProRes 4444 MOV for video editors.</td><td class="ch" data-ref="export"></td></tr>
@@ -319,7 +319,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
 <!-- ============================================================== 2 getting started -->
 <section class="chapter" id="start" data-title="Getting started" data-sub="Installing, opening, and the demo puppet">
   <h2>Opening Nyahmation</h2>
-  <p>Once Nyahmation is installed in Applications, open it like any other app: from Launchpad, the Dock, or by double-clicking it. Double-clicking a saved project (a <b>.nyah</b> file) opens it too.</p>
+  <p>Once Nyahmation is installed in Applications, open it like any other app: from Launchpad, the Dock, or by double-clicking it. Double-clicking a saved project (a <b>.nyah</b> file) opens it too, and <b>File → Open Recent</b> lists the last ten projects you opened or saved.</p>
+  <p>A new scene starts empty, with a small card saying how to begin: draw with the tools on the left, drag pictures in from your computer, or open <b>Pip, the demo puppet</b>, to see how animating works. It goes away as soon as you draw something.</p>
 
   <h2>Installing it on a Mac (for grown-ups)</h2>
   <p>Nyahmation isn't in the App Store; you make the app from its source code once. You need <b>Node.js</b> (the LTS version from nodejs.org) and a copy of the code (from GitHub: pick the branch, then <b>Code → Download ZIP</b>). Then, in Terminal, inside the Nyahmation folder:</p>
@@ -377,10 +378,12 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
         <tr><th colspan="2">File</th></tr>
         <tr><td>New</td><td><k>⌘N</k></td></tr>
         <tr><td>Open…</td><td><k>⌘O</k></td></tr>
+        <tr><td>Open Recent</td><td></td></tr>
         <tr><td>Open Demo Puppet</td><td></td></tr>
         <tr><td>Save</td><td><k>⌘S</k></td></tr>
         <tr><td>Save As…</td><td><k>⇧⌘S</k></td></tr>
         <tr><td>Import Art or Sound…</td><td><k>⌘I</k></td></tr>
+        <tr><td>Record Dialogue…</td><td><k>⇧⌘R</k></td></tr>
         <tr><td>Export Video…</td><td><k>⌘E</k></td></tr>
       </table>
       <table class="keys">
@@ -402,6 +405,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
         <tr><td>Actual Size</td><td><k>⌘1</k></td></tr>
         <tr><td>Show Grid</td><td><k>⌘'</k></td></tr>
         <tr><td>Snap to Grid</td><td><k>⇧⌘'</k></td></tr>
+        <tr><td>Interface Size (bigger text and buttons)</td><td></td></tr>
         <tr><td>Measure Preview Speed</td><td></td></tr>
       </table>
     </div>
@@ -424,11 +428,20 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
         <tr><td>New Background Layer</td><td></td></tr>
         <tr><td>Mirror Pose (flip left and right)</td><td><k>⌥⌘M</k></td></tr>
         <tr><td>Swap Sides (for walks)</td><td><k>⌥⇧⌘M</k></td></tr>
+        <tr><td>Add Blinks…</td><td><k>⌥⌘B</k></td></tr>
         <tr><td>Mark Branch Joints as Chain Roots</td><td></td></tr>
         <tr><td>Save Selection to Library…</td><td><k>⇧⌘L</k></td></tr>
       </table>
+      <table class="keys">
+        <tr><th colspan="2">Help</th></tr>
+        <tr><td>Nyahmation User Manual</td><td></td></tr>
+        <tr><td>Keyboard Shortcuts (every shortcut on one sheet)</td><td><k>⌘/</k></td></tr>
+      </table>
     </div>
   </div>
+
+  <p><b>Right-click</b> a part on the canvas for a menu of what you can do with it, such as duplicate, group, arrange or delete it in Build mode, or copy its pose, mirror it or pin it in Animate mode.</p>
+  <p>The strip above the canvas reminds you how the current tool works, including what <kbd>Shift</kbd>, <kbd>⌥</kbd> and <kbd>⌘</kbd> do with it.</p>
 
   <h2>Moving around the canvas</h2>
   <ul>
@@ -526,7 +539,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <div class="note"><p><b>Typing?</b> While you're typing in a text field, the same keys cut, copy and paste the text instead.</p></div>
 
   <h2>Importing art</h2>
-  <p><b>File → Import Art or Sound…</b> (<k>⌘I</k>) brings in:</p>
+  <p><b>File → Import Art or Sound…</b> (<k>⌘I</k>) brings in one file or several at once. Or simply <b>drag files from Finder onto the window</b>: pictures land where you drop them on the canvas, sounds go on the Sound row, and a <b>.nyah</b> project opens. Nyahmation brings in:</p>
   <ul>
     <li><b>SVG</b> files from other drawing apps (Inkscape, Illustrator, Affinity, Figma…). Each layer or group in the file becomes a part, with its name, so a character drawn elsewhere arrives ready to rig. Gradients come along. Things Nyahmation can't use, such as text, are listed in a message.</li>
     <li><b>PNG</b> and <b>JPEG</b> pictures. PNGs can have see-through backgrounds. Pictures have a fixed number of pixels, so they look soft if you blow them up; Nyahmation warns you when you export.</li>
@@ -555,6 +568,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><td>Character (C)</td><td class="wrap">One character per layer. Its parts can be rigged and posed, and the whole character can be saved to the library.</td></tr>
     <tr><td>Background (B)</td><td class="wrap">Scenery: sky, hills, a room. It sits behind the characters (drag it up the list to put it in front, for things like a table the character stands behind). Backgrounds can have depth, scroll, and stay fixed to the camera (<a class="xref" data-ref="backgrounds"></a>).</td></tr>
   </table>
+
+  <p><b>Right-click a row</b> to rename, hide or show, lock or unlock, duplicate, delete it, or save it to the library.</p>
 
   <h2>The part tree</h2>
   <p>A part inside another part moves with it, like a hand attached to a forearm attached to an upper arm. This is what makes a puppet: move the upper arm and everything below it comes along.</p>
@@ -648,6 +663,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <p>A background keeps its depth, scrolling and fixed-to-camera settings in the library (<a class="xref" data-ref="backgrounds"></a>).</p>
 
   <h2>Using a library item</h2>
+  <p>Under <b>Built in</b>, at the bottom of the list, are two that come with Nyahmation: <b>Pip</b>, rigged and with mouths for lip sync, and <b>Sunny hills</b>, the scenery he stands on. They're ready to use in any project, even before you've saved anything of your own.</p>
   <p>Click <b>Add</b>. The project gets its own copy, so you can change it freely without changing the library, and you can add the same item as many times as you like (a crowd of Pips!). Shapes land where they were when you saved them.</p>
 
   <h2>Updating a character everywhere</h2>
@@ -730,7 +746,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <p>An arm that swings behind the body needs to change its place in the stacking order partway through the move. In Animate mode, select the part, go to the frame where it should pass behind, and choose <b>Send Backward</b> (<k>⌘[</k>) or <b>Send to Back</b> (<k>⇧⌘[</k>); <b>Bring Forward</b> and <b>Bring to Front</b> go the other way. A mark on the part's row records the change, and the new order holds until the next change. Drag the mark to retime it like any other pose.</p>
 
   <h2>Scene settings</h2>
-  <p>With nothing selected (press <kbd>Esc</kbd>), Properties shows the scene: its size in pixels (1920 × 1080 is standard HD video), the frame rate (24, 25, 30 or 60 frames a second; 24 is the classic cartoon rate), the length in frames, the background colour, an optional <b>Sky</b> gradient (<a class="xref" data-ref="backgrounds"></a>), and <b>Animate on</b> (<a class="xref" data-ref="timing"></a>).</p>
+  <p>With nothing selected (press <kbd>Esc</kbd>), Properties shows the scene: its <b>Shape</b> (widescreen for YouTube, tall for Shorts, Reels and TikTok, square, 4:5 or 4:3; everything stays centred when you change it) and size in pixels (1920 × 1080 is standard HD video), the frame rate (24, 25, 30 or 60 frames a second; 24 is the classic cartoon rate; changing it keeps everything's timing in seconds, so moves keep their speed and lip sync stays on the words), the length in frames, the background colour, an optional <b>Sky</b> gradient (<a class="xref" data-ref="backgrounds"></a>), and <b>Animate on</b> (<a class="xref" data-ref="timing"></a>).</p>
 </section>
 
 <!-- ============================================================== 9 timing -->
@@ -761,6 +777,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <li>With parts selected, only their animation is stretched (and the parts inside them). With nothing selected, the whole scene and the camera are.</li>
     <li>Lip sync isn't stretched unless you select the mouth, because the dialogue doesn't change speed.</li>
   </ul>
+
+  <div class="note"><p><b>Right-click a pose mark</b> for a shortcut menu: how the motion leaves it, <b>Copy to frame…</b> (a copy at the playhead, for a hold) and <b>Delete pose</b>.</p></div>
 
   <h2>Easing: how a move starts and stops</h2>
   <p>Select a pose and choose <b>Motion out</b> in Properties. It decides how the move from this pose to the next one travels:</p>
@@ -801,9 +819,10 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
       <li>Onion skin is on</li>
       <li>Earlier frames show in red…</li>
       <li>…and later frames in green, so you can see the arc of a movement</li>
+      <li>How many frames each way, and how far apart they are</li>
     </ol>
   </figure>
-  <p>Tick <b>Onion skin</b> on the timeline to see faint copies of nearby frames: red for earlier, green for later. It shows the path a movement takes, so you can check that an arm swings in a nice arc.</p>
+  <p>Tick <b>Onion skin</b> on the timeline to see faint copies of nearby frames: red for earlier, green for later. It shows the path a movement takes, so you can check that an arm swings in a nice arc. Next to it, choose how many frames to show each way (1 to 4) and how far apart they are (every frame up to every 4th).</p>
 
   <h2>Pins: feet that stay on the floor</h2>
   <figure data-shot="pins">
@@ -826,7 +845,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
 </section>
 
 <!-- ============================================================== 10 walks -->
-<section class="chapter new" id="walks" data-title="Walks and repeats" data-sub="Copying poses, mirroring, and animation cycles">
+<section class="chapter new" id="walks" data-title="Walks and repeats" data-sub="Copying poses, mirroring, blinks and animation cycles">
   <p>A walk is the classic animation exercise, and three tools make it much quicker: copying poses, mirroring them, and repeating a stretch of animation as a cycle. They're useful well beyond walks, too: a blink every few seconds, a flag flapping, a dog wagging its tail.</p>
 
   <h2>Copying and pasting poses</h2>
@@ -845,6 +864,14 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><td>Swap Sides</td><td><k>⌥⇧⌘M</k></td><td class="wrap">Paired parts swap poses exactly as they are; everything else stays. For characters seen from the side, this is the second half of a walk: the left leg does what the right leg just did.</td></tr>
   </table>
 
+  <h2>Blinks</h2>
+  <p>A character who never blinks looks like a doll. Select the eyes in Animate mode and choose <b>Object → Add Blinks…</b> (<k>⌥⌘B</k>, or right-click the eyes). Nyahmation scatters blinks over the scene, or the loop range, every few seconds but never evenly, the way people blink, now and then twice in quick succession. Each blink is ordinary poses, so you can move one to land on a beat, or delete it; <b>Undo</b> takes them all away again.</p>
+  <ul>
+    <li>If the eyes are a switch layer, a blink shows a drawing you choose (one called "Closed" is picked for you) for a moment.</li>
+    <li>Otherwise the eyes squash flat for a moment, toward their joint: put the joint in the middle of the eyes (<a class="xref" data-ref="rigging"></a>).</li>
+    <li>Frames where the eyes already have poses of their own (a blink you placed, a squint) are left alone.</li>
+  </ul>
+
   <h2>Cycles: repeating animation</h2>
   <figure data-shot="cycle">
     <figcaption>Pip's layer repeating frames 1–24 for the rest of the scene.</figcaption>
@@ -862,6 +889,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <li><b>Frame To counts as frame From of the next repeat,</b> so pose them the same (copy and paste the pose). Otherwise the character jumps at every repeat.</li>
     <li><b>Keep moving</b> makes each repeat start where the last one ended. The character's top part and anything pinned move on by the distance one cycle covers, so a walk actually walks, with its feet still planted.</li>
     <li>Lip sync is never repeated: mouth shapes follow the dialogue. Everything else in the layer repeats, including blinks, draw-order changes, pins and changes of Animate on.</li>
+    <li>After frame <em>To</em> the layer only replays the cycle, so posing it there wouldn't show. Nyahmation doesn't record such a pose: the status line says which frame of the cycle is showing. Change the cycle itself, inside From–To.</li>
   </ul>
 
   <h2>A walk in six steps</h2>
@@ -911,6 +939,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><td>View</td><td class="wrap"><b>Look through the camera</b>: the same as Camera view on the timeline.</td></tr>
     <tr><td>Whole scene on this frame</td><td class="wrap">A camera pose back at the start: the whole scene, straight, at 100%.</td></tr>
     <tr><td>Remove all camera moves</td><td class="wrap">Deletes every camera pose (you can undo it).</td></tr>
+    <tr><td>Shake from this frame</td><td class="wrap">A camera shake for a landing, a slammed door or a giant's footstep: Gentle, Medium or Strong, for the length you choose. The picture jolts back and forth and settles, as a camera pose on each frame. Best while the camera holds still.</td></tr>
   </table>
 
   <h2>Camera view on or off</h2>
@@ -993,6 +1022,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <tr><th>Effect</th><th>Settings</th><th>Good for</th></tr>
     <tr><td>Drop shadow</td><td class="wrap">Colour, opacity, direction, distance, softness</td><td class="wrap">Lifting a character or a title off the background.</td></tr>
     <tr><td>Outer glow</td><td class="wrap">Colour, opacity, size, strength (1 is normal, up to 4)</td><td class="wrap">Magic, lamps, a glowing sun, neon signs.</td></tr>
+    <tr><td>Inner shadow</td><td class="wrap">Colour, opacity, direction, distance, softness</td><td class="wrap">Shading just inside the edge: a pressed button, carved letters, a hole.</td></tr>
+    <tr><td>Inner glow</td><td class="wrap">Colour, opacity, size</td><td class="wrap">Light along the inside of the edge: glass, a jewel, rim light from behind.</td></tr>
     <tr><td>Blur</td><td class="wrap">Amount</td><td class="wrap">Things far away or out of focus, and speed.</td></tr>
     <tr><td>Haze</td><td class="wrap">Colour, amount</td><td class="wrap">Fading distant layers toward the sky colour, as air does with real mountains.</td></tr>
     <tr><td>Contact shadow</td><td class="wrap">Opacity, ground (how far down the stage the floor is; it starts at the part's lowest point), width (a share of the part), softness</td><td class="wrap">A soft oval on the ground under a character. As the character jumps, it shrinks and fades.</td></tr>
@@ -1026,14 +1057,32 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <figure data-shot="sound">
     <figcaption>A voice recording on the Sound row, selected, with its properties.</figcaption>
     <ol class="callouts">
-      <li>Import… (⌘I) adds a sound at the current frame</li>
+      <li>Import… (⌘I) adds a sound file at the current frame; Record… on the timeline records one</li>
       <li>The Sound row, with the sound's waveform. Drag it to line it up</li>
       <li>Sound while scrubbing: hear each frame as you step or drag the playhead</li>
       <li>Sound properties: name, start frame, volume and mute</li>
     </ol>
   </figure>
 
-  <h2>Adding a sound</h2>
+  <h2>Recording dialogue</h2>
+  <figure data-shot="record" class="side" style="--pic: 50%">
+    <figcaption>Recording a line of dialogue.</figcaption>
+    <ol class="callouts">
+      <li>Where the recording will start: the playhead</li>
+      <li>Recording, and for how long</li>
+      <li>How loud the microphone hears you</li>
+      <li>Stop when you've finished the line</li>
+    </ol>
+  </figure>
+  <ol class="steps">
+    <li>In Animate mode, go to the frame where the line should start.</li>
+    <li>Click <b>Record…</b> on the timeline (or <b>File → Record Dialogue…</b>, <k>⇧⌘R</k>), then <b>Start recording</b>, and say the line. The bar shows how loud the microphone hears you.</li>
+    <li>Click <b>Stop</b>. The quiet bits before and after you spoke are trimmed off, so the words start right at the playhead. Listen to it, then click <b>Keep it</b>, or <b>Try again</b>. A kept recording goes on the Sound row, named Line 1, Line 2 and so on. If the scene has a mouth, <b>Keep and lip sync…</b> keeps it and goes straight on to Auto lip sync (<a class="xref" data-ref="lipsync"></a>).</li>
+  </ol>
+  <p>To add a line to animation that's already done, tick <b>Play the scene while I record</b>: the scene plays as you talk (the window moves out of the way), so you can speak in time with the picture.</p>
+  <p>The first time, macOS asks whether Nyahmation may use the microphone: click <b>Allow</b>. If you clicked Don't Allow, turn it on in <b>System Settings → Privacy &amp; Security → Microphone</b>. Use headphones if the scene already has sounds, so the microphone doesn't hear them.</p>
+
+  <h2>Adding a sound file</h2>
   <ol class="steps">
     <li>In Animate mode, go to the frame where the sound should start.</li>
     <li>Choose <b>File → Import Art or Sound…</b> (<k>⌘I</k>) and pick a sound file: WAV, MP3, M4A, AAC, OGG or FLAC.</li>
@@ -1047,7 +1096,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <li><b>Sound while scrubbing</b> (a checkbox on the timeline, on by default) plays a tiny slice of sound for each frame as you step with the arrow keys or drag along the number row. This is how you find exactly where each word starts.</li>
     <li>During playback the picture follows the sound, so they never drift apart, even on a slow computer.</li>
   </ul>
-  <div class="note"><p><b>Recording tip.</b> Record dialogue with your phone's voice memo app or QuickTime Player (File → New Audio Recording), in a quiet room, and save or share it to the Mac. Speak a little more clearly and slowly than normal; it makes lip sync easier, for you and for Auto lip sync.</p></div>
+  <div class="note"><p><b>Recording tip.</b> Record in a quiet room, with the microphone close. Speak a little more clearly and slowly than normal; it makes lip sync easier, for you and for Auto lip sync. A recording from your phone's voice memo app works too: share it to the Mac and drag it onto the window.</p></div>
 </section>
 
 <!-- ============================================================== 15 lip sync -->
@@ -1102,7 +1151,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   </figure>
   <p>Nyahmation can listen to the dialogue and fill in the mouth shapes for you, using Rhubarb Lip Sync. It's a great first draft: it gets most shapes right, and you spend your time polishing instead of typing every letter.</p>
   <ol class="steps">
-    <li>Import the dialogue (<a class="xref" data-ref="sound"></a>) and switch to Animate mode.</li>
+    <li>Record or import the dialogue (<a class="xref" data-ref="sound"></a>) and switch to Animate mode.</li>
     <li>Click the Mouth row's name on the timeline. The mouth palette appears; click <b>Auto lip sync…</b></li>
     <li>Pick the sound, the language, and if you can, type the words. Click <b>Start</b>.</li>
     <li>After a few seconds to a minute, the Mouth row fills with shapes for the length of the sound. Play it, and fix any shape you don't like by typing its letter (below).</li>
@@ -1160,7 +1209,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <ol class="steps">
     <li>Choose <b>File → Export Video…</b> (<k>⌘E</k>), or click <b>Export…</b> on the timeline.</li>
     <li>Pick a format, a size and which frames.</li>
-    <li>Click <b>Export…</b> and choose where to save. A progress bar shows each frame; <b>Cancel</b> stops it.</li>
+    <li>Click <b>Export…</b> and choose where to save. A progress bar shows each frame and roughly how long is left; <b>Cancel</b> stops it.</li>
+    <li>When it's done, <b>Show in Finder</b> takes you to the video.</li>
   </ol>
 
   <h2>Which format?</h2>
@@ -1186,10 +1236,11 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <h2>Projects</h2>
   <p>A project is one scene, saved as one <b>.nyah</b> file. The file holds everything: the drawings, the animation, the camera, pictures and sounds, so you can copy it to another computer or back it up in one piece.</p>
   <ul>
-    <li><b>Save</b> (<k>⌘S</k>) and <b>Save As…</b> (<k>⇧⌘S</k>). A dot after the project's name means there are unsaved changes.</li>
+    <li><b>Save</b> (<k>⌘S</k>) and <b>Save As…</b> (<k>⇧⌘S</k>). A dot after the project's name means there are unsaved changes; undoing back to how it was saved makes the dot go away.</li>
     <li>Nyahmation asks before closing, or opening another project, if there are unsaved changes.</li>
     <li>Saving is safe: the new file is written completely before it replaces the old one, so a crash can't damage your project.</li>
-    <li>Double-click a .nyah file in Finder, or drop it on Nyahmation's Dock icon, to open it.</li>
+    <li>Double-click a .nyah file in Finder, drop it on Nyahmation's Dock icon or window, or pick it from <b>File → Open Recent</b>, to open it.</li>
+    <li>If a file has been damaged (by a failing disk, say), Nyahmation says so instead of opening it, and your autosave or a backup can rescue the work.</li>
   </ul>
 
   <h2>Autosave: a safety net</h2>
