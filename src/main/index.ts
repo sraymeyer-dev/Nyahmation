@@ -105,6 +105,13 @@ function createWindow(): void {
     },
   });
 
+  // The page is the whole app: never navigate away from it (e.g. to a file
+  // dropped outside the drop handling) or open other windows.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   win.on('close', (event) => {
     if (!dirtyWindows.has(win)) return;
     const choice = dialog.showMessageBoxSync(win, {

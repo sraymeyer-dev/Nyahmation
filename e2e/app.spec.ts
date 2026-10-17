@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -1399,6 +1399,52 @@ test('in Animate mode, Shift+Enter selects the parent and Shift+→ finds poses 
   await expect(page.getByTestId('frame')).toHaveText('15 / 72');
   await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Build' }).click();
+});
+
+/** Drops files on the window at a canvas point, as if dragged from Finder. */
+async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
+  const b = await canvasBox();
+  await page.evaluate(
+    ({ files, x, y }) => {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0))], f.name, { type: f.type ?? '' }));
+      const target = document.elementFromPoint(x, y)!;
+      target.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    },
+    { files, x: b.x + at[0], y: b.y + at[1] },
+  );
+}
+
+test('files dropped on the window are imported where they land, or opened', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await menu('new');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60"><rect id="Box" width="100" height="60" fill="#e5484d"/></svg>`;
+  await dropFiles([{ name: 'box.svg', base64: Buffer.from(svg).toString('base64'), type: 'image/svg+xml' }], [250, 180]);
+  await expect.poll(async () => (await state()).names).toContain('Box');
+  const middle = (await debug<Pt>('frameMiddleScreen', 'Box'))!;
+  expect(middle.x).toBeCloseTo(250, 0);
+  expect(middle.y).toBeCloseTo(180, 0);
+
+  await dropFiles([{ name: 'notes.txt', base64: Buffer.from('hello').toString('base64') }], [250, 180]);
+  await expect(page.getByTestId('notice')).toContainText("Couldn't import notes.txt");
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+
+  // A project opens (it wasn't dropped from disk here, so it opens unsaved).
+  const path = join(dir, 'Dropped.nyah');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath })) as typeof dialog.showSaveDialog;
+  }, path);
+  await menu('saveAs');
+  await expect.poll(() => existsSync(path)).toBe(true);
+  await menu('new');
+  expect((await state()).names).not.toContain('Box');
+  await dropFiles([{ name: 'Dropped.nyah', base64: readFileSync(path).toString('base64') }], [250, 180]);
+  await expect.poll(async () => (await state()).names).toContain('Box');
+  expect(await page.evaluate(() => location.protocol)).not.toBe('data:');
 });
 
 test('autosaves unsaved work, and deletes the autosave once saved', async () => {

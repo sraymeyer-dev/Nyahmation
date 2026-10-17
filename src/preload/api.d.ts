@@ -168,6 +168,8 @@ export interface NyahApi {
    */
   onOpenFile(listener: (file: OpenedFile) => void): () => void;
   readyForFiles(): void;
+  /** Where a file dropped on the window is on disk (null if it isn't a file on disk). */
+  pathForFile(file: File): string | null;
   /** Cut, copy or paste text in the focused text field (the menu's shortcuts come to the app first). */
   editText(command: 'cut' | 'copy' | 'paste'): void;
   library: LibraryApi;

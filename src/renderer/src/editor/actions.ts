@@ -21,7 +21,7 @@ import {
 import { booleanShapes, type BooleanOp } from '../../../engine/boolean';
 import { arrangeOnFrame } from '../../../engine/drawOrder';
 import { evaluateRestPose, evaluateScene, type ResolvedScene } from '../../../engine/evaluate';
-import { invert } from '../../../engine/math';
+import { invert, type Mat2D } from '../../../engine/math';
 import { deletePoints, movePoints } from '../../../engine/pathEdit';
 import { createId, createPart, createProject } from '../../../engine/project';
 import type { AudioClip, Layer, LayerKind, Project, Vec2 } from '../../../engine/types';
@@ -345,17 +345,22 @@ export async function openProject(): Promise<void> {
   }
 }
 
-/** Opens a project's bytes, e.g. a .nyah file double-clicked in Finder. */
-export function openProjectFile(opened: OpenedFile, confirm = true): void {
+/**
+ * Opens a project's bytes, e.g. a .nyah file double-clicked in Finder. An
+ * empty path opens it as a new, unsaved project. Returns whether it opened.
+ */
+export function openProjectFile(opened: OpenedFile, confirm = true): boolean {
   if (confirm) {
-    if (get().file?.path === opened.path) return; // already open: the window just comes to the front
-    if (!confirmDiscard()) return;
+    if (opened.path && get().file?.path === opened.path) return false; // already open: the window just comes to the front
+    if (!confirmDiscard()) return false;
   }
   try {
     const bundle = unpackProject(opened.bytes);
-    loadProject(bundle.project, bundle.assets, { path: opened.path, name: opened.name });
+    loadProject(bundle.project, bundle.assets, opened.path ? { path: opened.path, name: opened.name } : null);
+    return true;
   } catch (err) {
     store.set({ notice: { title: `Couldn't open ${opened.name}`, lines: [(err as Error).message] } });
+    return false;
   }
 }
 
@@ -454,8 +459,15 @@ export function removeClip(id: string): void {
   );
 }
 
-export function importBytes(name: string, bytes: Uint8Array): void {
-  if (AUDIO_TYPES[name.split('.').pop()!.toLowerCase()]) {
+/** Whether a file name is a sound Nyahmation can import. */
+export const isSoundFile = (name: string) => !!AUDIO_TYPES[name.split('.').pop()!.toLowerCase()];
+
+/**
+ * Imports art (SVG, PNG, JPEG) into the active layer with its middle at `at`
+ * (a stage position; the middle of the scene by default), or a sound.
+ */
+export function importBytes(name: string, bytes: Uint8Array, at?: Vec2): void {
+  if (isSoundFile(name)) {
     void importAudio(name, bytes);
     return;
   }
@@ -463,12 +475,12 @@ export function importBytes(name: string, bytes: Uint8Array): void {
   const target = containerForNewPart(s);
   if (!target) return;
   const { project: base, containerId, layerId } = target;
-  const { width: W, height: H } = s.project.scene;
+  const middle = at ?? { x: s.project.scene.width / 2, y: s.project.scene.height / 2 };
   try {
     if (/\.svg$/i.test(name)) {
       const result = importSvg(new TextDecoder().decode(bytes), name);
-      const at: [number, number, number, number, number, number] = [1, 0, 0, 1, (W - result.width) / 2, (H - result.height) / 2];
-      const { project, partId } = insertPartAtScene(base, containerId, result.root, at);
+      const place: Mat2D = [1, 0, 0, 1, middle.x - result.width / 2, middle.y - result.height / 2];
+      const { project, partId } = insertPartAtScene(base, containerId, result.root, place);
       const assets = new Map(s.assets);
       for (const a of result.assets) assets.set(a.id, a.bytes);
       const withAssets: Project = {
@@ -494,8 +506,8 @@ export function importBytes(name: string, bytes: Uint8Array): void {
       joint: { pivot: { x: info.width / 2, y: info.height / 2 } },
       image: { assetId, width: info.width, height: info.height },
     });
-    const at: [number, number, number, number, number, number] = [1, 0, 0, 1, (W - info.width) / 2, (H - info.height) / 2];
-    const { project, partId } = insertPartAtScene(base, containerId, part, at);
+    const place: Mat2D = [1, 0, 0, 1, middle.x - info.width / 2, middle.y - info.height / 2];
+    const { project, partId } = insertPartAtScene(base, containerId, part, place);
     const assets = new Map(s.assets).set(assetId, bytes);
     store.commit(
       { ...project, assets: [...project.assets, { id: assetId, name, mimeType: info.mimeType }] },

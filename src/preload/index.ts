@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { MenuCommand, NyahApi, OpenedFile } from './api';
 
 const api: NyahApi = {
@@ -17,6 +17,13 @@ const api: NyahApi = {
     return () => ipcRenderer.removeListener('project:openFile', handler);
   },
   readyForFiles: () => ipcRenderer.send('project:ready'),
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || null;
+    } catch {
+      return null;
+    }
+  },
   editText: (command) => ipcRenderer.send('edit:text', command),
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
   library: {

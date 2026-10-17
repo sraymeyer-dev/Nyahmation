@@ -7,6 +7,7 @@ import * as library from './editor/library';
 import * as lipsync from './editor/lipsync';
 import { measurePreviewSpeed } from './editor/measure';
 import { startAutosave } from './editor/recovery';
+import { acceptDroppedFiles } from './editor/dropFiles';
 import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
 import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
@@ -221,9 +222,11 @@ export function App() {
     const unsubscribe = window.nyah?.onOpenFile((file) => actions.openProjectFile(file));
     window.nyah?.readyForFiles();
     const stopAutosave = startAutosave();
+    const stopDrops = acceptDroppedFiles();
     return () => {
       unsubscribe?.();
       stopAutosave();
+      stopDrops();
     };
   }, []);
 
