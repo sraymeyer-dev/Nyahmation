@@ -2,8 +2,8 @@ import { frameAccess, restAccess, type TransformAccess } from '../../../engine/a
 import { locatePart, topLevelSelection, walkParts } from '../../../engine/edit';
 import { cycleFrameOf } from '../../../engine/evaluate';
 import { mirrorPose, type MirrorMode } from '../../../engine/mirror';
-import { deletePoses, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from '../../../engine/retime';
-import { CAMERA_ID, type Ease, type Project, type Track } from '../../../engine/types';
+import { deletePoses, poseEaseAt, poseFrames, retimePoses, setPoseEase, stretchPoses, type RetimeTarget } from '../../../engine/retime';
+import { CAMERA_ID, type Ease, type EasePreset, type Project, type Track } from '../../../engine/types';
 import { store, type EditorState, type MarkRef } from './store';
 
 // Animate-mode helpers: how tools read and write transforms, and what the
@@ -181,4 +181,44 @@ export function setLoopPoint(which: 'in' | 'out'): void {
   const current = s.loop ?? { in: 0, out: n - 1 };
   const loop = which === 'in' ? { in: s.frame, out: Math.max(s.frame, current.out) } : { in: Math.min(current.in, s.frame), out: s.frame };
   store.set({ loop });
+}
+
+const EASE_CHOICES: [EasePreset, string][] = [
+  ['smooth', 'Smooth (flows through)'],
+  ['easeInOut', 'Ease in and out'],
+  ['easeIn', 'Ease in (start slow)'],
+  ['easeOut', 'Ease out (end slow)'],
+  ['linear', 'Linear (steady)'],
+  ['hold', 'Hold (jump at the next pose)'],
+];
+
+/** Right-click on a pose mark: its easing, a copy at the playhead (a hold), or delete it. */
+export async function markContextMenu(mark: MarkRef): Promise<void> {
+  const api = window.nyah;
+  if (!api) return;
+  let s = get();
+  const sameMark = (m: MarkRef) => m.row === mark.row && m.id === mark.id && m.frame === mark.frame;
+  if (!s.timeline.marks.some(sameMark)) store.set({ timeline: { ...s.timeline, marks: [mark] }, selectedClip: null });
+  s = get();
+  const marks = s.timeline.marks;
+  const ease = poseEaseAt(s.project, markTargets(s.project, marks));
+  const current = typeof ease === 'string' ? ease : ease ? 'custom' : null;
+  const many = marks.length > 1;
+  const chosen = await api.showContextMenu([
+    ...(ease ? EASE_CHOICES.map(([id, label]) => ({ id: `ease:${id}`, label: `Motion out: ${label}`, checked: current === id })) : []),
+    ...(ease ? [{ separator: true as const }] : []),
+    ...(s.frame !== mark.frame && !many ? [{ id: 'copy', label: `Copy to frame ${s.frame + 1} (the playhead)` }] : []),
+    { id: 'delete', label: many ? `Delete ${marks.length} poses` : 'Delete pose' },
+  ]);
+  if (!chosen) return;
+  if (chosen.startsWith('ease:')) setSelectedMarksEase(chosen.slice(5) as EasePreset, `menu-${Date.now()}`);
+  else if (chosen === 'delete') deleteSelectedMarks();
+  else if (chosen === 'copy') {
+    const now = get();
+    const result = retimeMarks(now.project, [mark], now.frame - mark.frame, { ripple: false, copy: true });
+    store.commit(result.project, {
+      timeline: { ...now.timeline, marks: [{ ...mark, frame: mark.frame + result.delta }] },
+      status: `Copied the pose from frame ${mark.frame + 1} to frame ${mark.frame + result.delta + 1}.`,
+    });
+  }
 }

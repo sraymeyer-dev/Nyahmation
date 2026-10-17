@@ -125,7 +125,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - **Drag a ◆** to retime it. Pulling the pose on frame 10 to frame 5 makes that move twice as fast.
   - **Shift-drag** moves the ◆ and everything after it on that row, so the rest of the timing is kept.
   - **Option-drag** (Mac) or **Ctrl-drag** copies the pose to another frame: a hold.
-  - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold.
+  - Click a ◆ to select it (Shift-click for more). **Delete** removes it. Properties sets how the motion leaves it: Smooth, Ease in/out, Linear or Hold. **Right-click** a ◆ for the same choices, and to copy it to the playhead.
   - Mouth sounds only move from the mouth's own row, so lip sync stays matched to the dialogue.
 - **Copy a pose:** select parts (or a whole character) and **Copy** (Cmd+C). Go to another frame, or select another character with the same part names, and **Paste**: the pose is recorded there.
 - **Arm behind the body:** select the arm and choose **Send Backward** (Cmd+[) or **Send to Back**: from this frame on it's drawn behind. Bring it forward again on a later frame.
@@ -189,7 +189,7 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 
 **Colours:** in Fill & stroke, **Swatches** keep the project's colours: click one for the fill, Shift-click for the outline, Option-click to remove it, + to keep the current fill. The eyedropper next to each colour picks a colour from anywhere on the screen.
 
-**Layers panel:** layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
+**Layers panel:** right-click a row to rename, hide, lock, duplicate, delete or save it to the library. Layers are listed front to back. Drag a row onto another to put it inside; drag onto its top or bottom edge to place it in front of or behind. Double-click a name to rename it. The eye hides; the lock stops a layer or part from being selected (and a locked layer can't be drawn on).
 
 ## Checks
 

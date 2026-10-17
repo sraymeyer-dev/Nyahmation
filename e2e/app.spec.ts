@@ -1623,6 +1623,75 @@ test('the interface can be made bigger, and is remembered', async () => {
   await expect.poll(ratio).toBeCloseTo(normal, 2);
 });
 
+/**
+ * Right-clicks `target` and picks `label` from the menu that opens (native
+ * menus can't be clicked here, so the main process picks it). Returns the
+ * menu's labels.
+ */
+async function contextPick(target: import('@playwright/test').Locator, label: string): Promise<string[]> {
+  await app.evaluate(({ Menu }, pick) => {
+    const g = globalThis as any;
+    g.realBuild ??= Menu.buildFromTemplate;
+    Menu.buildFromTemplate = (template: any[]) => {
+      const menu = g.realBuild(template);
+      menu.popup = (options: any) => {
+        g.menuLabels = template.map((i) => i.label ?? '—');
+        template.find((i) => i.label === pick)?.click?.();
+        options?.callback?.();
+      };
+      return menu;
+    };
+  }, label);
+  await target.click({ button: 'right' });
+  await expect.poll(() => app.evaluate(() => (globalThis as any).menuLabels ?? null)).not.toBeNull();
+  const labels = await app.evaluate(() => {
+    const g = globalThis as any;
+    const l = g.menuLabels;
+    g.menuLabels = null;
+    return l as string[];
+  });
+  return labels;
+}
+
+test('right-click menus on pose marks and layer rows', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Animate');
+  await goToFrame(5);
+  // A torso pose: its easing, a copy at the playhead, delete.
+  const mark = row('Torso').locator('.tl-mark[data-frame="16"]');
+  const labels = await contextPick(mark, 'Motion out: Linear (steady)');
+  expect(labels).toEqual(expect.arrayContaining(['Motion out: Smooth (flows through)', 'Copy to frame 6 (the playhead)', 'Delete pose']));
+  expect(await page.evaluate(() => {
+    const n = (window as any).__nyah;
+    const t = n.store.getState().project.scene.tracks.find((x: any) => x.partId === n.part('Torso').id && x.channel === 'rotation');
+    return t.poses.find((p: any) => p.frame === 16).ease;
+  })).toBe('linear');
+  await contextPick(mark, 'Copy to frame 6 (the playhead)');
+  await expect(row('Torso').locator('.tl-mark[data-frame="5"]')).toHaveCount(1);
+  await contextPick(row('Torso').locator('.tl-mark[data-frame="5"]'), 'Delete pose');
+  await expect(row('Torso').locator('.tl-mark[data-frame="5"]')).toHaveCount(0);
+
+  // A layer row: hide it, then show it again.
+  await switchMode('Build');
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  const scenery = page.getByTestId('layer-row').filter({ hasText: 'Scenery' });
+  expect(await contextPick(scenery, 'Hide')).toEqual(expect.arrayContaining(['Rename', 'Hide', 'Lock', 'Save to Library…', 'Delete Layer']));
+  expect((await debug<{ visible: boolean }>('part', 'Scenery')).visible).toBe(false);
+  await contextPick(scenery, 'Show');
+  expect((await debug<{ visible: boolean }>('part', 'Scenery')).visible).toBe(true);
+  // A part: rename it from the menu.
+  await contextPick(page.getByTestId('part-row').filter({ hasText: /^.?Hand$/ }).first(), 'Rename');
+  await page.locator('.outliner input.rename').fill('Left hand');
+  await page.locator('.outliner input.rename').press('Enter');
+  expect(await debug<object | null>('part', 'Left hand')).not.toBeNull();
+  await app.evaluate(({ Menu }) => {
+    Menu.buildFromTemplate = (globalThis as any).realBuild;
+  });
+});
+
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
 async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
   const b = await canvasBox();

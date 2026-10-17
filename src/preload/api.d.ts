@@ -109,6 +109,9 @@ export interface ExportApi {
   reveal(path: string): Promise<void>;
 }
 
+/** One entry in a right-click menu: a choice (with an id), or a separator. */
+export type ContextMenuItem = { id: string; label: string; checked?: boolean; enabled?: boolean } | { separator: true };
+
 /** Commands sent from the native menu (see src/main/menu.ts). */
 export type MenuCommand =
   | 'new'
@@ -186,6 +189,8 @@ export interface NyahApi {
   lipSync: LipSyncApi;
   /** Asks the system to let Nyahmation use the microphone (macOS asks the user once). Resolves to whether it may. */
   askForMicrophone(): Promise<boolean>;
+  /** Shows a right-click menu at the mouse; resolves to the chosen item's id, or null. */
+  showContextMenu(items: ContextMenuItem[]): Promise<string | null>;
   /** Draws the whole window bigger or smaller (1 is normal). */
   setInterfaceSize(factor: number): void;
   /** Opens the illustrated user manual (a PDF) in the system's viewer. */

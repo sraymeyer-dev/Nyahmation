@@ -17,6 +17,30 @@ const item = (label: string, command: MenuCommand, accelerator?: string): MenuIt
   click: () => send(command),
 });
 
+/** A right-click menu from the page: shows it at the mouse and resolves to the chosen id (null if dismissed). */
+export function showContextMenu(win: BrowserWindow, items: unknown): Promise<string | null> {
+  return new Promise((resolve) => {
+    let chosen: string | null = null;
+    const template: MenuItemConstructorOptions[] = (Array.isArray(items) ? items : []).map((raw) => {
+      const i = raw as { id?: unknown; label?: unknown; checked?: unknown; enabled?: unknown; separator?: unknown };
+      if (i.separator) return { type: 'separator' as const };
+      const id = String(i.id);
+      return {
+        label: String(i.label),
+        type: typeof i.checked === 'boolean' ? ('checkbox' as const) : ('normal' as const),
+        checked: i.checked === true,
+        enabled: i.enabled !== false,
+        click: () => {
+          chosen = id;
+        },
+      };
+    });
+    if (!template.length) return resolve(null);
+    // The click handler runs before the menu reports it has closed.
+    Menu.buildFromTemplate(template).popup({ window: win, callback: () => setTimeout(() => resolve(chosen), 0) });
+  });
+}
+
 /** The illustrated user manual: bundled with the app, or in docs/ when running from the source. */
 function manualPath(): string {
   const name = 'Nyahmation-User-Manual.pdf';

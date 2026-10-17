@@ -52,6 +52,7 @@ const api: NyahApi = {
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
   openManual: () => ipcRenderer.send('help:manual'),
   askForMicrophone: () => invoke('media:microphone'),
+  showContextMenu: (items) => invoke('menu:context', items),
   setInterfaceSize: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, factor))),
   library: {
     list: () => invoke('library:list'),

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { pinIntervals } from '../../../engine/pins';
 import type { Project } from '../../../engine/types';
 import { removeClip, select } from '../editor/actions';
-import { deleteSelectedMarks, jumpToPose, retimeMarks, rowFrames, setFrame, setLoopPoint, stretchLoop } from '../editor/animate';
+import { deleteSelectedMarks, jumpToPose, markContextMenu, retimeMarks, rowFrames, setFrame, setLoopPoint, stretchLoop } from '../editor/animate';
 import { NumberField } from './fields';
 import { store, useEditor, type MarkRef } from '../editor/store';
 import { drawingAt, drawingBlocks, MOUTH_SHAPES } from '../../../engine/drawings';
@@ -360,6 +360,10 @@ export function Timeline() {
                         title={unused ? `Frame ${f + 1}: not used while the layer repeats frames ${cycle!.from + 1}–${cycle!.to + 1}` : `Frame ${f + 1}`}
                         data-frame={f}
                         onPointerDown={(e) => markDown(e, mark)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          void markContextMenu(mark);
+                        }}
                       />
                     );
                   })}

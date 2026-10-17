@@ -3,7 +3,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
-import { buildMenu, openManual } from './menu';
+import { buildMenu, openManual, showContextMenu } from './menu';
 import { forgetProject, onRecentChange, rememberProject } from './recent';
 import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
 import { registerLipSyncHandlers } from './lipsync';
@@ -87,6 +87,11 @@ ipcMain.on('edit:text', (event, command: unknown) => {
 });
 
 ipcMain.on('help:manual', () => openManual());
+
+ipcMain.handle('menu:context', (event, items: unknown) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win ? showContextMenu(win, items) : null;
+});
 
 // Recording dialogue: macOS asks the user once whether Nyahmation may use the
 // microphone (the reason shown comes from NSMicrophoneUsageDescription).
