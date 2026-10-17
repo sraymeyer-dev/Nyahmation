@@ -1,5 +1,5 @@
 import { translatePath } from './geometry';
-import { isContinuousChannel, parseEffectChannel } from './tracks';
+import { DISCRETE_CHANNELS, isContinuousChannel, parseEffectChannel } from './tracks';
 import { CAMERA_ID, EFFECT_SETTINGS, type BlendMode, type Effect, type Layer, type LayerKind, type Part, type PartKind, type Project, type Scene, type Stepping, type Track } from './types';
 
 /** Bump when the saved format changes, and add a migration from the old version. */
@@ -147,11 +147,21 @@ export function validateProject(project: Project): void {
     }
   }
   for (const set of project.drawingSets) {
-    for (const d of set.drawings ?? []) {
-      if (!Array.isArray(d.items)) fail(`drawing ${d.key} in ${set.name} is damaged`);
-      for (const item of d.items) if (item.kind === 'shape' && item.style?.fillGradient !== undefined && !validGradient(item.style.fillGradient)) fail(`drawing ${d.key} in ${set.name} has a damaged gradient`);
+    if (!isObject(set) || typeof set.id !== 'string' || !Array.isArray(set.drawings) || (set.vocabulary !== 'mouth' && set.vocabulary !== 'custom')) fail('a drawing set is damaged');
+    for (const d of set.drawings) {
+      if (!isObject(d) || typeof d.key !== 'string' || !Array.isArray(d.items)) fail(`a drawing in ${set.name} is damaged`);
+      for (const item of d.items) {
+        const ok =
+          isObject(item) &&
+          (item.kind === 'shape'
+            ? Array.isArray(item.paths) && item.paths.every(validPath) && validStyle(item.style)
+            : item.kind === 'image' && typeof item.assetId === 'string' && [item.x, item.y, item.width, item.height].every(Number.isFinite));
+        if (!ok) fail(`drawing ${d.key} in ${set.name} is damaged`);
+        if (item.kind === 'shape' && item.style.fillGradient !== undefined && !validGradient(item.style.fillGradient)) fail(`drawing ${d.key} in ${set.name} has a damaged gradient`);
+      }
     }
   }
+  for (const a of project.assets) if (!isObject(a) || typeof a.id !== 'string' || typeof a.mimeType !== 'string') fail('a file in the project is damaged');
   if (scene.sky !== undefined && !(typeof scene.sky?.top === 'string' && typeof scene.sky?.bottom === 'string')) fail('the sky is damaged');
   if (project.swatches !== undefined && !(Array.isArray(project.swatches) && project.swatches.every((c) => typeof c === 'string'))) fail('the colour swatches are damaged');
 
@@ -162,7 +172,19 @@ export function validateProject(project: Project): void {
     if (!isObject(part) || typeof part.id !== 'string') fail('a part has no id');
     if (partIds.has(part.id)) fail(`part id ${part.id} is used twice`);
     partIds.add(part.id);
+    if (typeof part.name !== 'string' || !PART_KINDS.includes(part.kind)) fail(`part ${part.id} has no name or an unknown kind`);
     if (!Array.isArray(part.children)) fail(`part ${part.name} has no children list`);
+    const r = part.rest;
+    if (!isObject(r) || ![r.x, r.y, r.rotation, r.scaleX, r.scaleY].every(sane)) fail(`part ${part.name} has a damaged position`);
+    if (!isObject(part.joint) || !validPoint(part.joint.pivot)) fail(`part ${part.name} has a damaged joint`);
+    const j = part.joint;
+    if (![j.minAngle, j.maxAngle].every((a) => a === undefined || Number.isFinite(a)) || ![undefined, 1, -1].includes(j.bendDirection)) fail(`part ${part.name} has damaged joint limits`);
+    if (!Number.isFinite(part.opacity) || typeof part.visible !== 'boolean' || !Number.isFinite(part.drawOrder)) fail(`part ${part.name} has damaged settings`);
+    if (part.paths !== undefined && !(Array.isArray(part.paths) && part.paths.every(validPath))) fail(`part ${part.name} has a damaged outline`);
+    if (part.style !== undefined && !validStyle(part.style)) fail(`part ${part.name} has a damaged fill or stroke`);
+    if (part.image !== undefined && !validImage(part.image)) fail(`part ${part.name} has a damaged picture`);
+    if (part.drawingSetId !== undefined && typeof part.drawingSetId !== 'string') fail(`part ${part.name} has a damaged drawing set`);
+    if (part.restDrawing !== undefined && typeof part.restDrawing !== 'string') fail(`part ${part.name} has a damaged drawing`);
     const g = part.style?.fillGradient;
     if (g !== undefined && !validGradient(g)) fail(`part ${part.name} has a damaged gradient`);
     if (part.blend !== undefined && !BLEND_MODES.includes(part.blend)) fail(`part ${part.name} has an unknown blend mode`);
@@ -178,9 +200,10 @@ export function validateProject(project: Project): void {
     part.children.forEach(checkPart);
   };
   scene.layers.forEach((layer: Layer) => {
+    if (!isObject(layer) || typeof layer.id !== 'string' || !isObject(layer.root)) fail('a layer is damaged');
     if (layer.kind !== 'character' && layer.kind !== 'background') fail(`layer ${layer.name} has an unknown kind`);
     if (layer.stepping !== undefined && !isStepping(layer.stepping)) fail(`layer ${layer.name} has invalid stepping`);
-    if (layer.depth !== undefined && !(Number.isFinite(layer.depth) && layer.depth >= 0)) fail(`layer ${layer.name} has an invalid depth`);
+    if (layer.depth !== undefined && !(Number.isFinite(layer.depth) && layer.depth >= 0 && layer.depth <= 10)) fail(`layer ${layer.name} has an invalid depth`);
     if (layer.follow !== undefined && typeof layer.follow?.partId !== 'string') fail(`layer ${layer.name} follows nothing`);
     if (layer.scroll !== undefined && !(Number.isFinite(layer.scroll?.speed) && typeof layer.scroll?.repeat === 'boolean')) fail(`layer ${layer.name} has invalid scrolling`);
     const c = layer.cycle;
@@ -193,6 +216,9 @@ export function validateProject(project: Project): void {
 
   const seen = new Set<string>();
   scene.tracks.forEach((track: Track) => {
+    if (!isObject(track) || typeof track.partId !== 'string' || typeof track.channel !== 'string' || !Array.isArray(track.poses)) fail('an animation track is damaged');
+    if (!isContinuousChannel(track.channel) && !(DISCRETE_CHANNELS as readonly string[]).includes(track.channel)) fail(`unknown animation channel ${track.channel}`);
+    if (!track.poses.every(isObject)) fail(`a pose on ${track.partId}/${track.channel} is damaged`);
     const key = `${track.partId}/${track.channel}`;
     if (seen.has(key)) fail(`two tracks for ${key}`);
     seen.add(key);
@@ -216,8 +242,17 @@ export function validateProject(project: Project): void {
       }
       lastFrame = pose.frame;
       if (pose.ease !== undefined && !validEase(pose.ease)) fail(`pose on ${key} at frame ${pose.frame} has an unknown easing`);
-      if (isContinuousChannel(track.channel) && !Number.isFinite(pose.value)) {
+      if (isContinuousChannel(track.channel) && !sane(pose.value)) {
         fail(`pose on ${key} at frame ${pose.frame} is not a number`);
+      }
+      if (track.channel === 'zoom' && !((pose.value as number) > 0 && (pose.value as number) <= 1000)) fail(`the camera zoom at frame ${pose.frame} is out of range`);
+      const v: unknown = pose.value;
+      if (
+        (track.channel === 'drawing' && typeof v !== 'string') ||
+        (track.channel === 'visible' && typeof v !== 'boolean') ||
+        (track.channel === 'drawOrder' && !Number.isFinite(v))
+      ) {
+        fail(`pose on ${key} at frame ${pose.frame} is damaged`);
       }
       if (track.channel === 'pin' && pose.value !== null) {
         const v = pose.value as { point?: { x?: unknown; y?: unknown }; at?: { x?: unknown; y?: unknown } };
@@ -229,6 +264,40 @@ export function validateProject(project: Project): void {
 }
 
 const BLEND_MODES: readonly BlendMode[] = ['normal', 'multiply', 'screen', 'add', 'overlay'];
+const PART_KINDS: readonly PartKind[] = ['group', 'shape', 'switch', 'image'];
+
+/** A finite number of a sensible size: far bigger ones overflow when multiplied together. */
+function sane(n: unknown): boolean {
+  return Number.isFinite(n) && Math.abs(n as number) < 1e9;
+}
+
+function validPoint(p: unknown): boolean {
+  return isObject(p) && sane(p.x) && sane(p.y);
+}
+
+function validPath(path: unknown): boolean {
+  if (!isObject(path) || typeof path.closed !== 'boolean' || !Array.isArray(path.points)) return false;
+  return path.points.every(
+    (pt: unknown) => isObject(pt) && validPoint(pt.anchor) && (pt.handleIn === undefined || validPoint(pt.handleIn)) && (pt.handleOut === undefined || validPoint(pt.handleOut)),
+  );
+}
+
+function validStyle(s: unknown): boolean {
+  const paint = (c: unknown) => c === null || typeof c === 'string';
+  return (
+    isObject(s) &&
+    paint(s.fill) &&
+    paint(s.stroke) &&
+    Number.isFinite(s.strokeWidth) &&
+    ['butt', 'round', 'square'].includes(s.lineCap) &&
+    ['miter', 'round', 'bevel'].includes(s.lineJoin) &&
+    ['nonzero', 'evenodd'].includes(s.fillRule)
+  );
+}
+
+function validImage(i: unknown): boolean {
+  return isObject(i) && typeof i.assetId === 'string' && Number.isFinite(i.width) && Number.isFinite(i.height) && i.width > 0 && i.height > 0;
+}
 
 function validEffect(e: unknown): e is Effect {
   if (!isObject(e) || typeof e.id !== 'string' || !(e.kind in EFFECT_SETTINGS)) return false;

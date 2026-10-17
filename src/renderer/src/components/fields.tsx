@@ -45,7 +45,8 @@ export function NumberField({
   const shown = value === null ? '' : format(value, digits);
   const [text, setText] = useState(shown);
   useEffect(() => setText(shown), [shown]);
-  const clamp = (v: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
+  // Without limits of their own, numbers stay within what a project file accepts.
+  const clamp = (v: number) => Math.min(max ?? 1e8, Math.max(min ?? -1e8, v));
   const commit = (raw: string) => {
     const v = Number(raw);
     if (raw.trim() === '' || !Number.isFinite(v)) setText(shown);
