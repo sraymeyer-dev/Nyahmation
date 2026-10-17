@@ -1271,3 +1271,46 @@ input[type='color'] {
   height: 20px;
   padding: 0;
 }
+
+/* Help → Keyboard Shortcuts */
+.modal.shortcuts {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.shortcut-columns {
+  columns: 2 360px;
+  column-gap: 24px;
+}
+
+.shortcut-columns section {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+
+.shortcut-columns h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.shortcut-columns table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.shortcut-columns td {
+  padding: 2px 0;
+  vertical-align: top;
+}
+
+.shortcut-columns td.keys {
+  white-space: nowrap;
+  padding-right: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}

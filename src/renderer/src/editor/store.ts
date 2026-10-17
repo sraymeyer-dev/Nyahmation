@@ -71,6 +71,8 @@ export interface EditorState {
   /** Timeline zoom (pixels per frame) and selected pose marks. */
   timeline: { zoom: number; marks: readonly MarkRef[] };
   exportOpen: boolean;
+  /** Help → Keyboard Shortcuts is showing. */
+  shortcutsOpen: boolean;
   /** Play a snippet of sound when stepping or scrubbing (LS2). */
   audioScrub: boolean;
   /** The audio clip selected on the timeline. */
@@ -143,6 +145,7 @@ function initialState(): EditorState {
     onion: { enabled: false, before: 2, after: 2, step: 2 },
     timeline: { zoom: 14, marks: [] },
     exportOpen: false,
+    shortcutsOpen: false,
     audioScrub: true,
     selectedClip: null,
     lipSyncStep: 1,

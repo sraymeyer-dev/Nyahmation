@@ -9,8 +9,11 @@ files:
 # FFmpeg is a program the app runs, so it must stay outside the asar archive.
 asarUnpack:
   - node_modules/ffmpeg-static/**
-# Rhubarb Lip Sync (automatic lip sync), downloaded by npm run setup, if present.
+# Rhubarb Lip Sync (automatic lip sync), downloaded by npm run setup, if
+# present; and the user manual (Help → Nyahmation User Manual).
 extraResources:
+  - from: docs/manual/Nyahmation-User-Manual.pdf
+    to: Nyahmation-User-Manual.pdf
   - from: vendor/rhubarb
     to: rhubarb
     filter:

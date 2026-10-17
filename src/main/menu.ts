@@ -1,5 +1,6 @@
-import { BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron';
-import { basename, dirname } from 'node:path';
+import { app, BrowserWindow, dialog, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { existsSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import type { MenuCommand } from '../preload/api';
 import { clearRecentProjects, recentProjects } from './recent';
 
@@ -15,6 +16,23 @@ const item = (label: string, command: MenuCommand, accelerator?: string): MenuIt
   accelerator,
   click: () => send(command),
 });
+
+/** The illustrated user manual: bundled with the app, or in docs/ when running from the source. */
+function manualPath(): string {
+  const name = 'Nyahmation-User-Manual.pdf';
+  return app.isPackaged ? join(process.resourcesPath, name) : join(app.getAppPath(), 'docs', 'manual', name);
+}
+
+function openManual(): void {
+  const path = manualPath();
+  if (!existsSync(path)) {
+    dialog.showErrorBox("Couldn't find the user manual", `It should be at ${path}.`);
+    return;
+  }
+  void shell.openPath(path).then((error) => {
+    if (error) dialog.showErrorBox("Couldn't open the user manual", error);
+  });
+}
 
 /** File → Open Recent: each project by name (with its folder when two share a name), then Clear Menu. */
 function recentMenu(openRecent: (path: string) => void): MenuItemConstructorOptions[] {
@@ -117,6 +135,13 @@ export function buildMenu(openRecent: (path: string) => void): void {
       ],
     },
     { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Nyahmation User Manual', click: openManual },
+        item('Keyboard Shortcuts', 'shortcuts', 'CmdOrCtrl+/'),
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

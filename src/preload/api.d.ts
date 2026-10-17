@@ -150,7 +150,8 @@ export type MenuCommand =
   | 'boolUnion'
   | 'boolSubtract'
   | 'boolIntersect'
-  | 'boolExclude';
+  | 'boolExclude'
+  | 'shortcuts';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */

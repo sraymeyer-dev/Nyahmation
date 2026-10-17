@@ -1482,6 +1482,30 @@ test('a shorter scene keeps the playhead inside it; Ctrl+scroll zooms the timeli
   await menu('undo');
 });
 
+test('Help: keyboard shortcuts, and the user manual', async () => {
+  await menu('shortcuts');
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(sheet).toContainText('Play and pause');
+  await expect(sheet).toContainText('Pose K');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+
+  await app.evaluate(({ shell }) => {
+    (globalThis as any).opened = [];
+    shell.openPath = async (p: string) => {
+      (globalThis as any).opened.push(p);
+      return '';
+    };
+  });
+  await app.evaluate(({ Menu }) => {
+    const help = Menu.getApplicationMenu()!.items.find((i) => i.role === 'help')!.submenu!;
+    help.items.find((i) => i.label === 'Nyahmation User Manual')!.click();
+  });
+  const opened = await app.evaluate(() => (globalThis as any).opened as string[]);
+  expect(opened).toHaveLength(1);
+  expect(opened[0]).toMatch(/docs[\\/]manual[\\/]Nyahmation-User-Manual\.pdf$/);
+});
+
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
 async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
   const b = await canvasBox();

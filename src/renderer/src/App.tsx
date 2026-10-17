@@ -16,6 +16,7 @@ import { ExportDialog } from './components/ExportDialog';
 import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
 import { RecoveryPrompt } from './components/RecoveryPrompt';
+import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { Sidebar } from './components/Sidebar';
 import { ToolOptions } from './components/ToolOptions';
 import { Toolbar } from './components/Toolbar';
@@ -81,6 +82,7 @@ const MENU: Record<MenuCommand, () => void> = {
   boolExclude: () => actions.booleanOp('exclude'),
   mirrorPose: () => mirrorSelected('mirror'),
   swapSides: () => mirrorSelected('swap'),
+  shortcuts: () => store.set({ shortcutsOpen: true }),
 };
 
 let menuCommandsHandled = 0;
@@ -115,7 +117,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.exportOpen || s.lipSyncDialogFor) return;
+  if (s.exportOpen || s.lipSyncDialogFor || s.shortcutsOpen) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (lipSyncKey(e, s)) {
       e.preventDefault();
@@ -280,6 +282,7 @@ export function App() {
         <Sidebar />
         <ExportDialog />
         <LipSyncDialog />
+        <ShortcutsDialog />
       </div>
     </div>
   );
