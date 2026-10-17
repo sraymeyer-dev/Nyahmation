@@ -126,6 +126,26 @@ export function Timeline() {
     });
   }, []);
 
+  // Pinch, or Cmd/Ctrl+scroll, zooms the timeline around the mouse; plain scrolling scrolls.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const z = store.getState().timeline.zoom;
+      const next = Math.max(3, Math.min(48, z * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0025))));
+      const x = e.clientX - el.getBoundingClientRect().left - NAME_W;
+      const frameUnder = (el.scrollLeft + x) / z;
+      store.set((s) => ({ timeline: { ...s.timeline, zoom: next } }));
+      requestAnimationFrame(() => {
+        el.scrollLeft = Math.max(0, frameUnder * next - x);
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   // Keep the playhead in view while playing or stepping.
   useEffect(() => {
     const el = scroller.current;

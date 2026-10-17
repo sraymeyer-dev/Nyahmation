@@ -128,6 +128,13 @@ function SceneProperties({ project }: { project: Project }) {
       status: `Now ${fps} frames a second. Poses, lip sync and sounds keep their timing: the scene is ${next.scene.durationFrames} frames (${(next.scene.durationFrames / fps).toFixed(1)} s).`,
     });
   };
+  // A shorter scene keeps the playhead and loop range inside it. Poses after the end are kept.
+  const setLength = (durationFrames: number) => {
+    const s = store.getState();
+    const last = durationFrames - 1;
+    const loop = s.loop && s.loop.in <= last ? { in: s.loop.in, out: Math.min(s.loop.out, last) } : null;
+    store.commit({ ...project, scene: { ...scene, durationFrames } }, { frame: Math.min(s.frame, last), loop }, 'dur');
+  };
   // A new scene size: keep the whole scene in view if it was fitted.
   const resize = (patch: Partial<Scene>, key: string) => {
     const fitted = isViewFitted(store.getState());
@@ -151,7 +158,7 @@ function SceneProperties({ project }: { project: Project }) {
           </select>
         </Row>
         <Row label="Length">
-          <NumberField label="Length in frames" value={scene.durationFrames} digits={0} min={1} onCommit={(v) => set({ durationFrames: Math.round(v) }, 'dur')} suffix={`frames · ${(scene.durationFrames / scene.fps).toFixed(1)} s`} />
+          <NumberField label="Length in frames" value={scene.durationFrames} digits={0} min={1} onCommit={(v) => setLength(Math.round(v))} suffix={`frames · ${(scene.durationFrames / scene.fps).toFixed(1)} s`} />
         </Row>
         <Row label="Background">
           <input type="color" aria-label="Background color" value={scene.background} onChange={(e) => set({ background: e.target.value }, 'bg')} />

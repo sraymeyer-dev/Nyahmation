@@ -61,6 +61,15 @@ async function menu(command: string) {
   await page.waitForFunction((n) => ((window as any).__nyahMenuCount ?? 0) > n, before);
 }
 
+/**
+ * Switches mode and waits until the canvas has its new size: the timeline
+ * opens or closes, and a fitted view refits, before the next paint.
+ */
+async function switchMode(mode: 'Build' | 'Animate') {
+  await page.getByRole('tab', { name: mode }).click();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
 /** Canvas-relative mouse helpers. */
 async function canvasBox() {
   return (await page.getByTestId('stage').boundingBox())!;
@@ -236,7 +245,7 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   });
   await menu('openDemo');
   await expect(page.getByTestId('layer-row')).toHaveCount(2);
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await expect(page.getByTestId('frame')).toHaveText('1 / 72');
   const signature = () =>
     page.evaluate(() => {
@@ -255,10 +264,10 @@ test('the demo plays in Animate mode, on ones and on twos', async () => {
   await page.screenshot({ path: 'test-results/animate.png' });
 
   // On twos: frame 22 is a pose, 23 repeats it, 24 moves on.
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('Escape');
   await page.getByLabel('Animate on').selectOption('2');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.keyboard.press('Home');
   for (let i = 0; i < 22; i++) await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('frame')).toHaveText('23 / 72');
@@ -284,7 +293,7 @@ const debug = <T,>(fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as any).__nyah[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
 
 test('the Pose tool bends the arm to follow a dragged hand', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('Escape');
   await page.keyboard.press('k');
   const torsoBefore = await debug<{ rest: object }>('part', 'Torso');
@@ -395,7 +404,7 @@ test('posing on a frame in Animate mode records poses and shows marks', async ()
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.keyboard.press('k');
   await goToFrame(33);
   // Drag the hand as drawn on this frame.
@@ -655,7 +664,7 @@ async function streams(file: string): Promise<string[]> {
 }
 
 test('makes a mouth switch layer from shapes named after mouth shapes', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate(() => {
     window.confirm = () => true;
   });
@@ -702,7 +711,7 @@ test('the camera zooms and pans on the timeline, and only changes what you see',
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const partPoses = () => page.evaluate(() => JSON.stringify((window as any).__nyah.store.getState().project.scene.tracks.filter((t: any) => t.partId !== 'camera')));
   const posesBefore = await partPoses();
   const headBefore = await debug<Pt>('framePartScreen', 'Head');
@@ -743,7 +752,7 @@ test('the camera zooms and pans on the timeline, and only changes what you see',
 
 test('a layer fixed to the camera follows a part, keeping its size', async () => {
   // Draw a name tag above Pip's head on a new layer (Build mode).
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await menu('newBackgroundLayer');
   await page.keyboard.press('m');
   const head = (await debug<Pt>('partScreen', 'Head'))!;
@@ -759,7 +768,7 @@ test('a layer fixed to the camera follows a part, keeping its size', async () =>
   await page.getByLabel('Follows part').selectOption({ label: 'Head' });
 
   // Animate: the camera zooms (from the previous test) and Pip walks right.
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const tagAt = (f: number) =>
     page.evaluate(([n, frame]) => {
       const nyah = (window as any).__nyah;
@@ -781,7 +790,7 @@ test('a layer fixed to the camera follows a part, keeping its size', async () =>
 
 test('a sky, a gradient fill, parallax depth and a scrolling layer', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.getByRole('tab', { name: 'Layers' }).click();
   const pixel = (at: Pt) =>
     page.evaluate((p) => {
@@ -820,7 +829,7 @@ test('a sky, a gradient fill, parallax depth and a scrolling layer', async () =>
   await speed.press('Enter');
   await page.getByLabel('Repeat sideways').check();
 
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const sunAt = (f: number) =>
     page.evaluate((frame) => {
       const nyah = (window as any).__nyah;
@@ -913,7 +922,7 @@ test('a drop shadow on a group is one shadow of the whole group', async () => {
   await page.evaluate(() => {
     window.confirm = () => true;
   });
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
   await page.getByRole('tab', { name: 'Layers' }).click();
   expect(near(await stagePixel(420, 250), [255, 255, 255])).toBe(true);
@@ -965,7 +974,7 @@ test('blend modes, clipping, haze and an animated glow', async () => {
   // Animate a glow on the eye: bigger on frame 10.
   await outlineRow('Eye').click();
   await page.getByLabel('Add effect').selectOption('glow');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(10);
   await page.getByLabel('Outer glow size').fill('60');
   await page.getByLabel('Outer glow size').press('Enter');
@@ -1006,7 +1015,7 @@ test('copies, cuts and pastes parts in Build mode', async () => {
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.getByRole('tab', { name: 'Layers' }).click();
   const count = (name: string) => state().then((s) => s.names.filter((n) => n === name).length);
   const selectedAt = () => page.evaluate(() => (window as any).__nyah.selectedScreen());
@@ -1065,11 +1074,11 @@ test('copies, cuts and pastes parts in Build mode', async () => {
 
 test('copies a pose onto another frame and onto a copy of the character', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
   await menu('copy');
   await menu('paste'); // a second Pip, with no animation
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const ids = await page.evaluate(() => {
     const layers = (window as any).__nyah.store.getState().project.scene.layers.filter((l: any) => l.name === 'Pip');
     const forearm = (root: any) => {
@@ -1101,7 +1110,7 @@ test('copies a pose onto another frame and onto a copy of the character', async 
 
 test('in Animate mode, sending a part back is a draw-order swap from that frame', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(30);
   await page.evaluate(() => {
     const nyah = (window as any).__nyah;
@@ -1115,13 +1124,13 @@ test('in Animate mode, sending a part back is a draw-order swap from that frame'
   expect(await order(29)).toEqual(before);
   await expect(row('Upper arm (front)').locator('.tl-mark[data-frame="30"]')).toHaveCount(1);
   // The rest pose isn't touched.
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   expect((await order(0))[0]).not.toBe('Upper arm (front)');
 });
 
 test('a custom easing curve, and stretching a range of poses', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   // Select Torso's first pose mark and give it a custom curve.
   await row('Torso').locator('.tl-mark').first().click();
   await page.getByLabel('Pose easing').selectOption('custom');
@@ -1173,7 +1182,7 @@ test('mirrors a pose, and swaps sides for a walk', async () => {
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(20);
   const ids = await page.evaluate(() => {
     const nyah = (window as any).__nyah;
@@ -1200,7 +1209,7 @@ test('mirrors a pose, and swaps sides for a walk', async () => {
 
 test('a layer can repeat as a cycle, and change its stepping over time', async () => {
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByTestId('layer-row').filter({ hasText: 'Pip' }).click();
   await page.getByLabel('Repeat as a cycle').check();
@@ -1258,7 +1267,7 @@ test('a layer can repeat as a cycle, and change its stepping over time', async (
 });
 
 test('shape tools: union, subtract, intersect and exclude', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
   await page.getByRole('tab', { name: 'Layers' }).click();
   // Red and Green overlap in 250–300; subtract Green from Red (Red is behind).
@@ -1307,8 +1316,8 @@ test('colour swatches and the eyedropper', async () => {
       }
     };
   });
-  await page.getByRole('tab', { name: 'Animate' }).click();
-  await page.getByRole('tab', { name: 'Build' }).click(); // re-render so the button appears
+  await switchMode('Animate');
+  await switchMode('Build'); // re-render so the button appears
   await outlineRow('Pupil').click();
   await page.getByLabel('Pick fill colour from the screen').click();
   await expect.poll(() => page.evaluate(() => (window as any).__nyah.part('Pupil').style.fill)).toBe('#123456');
@@ -1318,7 +1327,7 @@ test('colour swatches and the eyedropper', async () => {
 });
 
 test('a contact shadow sits on the ground under a group, and shrinks as it rises', async () => {
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
   await page.getByRole('tab', { name: 'Layers' }).click();
   await outlineRow('Squares').click();
@@ -1330,7 +1339,7 @@ test('a contact shadow sits on the ground under a group, and shrinks as it rises
   const under = await stagePixel(275, 305);
   expect(under[0]!).toBeLessThan(235);
   // Lift the squares 150 px (in Animate mode): the oval stays on the ground, fainter and smaller.
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await goToFrame(5);
   await page.getByLabel('Y', { exact: true }).fill('-150');
   await page.getByLabel('Y', { exact: true }).press('Enter');
@@ -1376,11 +1385,11 @@ test('measures preview speed and shows the playback rate', async () => {
   await expect(page.getByTestId('notice')).toContainText('Quarter:');
   await page.getByTestId('notice').getByRole('button', { name: 'Dismiss' }).click();
 
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await page.getByRole('button', { name: 'Play' }).click();
   await expect(page.getByTestId('playback-rate')).toContainText(/Showing \d+ of 24 fps/);
   await page.getByRole('button', { name: 'Pause' }).click();
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
 });
 
 test('the scene stays fitted when the timeline opens, until you zoom', async () => {
@@ -1392,7 +1401,7 @@ test('the scene stays fitted when the timeline opens, until you zoom', async () 
     const corner = (await debug<Pt>('stageScreen', { x: 1920, y: 1080 }))!;
     return { corner, height: (await canvasBox()).height };
   };
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   await expect.poll(async () => {
     const b = await bottom();
     return b.corner.y <= b.height;
@@ -1400,14 +1409,14 @@ test('the scene stays fitted when the timeline opens, until you zoom', async () 
   // After zooming by hand, the view is left alone.
   await menu('zoomIn');
   const zoomed = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom)).toBe(zoomed);
   await menu('zoomFit');
 });
 
 test('in Animate mode, Shift+Enter selects the parent and Shift+→ finds poses inside a group', async () => {
-  await page.getByRole('tab', { name: 'Animate' }).click();
+  await switchMode('Animate');
   const selectNamed = (name: string) =>
     page.evaluate((n) => {
       const nyah = (window as any).__nyah;
@@ -1423,7 +1432,7 @@ test('in Animate mode, Shift+Enter selects the parent and Shift+→ finds poses 
   await page.keyboard.press('Shift+ArrowRight');
   await expect(page.getByTestId('frame')).toHaveText('15 / 72');
   await page.keyboard.press('Escape');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
 });
 
 test('changing the frame rate keeps the timing of poses and lip sync', async () => {
@@ -1431,7 +1440,7 @@ test('changing the frame rate keeps the timing of poses and lip sync', async () 
     window.confirm = () => true;
   });
   await menu('openDemo');
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('Escape');
   const mouthFrames = () =>
     page.evaluate(() => {
@@ -1446,6 +1455,26 @@ test('changing the frame rate keeps the timing of poses and lip sync', async () 
   await expect(page.getByLabel('Length in frames')).toHaveValue('90');
   await menu('undo');
   expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
+});
+
+test('a shorter scene keeps the playhead inside it; Ctrl+scroll zooms the timeline', async () => {
+  await switchMode('Animate');
+  await page.evaluate(() => (window as any).__nyah.store.set({ frame: 60, loop: { in: 50, out: 70 } }));
+  await page.keyboard.press('Escape');
+  await page.getByLabel('Length in frames').fill('55');
+  await page.getByLabel('Length in frames').press('Enter');
+  await expect(page.getByTestId('frame')).toHaveText('55 / 55');
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().loop)).toEqual({ in: 50, out: 54 });
+
+  const zoom = () => page.evaluate(() => (window as any).__nyah.store.getState().timeline.zoom);
+  const before = await zoom();
+  const box = (await page.getByTestId('timeline').boundingBox())!;
+  await page.mouse.move(box.x + 400, box.y + 60);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -200);
+  await page.keyboard.up('Control');
+  await expect.poll(zoom).toBeGreaterThan(before);
+  await menu('undo');
 });
 
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
@@ -1467,7 +1496,7 @@ test('files dropped on the window are imported where they land, or opened', asyn
   await page.evaluate(() => {
     window.confirm = () => true;
   });
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await menu('new');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60"><rect id="Box" width="100" height="60" fill="#e5484d"/></svg>`;
   await dropFiles([{ name: 'box.svg', base64: Buffer.from(svg).toString('base64'), type: 'image/svg+xml' }], [250, 180]);
@@ -1497,7 +1526,7 @@ test('files dropped on the window are imported where they land, or opened', asyn
 test('autosaves unsaved work, and deletes the autosave once saved', async () => {
   const recovery = join(dir, 'recovery');
   const autosaves = () => (existsSync(recovery) ? readdirSync(recovery).filter((f) => f.endsWith('.nyah')) : []);
-  await page.getByRole('tab', { name: 'Build' }).click();
+  await switchMode('Build');
   await page.keyboard.press('m');
   await drag([300, 300], [360, 350]);
   expect((await state()).dirty).toBe(true);
