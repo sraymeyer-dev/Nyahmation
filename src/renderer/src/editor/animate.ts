@@ -72,13 +72,23 @@ export function setFrame(frame: number): void {
   store.set({ frame: Math.max(0, Math.min(n - 1, Math.round(frame))), playing: false });
 }
 
-/** Jumps to the previous or next frame with a pose (on the selected parts, or anywhere). */
+/** Jumps to the previous or next frame with a pose (on the selected parts and what's inside them, or anywhere). */
 export function jumpToPose(direction: 1 | -1): void {
   const s = get();
-  const ids = s.selection.length ? new Set(s.selection) : rowParts(s.project, 'scene', '');
+  const ids = s.selection.length ? selectedSubtrees(s.project, s.selection) : rowParts(s.project, 'scene', '');
   const frames = poseFrames(s.project, ids);
   const target = direction > 0 ? frames.find((f) => f > s.frame) : [...frames].reverse().find((f) => f < s.frame);
   if (target !== undefined) setFrame(target);
+}
+
+/** The selected parts and everything inside them (a group's poses are mostly on its children). */
+function selectedSubtrees(project: Project, selection: readonly string[]): Set<string> {
+  const ids = new Set<string>();
+  for (const id of selection) {
+    const loc = locatePart(project, id);
+    if (loc) for (const p of walkParts(loc.part)) ids.add(p.id);
+  }
+  return ids;
 }
 
 /**
@@ -90,11 +100,7 @@ export function jumpToPose(direction: 1 | -1): void {
 export function stretchLoop(length: number): void {
   const s = get();
   if (!s.loop) return;
-  const parts = new Set<string>();
-  for (const id of s.selection) {
-    const loc = locatePart(s.project, id);
-    if (loc) for (const p of walkParts(loc.part)) parts.add(p.id);
-  }
+  const parts = selectedSubtrees(s.project, s.selection);
   const selectedMouth = new Set(s.selection);
   const isLipSync = lipSyncTrack(s.project);
   const inScope = (t: Track) => (parts.size === 0 || parts.has(t.partId)) && (!isLipSync(t) || selectedMouth.has(t.partId));

@@ -159,7 +159,10 @@ function onKeyDown(e: KeyboardEvent): void {
         else deleteSelectedMarks();
         return;
       case 'Escape':
-        store.set((st) => ({ selection: [], selectedClip: null, timeline: { ...st.timeline, marks: [] } }));
+        store.set((st) => ({ selection: [], selectedClip: null, cameraSelected: false, timeline: { ...st.timeline, marks: [] } }));
+        return;
+      case 'Enter':
+        if (e.shiftKey) actions.selectParent();
         return;
     }
     return;

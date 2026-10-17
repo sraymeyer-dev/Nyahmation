@@ -1364,6 +1364,26 @@ test('the scene stays fitted when the timeline opens, until you zoom', async () 
   await menu('zoomFit');
 });
 
+test('in Animate mode, Shift+Enter selects the parent and Shift+→ finds poses inside a group', async () => {
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  const selectNamed = (name: string) =>
+    page.evaluate((n) => {
+      const nyah = (window as any).__nyah;
+      nyah.store.set({ selection: [nyah.part(n).id] });
+    }, name);
+  const selectedName = () => page.evaluate(() => (window as any).__nyah.nameOf((window as any).__nyah.store.getState().selection[0]));
+  await selectNamed('Hand');
+  await page.keyboard.press('Shift+Enter');
+  expect(await selectedName()).toBe('Forearm (front)');
+  // The torso's own next pose is on frame 17; its raised arm's is on frame 15.
+  await selectNamed('Torso');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(page.getByTestId('frame')).toHaveText('15 / 72');
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: 'Build' }).click();
+});
+
 test('autosaves unsaved work, and deletes the autosave once saved', async () => {
   const recovery = join(dir, 'recovery');
   const autosaves = () => (existsSync(recovery) ? readdirSync(recovery).filter((f) => f.endsWith('.nyah')) : []);
