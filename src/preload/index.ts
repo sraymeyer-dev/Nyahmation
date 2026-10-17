@@ -51,6 +51,7 @@ const api: NyahApi = {
   editText: (command) => ipcRenderer.send('edit:text', command),
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
   openManual: () => ipcRenderer.send('help:manual'),
+  askForMicrophone: () => invoke('media:microphone'),
   library: {
     list: () => invoke('library:list'),
     read: (relPath) => invoke('library:read', relPath),

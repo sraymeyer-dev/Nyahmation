@@ -71,6 +71,8 @@ export interface EditorState {
   /** Timeline zoom (pixels per frame) and selected pose marks. */
   timeline: { zoom: number; marks: readonly MarkRef[] };
   exportOpen: boolean;
+  /** The Record dialogue window is open (AU6). */
+  recordOpen: boolean;
   /** Help → Keyboard Shortcuts is showing. */
   shortcutsOpen: boolean;
   /** Play a snippet of sound when stepping or scrubbing (LS2). */
@@ -146,6 +148,7 @@ function initialState(): EditorState {
     timeline: { zoom: 14, marks: [] },
     exportOpen: false,
     shortcutsOpen: false,
+    recordOpen: false,
     audioScrub: true,
     selectedClip: null,
     lipSyncStep: 1,

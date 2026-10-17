@@ -24,6 +24,7 @@ const SECTIONS: { title: string; entries: Entry[] }[] = [
       [cmd('S'), 'Save'],
       [cmd('S', { shift: true }), 'Save as'],
       [cmd('I'), 'Import art or sound (or drag files onto the window)'],
+      [cmd('R', { shift: true }), 'Record dialogue from the microphone'],
       [cmd('E'), 'Export video'],
     ],
   },

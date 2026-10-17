@@ -151,7 +151,8 @@ export type MenuCommand =
   | 'boolSubtract'
   | 'boolIntersect'
   | 'boolExclude'
-  | 'shortcuts';
+  | 'shortcuts'
+  | 'recordDialogue';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -179,6 +180,8 @@ export interface NyahApi {
   export: ExportApi;
   recovery: RecoveryApi;
   lipSync: LipSyncApi;
+  /** Asks the system to let Nyahmation use the microphone (macOS asks the user once). Resolves to whether it may. */
+  askForMicrophone(): Promise<boolean>;
   /** Opens the illustrated user manual (a PDF) in the system's viewer. */
   openManual(): void;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */

@@ -452,6 +452,9 @@ export function Timeline() {
         {!active && <span className="hint">Drag ◆ to retime · Shift: ripple · Option/Ctrl: copy</span>}
         <button onClick={() => setZoom(zoom / 1.3)} aria-label="Zoom timeline out">−</button>
         <button onClick={() => setZoom(zoom * 1.3)} aria-label="Zoom timeline in">+</button>
+        <button onClick={() => store.set({ recordOpen: true, playing: false })} title="Record dialogue from the microphone, starting here (Shift+Cmd/Ctrl+R)">
+          <span className="record-dot" aria-hidden /> Record…
+        </button>
         <button className="primary" onClick={() => store.set({ exportOpen: true })}>Export…</button>
       </div>
       {active && <DrawingPalette part={active.part} set={active.set} step={lipSyncStep} />}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, systemPreferences } from 'electron';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
@@ -87,6 +87,16 @@ ipcMain.on('edit:text', (event, command: unknown) => {
 });
 
 ipcMain.on('help:manual', () => openManual());
+
+// Recording dialogue: macOS asks the user once whether Nyahmation may use the
+// microphone (the reason shown comes from NSMicrophoneUsageDescription).
+ipcMain.handle('media:microphone', async () => {
+  if (process.platform !== 'darwin') return true;
+  const status = systemPreferences.getMediaAccessStatus('microphone');
+  if (status === 'granted') return true;
+  if (status === 'not-determined') return systemPreferences.askForMediaAccess('microphone');
+  return false;
+});
 
 ipcMain.on('project:ready', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);

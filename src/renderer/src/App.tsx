@@ -16,6 +16,7 @@ import { EmptyScene } from './components/EmptyScene';
 import { ExportDialog } from './components/ExportDialog';
 import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
+import { RecordDialog } from './components/RecordDialog';
 import { RecoveryPrompt } from './components/RecoveryPrompt';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { Sidebar } from './components/Sidebar';
@@ -84,6 +85,7 @@ const MENU: Record<MenuCommand, () => void> = {
   mirrorPose: () => mirrorSelected('mirror'),
   swapSides: () => mirrorSelected('swap'),
   shortcuts: () => store.set({ shortcutsOpen: true }),
+  recordDialogue: () => store.set({ recordOpen: true, playing: false }),
 };
 
 let menuCommandsHandled = 0;
@@ -118,7 +120,7 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   const s = store.getState();
-  if (s.exportOpen || s.lipSyncDialogFor || s.shortcutsOpen) return;
+  if (s.exportOpen || s.lipSyncDialogFor || s.shortcutsOpen || s.recordOpen) return;
   if (s.mode === 'animate' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (lipSyncKey(e, s)) {
       e.preventDefault();
@@ -285,6 +287,7 @@ export function App() {
         <ExportDialog />
         <LipSyncDialog />
         <ShortcutsDialog />
+        <RecordDialog />
       </div>
     </div>
   );

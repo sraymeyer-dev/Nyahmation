@@ -1347,3 +1347,50 @@ input[type='color'] {
   border: none;
   color: var(--muted);
 }
+
+/* Record dialogue */
+.record-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e5484d;
+  vertical-align: baseline;
+}
+
+.record-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-status .record-dot {
+  animation: record-pulse 1s ease-in-out infinite;
+}
+
+@keyframes record-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.level {
+  height: 8px;
+  border-radius: 4px;
+  background: #1f2023;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.level .bar {
+  height: 100%;
+  background: #30a46c;
+  transition: width 60ms linear;
+}
+
+.modal.record audio {
+  width: 100%;
+  margin: 4px 0;
+}

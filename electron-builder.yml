@@ -24,6 +24,9 @@ fileAssociations:
     role: Editor
 mac:
   category: public.app-category.graphics-design
+  # Shown when macOS asks whether Nyahmation may use the microphone (Record Dialogue).
+  extendInfo:
+    NSMicrophoneUsageDescription: Nyahmation records dialogue for your animations.
   # Built for the Mac it's made on (Intel or Apple Silicon): the bundled
   # FFmpeg is downloaded for that chip only, so a universal app can't carry it.
   target:

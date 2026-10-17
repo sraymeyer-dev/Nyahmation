@@ -11,7 +11,8 @@ let page: Page;
 const dir = mkdtempSync(join(tmpdir(), 'nyah-'));
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: ['.'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery'), NYAH_RECENT_FILE: join(dir, 'recent.json') } });
+  // A pretend microphone (a beep), allowed without asking, for recording dialogue.
+  app = await electron.launch({ args: ['.', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'], env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery'), NYAH_RECENT_FILE: join(dir, 'recent.json') } });
   page = await app.firstWindow();
   page.on('pageerror', (err) => console.error('Page error:', err.message));
   await page.setViewportSize({ width: 1400, height: 860 });
@@ -1550,6 +1551,31 @@ test('Help: keyboard shortcuts, and the user manual', async () => {
   const opened = await app.evaluate(() => (globalThis as any).opened as string[]);
   expect(opened).toHaveLength(1);
   expect(opened[0]).toMatch(/docs[\\/]manual[\\/]Nyahmation-User-Manual\.pdf$/);
+});
+
+test('records dialogue from the microphone onto the Sound row', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Animate');
+  await goToFrame(4);
+  await page.getByRole('button', { name: 'Record…' }).click();
+  const box = page.getByTestId('record-dialog');
+  await expect(box).toContainText('from frame 5');
+  await box.getByRole('button', { name: 'Start recording' }).click();
+  await expect(box.getByTestId('record-time')).toContainText(/Recording… 1\.\d s/, { timeout: 10_000 });
+  await box.getByRole('button', { name: 'Stop' }).click();
+  await box.getByRole('button', { name: 'Keep it' }).click();
+  await expect(box).toHaveCount(0);
+  const clip = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[0]);
+  expect(clip.name).toBe('Line 1');
+  expect(clip.startFrame).toBe(4);
+  expect(clip.duration).toBeGreaterThan(0.8);
+  await expect(page.getByTestId('audio-clip')).toContainText('Line 1');
+  // It's kept as a WAV file, like an imported one.
+  const mime = await page.evaluate(() => (window as any).__nyah.store.getState().project.assets.at(-1).mimeType);
+  expect(mime).toBe('audio/wav');
 });
 
 /** Drops files on the window at a canvas point, as if dragged from Finder. */

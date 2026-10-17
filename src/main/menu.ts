@@ -66,6 +66,7 @@ export function buildMenu(openRecent: (path: string) => void): void {
         item('Save As…', 'saveAs', 'Shift+CmdOrCtrl+S'),
         { type: 'separator' },
         item('Import Art or Sound…', 'import', 'CmdOrCtrl+I'),
+        item('Record Dialogue…', 'recordDialogue', 'Shift+CmdOrCtrl+R'),
         item('Export Video…', 'export', 'CmdOrCtrl+E'),
         ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'quit' as const }]),
       ],
