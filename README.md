@@ -149,6 +149,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
   - **Follows**: a fixed layer can ride along with a part, such as a speech bubble on Pip's head. Draw the bubble where it should sit above the head in Build mode; it follows the head, keeps its size, and stays clear of the head when the camera zooms in.
   - **Depth**: 1 is the stage. Distant scenery at 0.3 moves less when the camera pans or zooms; foreground at 1.5 moves more.
   - **Scroll** and **Repeat sideways**: slide the layer along (negative speeds go left) and repeat it so it never runs out, for scenery passing a car window or a walk on the spot.
+- **Scene shape:** with nothing selected, Properties sets the scene's **Shape**: widescreen (YouTube), tall (Shorts, Reels, TikTok), square and more, or any width and height. Everything stays centred in the new shape.
 - **Gradients:** select a shape and choose a **Fill type** (straight or round gradient) with two colours and an angle. With nothing selected, the scene's **Sky** option paints a gradient sky behind everything. Gradients in imported SVGs come in too.
 
 **Effects (Properties → Effects, or Layer effects for a whole layer):**

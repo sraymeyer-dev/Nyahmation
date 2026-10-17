@@ -2,6 +2,7 @@ import { locatePart, restWorldMatrix, updateLayer, updatePart, type PartLocation
 import { channelValueAt, frameAccess, recordValue } from '../../../engine/access';
 import { applyToPoint } from '../../../engine/math';
 import { changeFrameRate, poseEaseAt } from '../../../engine/retime';
+import { resizeScene, SCENE_SIZES } from '../../../engine/stage';
 import { canPoseOnFrame, shownFrame, deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
@@ -136,20 +137,40 @@ function SceneProperties({ project }: { project: Project }) {
     const loop = s.loop && s.loop.in <= last ? { in: s.loop.in, out: Math.min(s.loop.out, last) } : null;
     store.commit({ ...project, scene: { ...scene, durationFrames } }, { frame: Math.min(s.frame, last), loop }, 'dur');
   };
-  // A new scene size: keep the whole scene in view if it was fitted.
-  const resize = (patch: Partial<Scene>, key: string) => {
-    const fitted = isViewFitted(store.getState());
-    set(patch, key);
+  // A new scene size keeps what was in the middle of the picture in the middle
+  // (E5), and the whole scene in view if it was fitted (always, for a new shape).
+  const resize = (width: number, height: number, key: string, refit = false) => {
+    const fitted = refit || isViewFitted(store.getState());
+    store.commit(resizeScene(project, width, height), {}, key);
     if (fitted) zoomToFit();
   };
+  const preset = SCENE_SIZES.findIndex((p) => p.width === scene.width && p.height === scene.height);
   return (
     <>
       <Section title="Scene">
+        <Row label="Shape">
+          <select
+            aria-label="Scene shape"
+            title="Everything stays centred in the new shape."
+            value={preset}
+            onChange={(e) => {
+              const p = SCENE_SIZES[Number(e.target.value)];
+              if (p) resize(p.width, p.height, 'size', true);
+            }}
+          >
+            {preset < 0 && <option value={-1}>Custom</option>}
+            {SCENE_SIZES.map((p, i) => (
+              <option key={i} value={i}>
+                {p.name}, {p.width} × {p.height}
+              </option>
+            ))}
+          </select>
+        </Row>
         <Row label="Width">
-          <NumberField label="Scene width" value={scene.width} digits={0} min={16} max={8192} onCommit={(v) => resize({ width: Math.round(v) }, 'w')} suffix="px" />
+          <NumberField label="Scene width" value={scene.width} digits={0} min={16} max={8192} onCommit={(v) => resize(Math.round(v), scene.height, 'w')} suffix="px" />
         </Row>
         <Row label="Height">
-          <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => resize({ height: Math.round(v) }, 'h')} suffix="px" />
+          <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => resize(scene.width, Math.round(v), 'h')} suffix="px" />
         </Row>
         <Row label="Frame rate">
           <select aria-label="Frame rate" value={scene.fps} onChange={(e) => setFrameRate(Number(e.target.value))}>

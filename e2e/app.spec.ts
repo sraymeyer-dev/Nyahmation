@@ -1556,6 +1556,31 @@ test('changing the frame rate keeps the timing of poses and lip sync', async () 
   expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
 });
 
+test('a new scene shape keeps the characters in the middle', async () => {
+  await switchMode('Build');
+  await page.keyboard.press('Escape');
+  const state = () =>
+    page.evaluate(() => {
+      const s = (window as any).__nyah.store.getState();
+      const pip = s.project.scene.layers.find((l: any) => l.name === 'Pip').root;
+      return { w: s.project.scene.width, h: s.project.scene.height, x: pip.rest.x, y: pip.rest.y };
+    });
+  const before = await state();
+  await page.getByLabel('Scene shape').selectOption({ label: 'Tall (Shorts, Reels, TikTok), 1080 × 1920' });
+  const after = await state();
+  expect(after).toEqual({ w: 1080, h: 1920, x: before.x + (1080 - before.w) / 2, y: before.y + (1920 - before.h) / 2 });
+  await expect(page.getByLabel('Scene width')).toHaveValue('1080');
+  // Typing a size that isn't one of the shapes shows it as Custom.
+  await page.getByLabel('Scene width').fill('1000');
+  await page.getByLabel('Scene width').press('Enter');
+  await expect(page.getByLabel('Scene shape').locator('option:checked')).toHaveText('Custom');
+  // Out of the field, so Undo is the project's rather than the field's.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await menu('undo');
+  await menu('undo');
+  expect(await state()).toEqual(before);
+});
+
 test('a shorter scene keeps the playhead inside it; Ctrl+scroll zooms the timeline', async () => {
   await switchMode('Animate');
   await page.evaluate(() => (window as any).__nyah.store.set({ frame: 60, loop: { in: 50, out: 70 } }));

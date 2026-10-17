@@ -30,6 +30,7 @@ import { mirrorPose } from './mirror';
 import { pinPart, unpinPart } from './pins';
 import { createProject, parseProject } from './project';
 import { changeFrameRate, deletePoses, retimePoses, stretchPoses } from './retime';
+import { resizeScene } from './stage';
 import { setPivot } from './rig';
 import { recordStepping } from './stepping';
 import { EFFECT_SETTINGS, type Part, type Project, type Stepping } from './types';
@@ -137,6 +138,7 @@ const EDITS: Record<string, (p: Project, r: Rng) => Project> = {
     return stretchPoses(p, from, from + r.int(0, 30), r.int(1, 60)).project;
   },
   frameRate: (p, r) => changeFrameRate(p, r.pick([12, 24, 25, 30, 60])!),
+  resize: (p, r) => resizeScene(p, r.int(16, 4000), r.int(16, 4000)),
   mirror: (p, r) => (p.scene.layers.length ? mirrorPose(p, [r.pick(roots(p))!], r.int(0, p.scene.durationFrames - 1), r.next() < 0.5 ? 'mirror' : 'swap').project : p),
   pin(p, r) {
     const id = r.pick(ids(p));
