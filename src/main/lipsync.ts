@@ -75,7 +75,11 @@ export function registerLipSyncHandlers(): void {
           }
         }
       });
-      const code = await new Promise<number | null>((resolve) => child.on('close', resolve));
+      // If the program can't start at all (not allowed to run, say), say so rather than crash.
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.on('error', (err) => reject(new Error(`Rhubarb Lip Sync couldn't start (${err.message}). Try "npm run setup" again.`)));
+        child.on('close', resolve);
+      });
       running.delete(event.sender.id);
       if (child.killed || code === null) throw new Error('Cancelled.');
       if (code !== 0) throw new Error(lastError || `Rhubarb stopped with code ${code}.`);

@@ -37,6 +37,8 @@ interface Session {
   exited?: Promise<number | null>;
   /** Folder holding the temporary soundtrack for FFmpeg. */
   tempDir?: string;
+  /** FFmpeg couldn't be started. */
+  failed?: boolean;
 }
 
 const sessions = new Map<number, Session>();
@@ -44,8 +46,9 @@ let nextId = 1;
 /** Files and folders exported in this run of the app, which may be shown in Finder or Explorer. */
 const exported = new Set<string>();
 
-/** FFmpeg ships inside the app; in a packaged app it lives outside the asar archive. */
+/** FFmpeg ships inside the app; in a packaged app it lives outside the asar archive. NYAH_FFMPEG overrides it (tests). */
 export function ffmpegBinary(): string | null {
+  if (process.env.NYAH_FFMPEG) return process.env.NYAH_FFMPEG;
   const p = ffmpegPath as unknown as string | null;
   return p ? p.replace('app.asar', 'app.asar.unpacked') : null;
 }
@@ -201,7 +204,15 @@ export function registerExportHandlers(): void {
       ff.stdin.on('error', () => {
         /* reported through the exit code */
       });
-      session.exited = new Promise((resolve) => ff.on('close', (code) => resolve(code)));
+      // If FFmpeg can't start at all (not allowed to run, say), the export fails with the reason rather than crashing the app.
+      session.exited = new Promise((resolve) => {
+        ff.on('error', (err) => {
+          session.failed = true;
+          session.stderr += `\nFFmpeg couldn't start: ${err.message}`;
+          resolve(-1);
+        });
+        ff.on('close', (code) => resolve(code));
+      });
     }
     const id = nextId++;
     sessions.set(id, session);
@@ -217,8 +228,10 @@ export function registerExportHandlers(): void {
     }
     if (bytes.length !== s.width * s.height * 4) throw new Error('A frame had the wrong size.');
     const ff = s.ffmpeg!;
-    if (ff.exitCode !== null) throw new Error(`The video encoder stopped: ${s.stderr.split('\n').slice(-3).join(' ')}`);
-    if (!ff.stdin.write(bytes)) await new Promise<void>((resolve) => ff.stdin.once('drain', () => resolve()));
+    if (ff.exitCode !== null || s.failed) throw new Error(`The video encoder stopped: ${s.stderr.split('\n').slice(-3).join(' ')}`);
+    // Wait for FFmpeg to take the frame, unless it stops (or never started) meanwhile.
+    if (!ff.stdin.write(bytes)) await Promise.race([new Promise<void>((resolve) => ff.stdin.once('drain', () => resolve())), s.exited]);
+    if (ff.exitCode !== null || s.failed) throw new Error(`The video encoder stopped: ${s.stderr.split('\n').slice(-3).join(' ')}`);
   });
 
   ipcMain.handle('export:end', async (_event, id: number) => {

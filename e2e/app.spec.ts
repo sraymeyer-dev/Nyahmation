@@ -585,6 +585,21 @@ test('auto lip sync fills in mouth shapes from the dialogue', async () => {
   await menu('undo');
   expect(await drawingPoses('Mouth')).not.toEqual(poses);
   await menu('redo');
+
+  // If Rhubarb can't start at all, the dialog says why (rather than the app crashing).
+  const fake = join(dir, 'fake-rhubarb');
+  mkdirSync(fake, { recursive: true });
+  writeFileSync(join(fake, process.platform === 'win32' ? 'rhubarb.exe' : 'rhubarb'), 'not a program', { mode: 0o644 });
+  await app.evaluate((_electron, path) => {
+    process.env.NYAH_RHUBARB_DIR = path;
+  }, fake);
+  await page.getByRole('button', { name: 'Auto lip sync…' }).click();
+  await dialogBox.getByRole('button', { name: 'Start' }).click();
+  await expect(dialogBox).toContainText(/Lip sync failed: Rhubarb Lip Sync couldn't start/);
+  await app.evaluate(() => {
+    delete process.env.NYAH_RHUBARB_DIR;
+  });
+  await dialogBox.getByRole('button', { name: 'Close' }).click();
   await page.keyboard.press('Escape');
 });
 
@@ -663,6 +678,19 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   }
   // The WebM keeps its see-through channel.
   expect(spawnSync(ffmpeg, ['-hide_banner', '-c:v', 'libvpx-vp9', '-i', webm], { encoding: 'utf8' }).stderr).toContain('yuva420p');
+
+  // If the encoder can't start at all, the export says why (rather than the app crashing or hanging).
+  const broken = join(dir, 'not-a-program');
+  writeFileSync(broken, 'not a program', { mode: 0o644 });
+  await app.evaluate((_electron, path) => {
+    process.env.NYAH_FFMPEG = path;
+  }, broken);
+  await dialogBox.getByLabel('Export format').selectOption('mp4');
+  await dialogBox.getByRole('button', { name: 'Export again…' }).click();
+  await expect(dialogBox.getByText(/Export failed: .*couldn't start/)).toBeVisible({ timeout: 30_000 });
+  await app.evaluate(() => {
+    delete process.env.NYAH_FFMPEG;
+  });
   await dialogBox.getByRole('button', { name: 'Close' }).click();
 });
 
