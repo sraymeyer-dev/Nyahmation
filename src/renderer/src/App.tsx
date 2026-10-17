@@ -67,7 +67,7 @@ const MENU: Record<MenuCommand, () => void> = {
   zoom100: actions.zoomActualSize,
   toggleGrid: actions.toggleGrid,
   toggleSnap: actions.toggleSnap,
-  saveToLibrary: () => store.set({ sidebarTab: 'library' }),
+  saveToLibrary: library.openLibrarySave,
   autoChainRoots: library.autoChainRootsForActiveLayer,
   export: () => store.set({ exportOpen: true }),
   makeSwitchLayer: lipsync.makeSwitchLayerFromSelection,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LibraryEntry } from '../../../preload/api';
 import { addFromLibrary, libraryCandidate, refreshLibrary, removeFromLibrary, revealLibrary, saveSelectionToLibrary } from '../editor/library';
-import { useEditor } from '../editor/store';
+import { store, useEditor } from '../editor/store';
 
 // The Library tab: reusable characters, backgrounds and shapes stored as
 // files in the library folder (docs/DESIGN.md §7).
@@ -69,7 +69,8 @@ export function Library() {
   const library = useEditor((s) => s.library);
   const candidate = useEditor(libraryCandidateKey);
   const [query, setQuery] = useState('');
-  const [saving, setSaving] = useState(false);
+  const saving = useEditor((s) => s.librarySaving);
+  const setSaving = (librarySaving: boolean) => store.set({ librarySaving });
   const hasApi = !!window.nyah;
 
   useEffect(() => {

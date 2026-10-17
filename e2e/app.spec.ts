@@ -350,9 +350,8 @@ test('saves a character to the library and adds a copy', async () => {
   });
   await page.getByRole('button', { name: 'Update from library' }).click();
   await expect(page.getByText(/Updated “Pip the puppet” from the library: \d+ parts kept their animation, 0 new, 0 removed\./)).toBeVisible();
-  // Saving it again offers to replace the item as a new version, rather than adding a copy.
-  await page.getByRole('tab', { name: 'Library' }).click();
-  await page.getByRole('button', { name: 'Save to library…' }).click();
+  // Saving it again (here from the Object menu) offers to replace the item as a new version, rather than adding a copy.
+  await menu('saveToLibrary');
   await expect(page.getByLabel('Replace the library version')).toBeChecked();
   await expect(page.getByLabel('Library item name')).toHaveValue('Pip the puppet');
   await page.locator('.save-form').getByRole('button', { name: 'Save' }).click();
@@ -596,6 +595,10 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
     dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
   }, [pngDir, mp4]);
 
+  // Frames left by an earlier, longer export are cleared; other files are left alone.
+  mkdirSync(pngDir, { recursive: true });
+  writeFileSync(join(pngDir, 'frame_00099.png'), 'old');
+  writeFileSync(join(pngDir, 'notes.txt'), 'mine');
   await menu('export');
   const dialogBox = page.getByRole('dialog', { name: 'Export video' });
   await dialogBox.getByLabel('Export format').selectOption('png');
@@ -604,6 +607,8 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   await dialogBox.getByRole('button', { name: 'Export…' }).click();
   await expect(dialogBox.getByTestId('export-done')).toBeVisible({ timeout: 30_000 });
   expect(readdirSync(pngDir).filter((f) => f.endsWith('.png'))).toHaveLength(12);
+  expect(existsSync(join(pngDir, 'frame_00099.png'))).toBe(false);
+  expect(existsSync(join(pngDir, 'notes.txt'))).toBe(true);
 
   await dialogBox.getByLabel('Export format').selectOption('mp4');
   await dialogBox.getByRole('button', { name: 'Export again…' }).click();

@@ -63,6 +63,8 @@ export interface EditorState {
   /** Increments when decoded images become available, so the canvas redraws. */
   imagesVersion: number;
   sidebarTab: 'layers' | 'library';
+  /** The Library tab's Save form is open. */
+  librarySaving: boolean;
   /** Playback loops between these frames (inclusive) when set. */
   loop: { in: number; out: number } | null;
   onion: { enabled: boolean; before: number; after: number; step: number };
@@ -136,6 +138,7 @@ function initialState(): EditorState {
     status: '',
     imagesVersion: 0,
     sidebarTab: 'layers',
+    librarySaving: false,
     loop: null,
     onion: { enabled: false, before: 2, after: 2, step: 2 },
     timeline: { zoom: 14, marks: [] },

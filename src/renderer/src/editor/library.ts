@@ -43,6 +43,16 @@ export function libraryCandidate(s: EditorState): { label: string; defaultName: 
   return { label: `${s.selection.length} selected parts`, defaultName: 'Shape' };
 }
 
+/** Object → Save Selection to Library…: the Library tab, with its Save form open. */
+export function openLibrarySave(): void {
+  const s = get();
+  if (!libraryCandidate(s)) {
+    store.set({ sidebarTab: 'library', status: 'Select a character layer (click its row in Layers) or some parts, then save them to the library.' });
+    return;
+  }
+  store.set({ sidebarTab: 'library', librarySaving: true });
+}
+
 export async function refreshLibrary(): Promise<void> {
   const api = window.nyah;
   if (!api) return;

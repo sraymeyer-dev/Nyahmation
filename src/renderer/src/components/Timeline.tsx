@@ -410,6 +410,33 @@ export function Timeline() {
           <input type="checkbox" checked={onion.enabled} onChange={(e) => store.set((s) => ({ onion: { ...s.onion, enabled: e.target.checked } }))} />
           Onion skin
         </label>
+        {onion.enabled && (
+          <>
+            <select
+              aria-label="Onion skin frames each way"
+              title="How many earlier (red) and later (green) frames to show"
+              value={onion.before}
+              onChange={(e) => store.set((s) => ({ onion: { ...s.onion, before: Number(e.target.value), after: Number(e.target.value) } }))}
+            >
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n} each way
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Onion skin spacing"
+              title="How far apart the faint frames are"
+              value={onion.step}
+              onChange={(e) => store.set((s) => ({ onion: { ...s.onion, step: Number(e.target.value) } }))}
+            >
+              <option value={1}>every frame</option>
+              <option value={2}>every 2nd frame</option>
+              <option value={3}>every 3rd frame</option>
+              <option value={4}>every 4th frame</option>
+            </select>
+          </>
+        )}
         <label className="check" title="Show the picture as the camera sees it (as it will be exported). Off: the stage, with the camera's frame on it.">
           <input type="checkbox" checked={cameraView} onChange={(e) => store.set({ cameraView: e.target.checked })} />
           Camera view

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
@@ -179,6 +179,10 @@ export function registerExportHandlers(): void {
     const session: Session = { format, path, width, height, stderr: '', transparent: opts.transparent === true };
     if (format === 'png') {
       await mkdir(path, { recursive: true });
+      // An earlier, longer export to this folder would leave its last frames
+      // after this one's (and an old soundtrack): remove what Nyahmation wrote.
+      const old = (await readdir(path)).filter((f) => /^frame_\d{5}\.png$/.test(f) || f === 'soundtrack.wav');
+      await Promise.all(old.map((f) => rm(join(path, f), { force: true })));
       if (audio) await writeFile(join(path, 'soundtrack.wav'), audio);
     } else {
       const bin = ffmpegBinary();

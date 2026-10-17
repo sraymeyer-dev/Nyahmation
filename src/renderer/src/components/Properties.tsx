@@ -114,6 +114,7 @@ function StyleEditor({ style, onChange }: { style: ShapeStyle; onChange: (patch:
 function SceneProperties({ project }: { project: Project }) {
   const scene = project.scene;
   const style = useEditor((s) => s.style);
+  const mode = useEditor((s) => s.mode);
   const set = (patch: Partial<Scene>, key: string) => store.commit({ ...project, scene: { ...scene, ...patch } }, {}, key);
   // Poses, lip sync and sounds keep their timing in seconds, so the playhead and loop range move with them.
   const setFrameRate = (fps: number) => {
@@ -191,9 +192,12 @@ function SceneProperties({ project }: { project: Project }) {
           </select>
         </Row>
       </Section>
-      <Section title="Style for new shapes">
-        <StyleEditor style={style} onChange={(patch) => store.set((s) => ({ style: { ...s.style, ...patch } }))} />
-      </Section>
+      {/* Shapes are drawn in Build mode. */}
+      {mode === 'build' && (
+        <Section title="Style for new shapes">
+          <StyleEditor style={style} onChange={(patch) => store.set((s) => ({ style: { ...s.style, ...patch } }))} />
+        </Section>
+      )}
     </>
   );
 }
