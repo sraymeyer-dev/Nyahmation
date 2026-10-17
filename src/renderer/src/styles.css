@@ -1334,6 +1334,12 @@ input[type='color'] {
   color: var(--muted);
 }
 
+.empty-scene .shape {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+
 .empty-scene .buttons {
   display: flex;
   flex-wrap: wrap;

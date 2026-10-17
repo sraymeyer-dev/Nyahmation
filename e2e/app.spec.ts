@@ -95,6 +95,12 @@ test('starts with an empty scene and one background layer', async () => {
   await expect(page.getByTestId('layer-row')).toContainText('Background');
   // A first step for the empty scene, which goes once something is drawn.
   await expect(page.getByTestId('empty-scene')).toContainText('Open the demo puppet');
+  // It also offers the video's shape, easiest to choose before drawing.
+  const size = () => page.evaluate(() => (({ width, height }) => `${width}×${height}`)((window as any).__nyah.store.getState().project.scene));
+  await page.getByLabel('Shape of the video').selectOption({ label: 'Tall (Shorts, Reels, TikTok)' });
+  expect(await size()).toBe('1080×1920');
+  await page.getByLabel('Shape of the video').selectOption({ label: 'Widescreen (YouTube, TV)' });
+  expect(await size()).toBe('1920×1080');
 });
 
 test('draws a rectangle, then undo and redo it', async () => {
