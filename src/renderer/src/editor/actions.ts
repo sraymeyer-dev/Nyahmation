@@ -275,10 +275,19 @@ function nextLayerName(project: Project, base: string): string {
 
 // ---- View ------------------------------------------------------------------------
 
+/** The view the last Fit produced, so it can be kept fitted while the canvas changes size. */
+let fittedView: EditorState['view'] | null = null;
+
 export function zoomToFit(): void {
   const s = get();
   const { width, height } = s.viewportSize;
-  store.set({ view: fitView(s.project.scene.width, s.project.scene.height, width, height) });
+  fittedView = fitView(s.project.scene.width, s.project.scene.height, width, height);
+  store.set({ view: fittedView });
+}
+
+/** True while the view is still the fitted one: nobody has zoomed or panned since. */
+export function isViewFitted(s: EditorState): boolean {
+  return s.view === fittedView;
 }
 
 export function zoomBy(factor: number): void {

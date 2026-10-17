@@ -1341,6 +1341,29 @@ test('measures preview speed and shows the playback rate', async () => {
   await page.getByRole('tab', { name: 'Build' }).click();
 });
 
+test('the scene stays fitted when the timeline opens, until you zoom', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  const bottom = async () => {
+    const corner = (await debug<Pt>('stageScreen', { x: 1920, y: 1080 }))!;
+    return { corner, height: (await canvasBox()).height };
+  };
+  await page.getByRole('tab', { name: 'Animate' }).click();
+  await expect.poll(async () => {
+    const b = await bottom();
+    return b.corner.y <= b.height;
+  }).toBe(true);
+  // After zooming by hand, the view is left alone.
+  await menu('zoomIn');
+  const zoomed = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom)).toBe(zoomed);
+  await menu('zoomFit');
+});
+
 test('autosaves unsaved work, and deletes the autosave once saved', async () => {
   const recovery = join(dir, 'recovery');
   const autosaves = () => (existsSync(recovery) ? readdirSync(recovery).filter((f) => f.endsWith('.nyah')) : []);

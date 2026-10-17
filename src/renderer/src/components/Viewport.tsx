@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { assetMimeType, resolvedScene, zoomToFit } from '../editor/actions';
+import { assetMimeType, isViewFitted, resolvedScene, zoomToFit } from '../editor/actions';
 import { drawGrid, drawOutsideScene, drawSelection, makeOverlayContext } from '../editor/overlay';
 import { store } from '../editor/store';
 import { onInvalidate } from '../editor/tools/common';
@@ -58,8 +58,11 @@ export function Viewport() {
       const { clientWidth: w, clientHeight: h } = canvas;
       canvas.width = Math.max(1, Math.round(w * dpr));
       canvas.height = Math.max(1, Math.round(h * dpr));
+      const wasFitted = isViewFitted(store.getState());
       store.set({ viewportSize: { width: w, height: h } });
-      if (!fitted && w > 0 && h > 0) {
+      // Fit the first time, and keep a fitted view fitted (e.g. when the
+      // timeline opens in Animate mode, or the window is resized).
+      if ((!fitted || wasFitted) && w > 0 && h > 0) {
         fitted = true;
         zoomToFit();
       }

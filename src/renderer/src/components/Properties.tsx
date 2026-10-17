@@ -8,6 +8,7 @@ import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform
 import { layerSteppingAt, recordStepping } from '../../../engine/stepping';
 import { store, useEditor } from '../editor/store';
 import { updateFromLibrary } from '../editor/library';
+import { isViewFitted, zoomToFit } from '../editor/actions';
 import { NumberField, PaintField, Row, Section, toHex } from './fields';
 import { AudioClipSection, SwitchSection } from './SwitchProperties';
 import { CameraSection, LayerCameraSection } from './CameraProperties';
@@ -114,14 +115,20 @@ function SceneProperties({ project }: { project: Project }) {
   const scene = project.scene;
   const style = useEditor((s) => s.style);
   const set = (patch: Partial<Scene>, key: string) => store.commit({ ...project, scene: { ...scene, ...patch } }, {}, key);
+  // A new scene size: keep the whole scene in view if it was fitted.
+  const resize = (patch: Partial<Scene>, key: string) => {
+    const fitted = isViewFitted(store.getState());
+    set(patch, key);
+    if (fitted) zoomToFit();
+  };
   return (
     <>
       <Section title="Scene">
         <Row label="Width">
-          <NumberField label="Scene width" value={scene.width} digits={0} min={16} max={8192} onCommit={(v) => set({ width: Math.round(v) }, 'w')} suffix="px" />
+          <NumberField label="Scene width" value={scene.width} digits={0} min={16} max={8192} onCommit={(v) => resize({ width: Math.round(v) }, 'w')} suffix="px" />
         </Row>
         <Row label="Height">
-          <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => set({ height: Math.round(v) }, 'h')} suffix="px" />
+          <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => resize({ height: Math.round(v) }, 'h')} suffix="px" />
         </Row>
         <Row label="Frame rate">
           <select aria-label="Frame rate" value={scene.fps} onChange={(e) => set({ fps: Number(e.target.value) }, 'fps')}>
