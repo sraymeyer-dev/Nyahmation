@@ -43,7 +43,7 @@ export async function restoreRecovery(entry: RecoveryEntry): Promise<void> {
   try {
     const bundle = unpackProject(await api.recovery.read(entry.id));
     loadProject(bundle.project, bundle.assets, entry.path ? { path: entry.path, name: entry.name } : null);
-    store.set({ dirty: true, status: `Restored “${entry.name}” as it was ${describeTime(entry.savedAt)}. Save to keep it.` });
+    store.markUnsaved({ status: `Restored “${entry.name}” as it was ${describeTime(entry.savedAt)}. Save to keep it.` });
     forget(entry.id);
     // Keep the old recovery file until this window has written its own copy.
     if ((await tick(true)) === 'wrote') await api.recovery.discard(entry.id);

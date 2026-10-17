@@ -375,8 +375,7 @@ export async function save(saveAs = false): Promise<void> {
     const saved = await api.saveProject(packForSave(s), saveAs ? undefined : s.file?.path);
     if (!saved) return;
     // Anything changed while the file was being written stays unsaved.
-    const unchanged = get().project === s.project && get().assets === s.assets;
-    store.set({ file: saved, dirty: !unchanged, status: `Saved ${saved.name}` });
+    store.markSaved(s.project, { file: saved, status: `Saved ${saved.name}` });
   } catch (err) {
     store.set({ notice: { title: "Couldn't save", lines: [(err as Error).message] } });
   }
