@@ -1590,6 +1590,19 @@ test('records dialogue from the microphone onto the Sound row', async () => {
   const second = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[1]);
   expect(second.name).toBe('Line 2');
   expect(second.startFrame).toBeGreaterThanOrEqual(10);
+
+  // Pip has a mouth, so a take can go straight on to lip sync, with that take chosen.
+  await goToFrame(30);
+  await page.getByRole('button', { name: 'Record…' }).click();
+  await box.getByRole('button', { name: 'Start recording' }).click();
+  await expect(box.getByTestId('record-time')).toContainText(/Recording… [1-9]\./, { timeout: 10_000 });
+  await box.getByRole('button', { name: 'Stop' }).click();
+  await box.getByRole('button', { name: 'Keep and lip sync…' }).click();
+  const lipSync = page.getByTestId('lipsync-dialog');
+  await expect(lipSync).toContainText('Auto lip sync for “Mouth”');
+  const third = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[2].id);
+  await expect(lipSync.getByLabel('Dialogue sound')).toHaveValue(third);
+  await lipSync.getByRole('button', { name: 'Close' }).click();
 });
 
 test('adds the built-in Pip and scenery to a new project', async () => {

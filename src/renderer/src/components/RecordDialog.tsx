@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { startRecording, type Recording } from '../audio/recorder';
 import { importAudio } from '../editor/actions';
 import { store, useEditor } from '../editor/store';
+import { walkParts } from '../../../engine/edit';
 
 // Record dialogue (docs/DESIGN.md AU6): straight from the microphone onto
 // the Sound row, starting at the playhead. Listen to it, then keep it or try
@@ -33,6 +34,13 @@ export function RecordDialog() {
   /** Where the playhead was when recording started: the recording goes there. */
   const startFrame = useRef(0);
 
+  /** The mouth to lip sync a kept take to: the selected one, or the first in the scene. */
+  const mouth = useEditor((s) => {
+    if (!s.recordOpen) return null;
+    const mouthSets = new Set(s.project.drawingSets.filter((d) => d.vocabulary === 'mouth').map((d) => d.id));
+    const mouths = s.project.scene.layers.flatMap((l) => [...walkParts(l.root)]).filter((p) => p.kind === 'switch' && p.drawingSetId && mouthSets.has(p.drawingSetId));
+    return (mouths.find((p) => s.selection.includes(p.id)) ?? mouths[0])?.id ?? null;
+  });
   // The meter and the clock, while recording.
   useEffect(() => {
     if (!recording) return;
@@ -102,12 +110,15 @@ export function RecordDialog() {
       setBusy(false);
     }
   };
-  const keep = async () => {
+  const keep = async (lipSync = false) => {
     if (!take) return;
     const name = nextLineName(store.getState().project.scene.audio.map((c) => c.name));
     // Played along with the scene, the trimmed take moves on to keep its timing; otherwise the words start at the playhead.
-    await importAudio(`${name}.wav`, take.wav, withPicture ? startFrame.current + take.framesSkipped : undefined);
+    const start = withPicture ? startFrame.current + take.framesSkipped : startFrame.current;
+    await importAudio(`${name}.wav`, take.wav, start);
     close();
+    // Auto lip sync picks the sound under the playhead: this take.
+    if (lipSync && mouth) store.set({ frame: start, lipSyncDialogFor: mouth });
   };
 
   return (
@@ -152,8 +163,13 @@ export function RecordDialog() {
             </button>
           ) : (
             <>
+              {take && mouth && (
+                <button className="primary" disabled={busy} onClick={() => void keep(true)} title="Keep it, then fill in the mouth shapes from it">
+                  Keep and lip sync…
+                </button>
+              )}
               {take && (
-                <button className="primary" disabled={busy} onClick={() => void keep()}>
+                <button className={mouth ? '' : 'primary'} disabled={busy} onClick={() => void keep()}>
                   Keep it
                 </button>
               )}

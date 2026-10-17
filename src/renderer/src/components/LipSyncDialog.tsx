@@ -21,9 +21,9 @@ export function LipSyncDialog() {
     if (!mouthId) return;
     setError(null);
     setProgress(null);
-    // Start with the sound under the playhead, or the first one.
+    // Start with the sound under the playhead (the newest, if several are), or the first one.
     const fps = project.scene.fps;
-    const under = clips.find((c) => frame >= c.startFrame && frame < c.startFrame + c.duration * fps);
+    const under = [...clips].reverse().find((c) => frame >= c.startFrame && frame < c.startFrame + c.duration * fps);
     setClipId((under ?? clips[0])?.id ?? '');
     void window.nyah?.lipSync.available().then(setAvailable);
     return window.nyah?.lipSync.onProgress((v) => setProgress(v));
