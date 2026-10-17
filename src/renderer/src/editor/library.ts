@@ -156,7 +156,11 @@ export async function updateFromLibrary(layerId: string): Promise<void> {
 export async function removeFromLibrary(entry: LibraryEntry): Promise<void> {
   const api = window.nyah;
   if (!api || !window.confirm(`Move “${entry.name}” to the Trash?`)) return;
-  await api.library.remove(entry.relPath);
+  try {
+    await api.library.remove(entry.relPath);
+  } catch (err) {
+    store.set({ notice: { title: `Couldn't move “${entry.name}” to the Trash`, lines: [(err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'You can delete it from the library folder yourself (Folder, above the list).'] } });
+  }
   await refreshLibrary();
 }
 
