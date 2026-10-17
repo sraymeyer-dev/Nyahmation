@@ -182,6 +182,10 @@ button:focus-visible {
 
 .tool-options .hint {
   color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .divider {
