@@ -45,7 +45,7 @@ export function LipSyncDialog() {
       await runAutoLipSync(mouthId, clipId, { script, recognizer });
       store.set({ lipSyncDialogFor: null });
     } catch (err) {
-      const message = (err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      const message = (err as Error).message;
       setError(message);
       setProgress(null);
     }

@@ -211,6 +211,19 @@ test('will not draw on a locked layer', async () => {
   await layer.getByRole('button', { name: 'Unlock' }).click();
 });
 
+test('a save that fails says why, in plain words', async () => {
+  const path = join(dir, 'no such folder', 'Drawing.nyah');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath })) as typeof dialog.showSaveDialog;
+  }, path);
+  await menu('saveAs');
+  const notice = page.getByTestId('notice');
+  await expect(notice).toContainText("Couldn't save");
+  await expect(notice).toContainText("That file or folder isn't there");
+  await expect(notice).not.toContainText('invoking remote method');
+  await notice.getByRole('button', { name: 'Dismiss' }).click();
+});
+
 test('saves and reopens a project', async () => {
   const path = join(dir, 'Drawing.nyah');
   await app.evaluate(({ dialog }, filePath) => {
