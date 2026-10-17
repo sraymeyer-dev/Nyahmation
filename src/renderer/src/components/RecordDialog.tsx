@@ -27,7 +27,11 @@ export function RecordDialog() {
   const [level, setLevel] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
+  /** Play the scene while recording, to speak in time with the picture. */
+  const [withPicture, setWithPicture] = useState(false);
   const live = useRef<Recording | null>(null);
+  /** Where the playhead was when recording started: the recording goes there. */
+  const startFrame = useRef(0);
 
   // The meter and the clock, while recording.
   useEffect(() => {
@@ -51,7 +55,12 @@ export function RecordDialog() {
     if (take) URL.revokeObjectURL(take.url);
     setTake(null);
   };
+  const stopPicture = () => {
+    if (store.getState().playing) store.set({ playing: false });
+    store.set({ frame: startFrame.current });
+  };
   const close = () => {
+    if (live.current) stopPicture();
     live.current?.cancel();
     live.current = null;
     setRecording(null);
@@ -68,6 +77,8 @@ export function RecordDialog() {
       const r = await startRecording();
       live.current = r;
       setRecording(r);
+      startFrame.current = store.getState().frame;
+      if (withPicture) store.set({ playing: true });
     } catch (err) {
       const mac = navigator.platform.toLowerCase().includes('mac');
       setError(`${(err as Error).message}${/allowed/.test((err as Error).message) && mac ? ' Turn it on for Nyahmation in System Settings → Privacy & Security → Microphone, then try again.' : ''}`);
@@ -80,6 +91,7 @@ export function RecordDialog() {
     if (!r) return;
     live.current = null;
     setRecording(null);
+    stopPicture();
     setBusy(true);
     try {
       const result = await r.stop();
@@ -98,7 +110,8 @@ export function RecordDialog() {
   };
 
   return (
-    <div className="modal-backdrop" onClick={() => !recording && !busy && close()}>
+    // While the scene plays, the window moves aside so the picture can be seen.
+    <div className={`modal-backdrop ${recording && withPicture ? 'aside' : ''}`} onClick={() => !recording && !busy && close()}>
       <div className="modal record" role="dialog" aria-label="Record dialogue" data-testid="record-dialog" onClick={(e) => e.stopPropagation()}>
         <h2>Record dialogue</h2>
         <p className="hint">
@@ -122,7 +135,13 @@ export function RecordDialog() {
             <audio controls src={take.url} aria-label="Listen to the recording" />
           </>
         ) : (
-          <p className="hint">Use headphones if the scene has other sounds, so the microphone doesn't hear them.</p>
+          <>
+            <label className="check">
+              <input type="checkbox" aria-label="Play the scene while recording" checked={withPicture} onChange={(e) => setWithPicture(e.target.checked)} />
+              Play the scene while I record, to speak in time with it
+            </label>
+            <p className="hint">Use headphones if the scene has sounds, so the microphone doesn't hear them.</p>
+          </>
         )}
         {error && <p className="hint warn">{error}</p>}
         <div className="buttons">

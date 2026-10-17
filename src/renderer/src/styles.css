@@ -1394,3 +1394,14 @@ input[type='color'] {
   width: 100%;
   margin: 4px 0;
 }
+
+.modal-backdrop.aside {
+  background: none;
+  place-items: end center;
+  padding-bottom: 12px;
+  pointer-events: none;
+}
+
+.modal-backdrop.aside .modal {
+  pointer-events: auto;
+}

@@ -1576,6 +1576,19 @@ test('records dialogue from the microphone onto the Sound row', async () => {
   // It's kept as a WAV file, like an imported one.
   const mime = await page.evaluate(() => (window as any).__nyah.store.getState().project.assets.at(-1).mimeType);
   expect(mime).toBe('audio/wav');
+
+  // Again, playing the scene while talking: it plays, and the take still starts where the playhead was.
+  await goToFrame(10);
+  await page.getByRole('button', { name: 'Record…' }).click();
+  await box.getByLabel('Play the scene while recording').check();
+  await box.getByRole('button', { name: 'Start recording' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__nyah.store.getState().frame)).toBeGreaterThan(14);
+  await box.getByRole('button', { name: 'Stop' }).click();
+  await expect(page.getByTestId('frame')).toHaveText('11 / 72');
+  await box.getByRole('button', { name: 'Keep it' }).click();
+  await expect(box).toHaveCount(0);
+  const second = await page.evaluate(() => (window as any).__nyah.store.getState().project.scene.audio[1]);
+  expect(second).toMatchObject({ name: 'Line 2', startFrame: 10 });
 });
 
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
