@@ -11,6 +11,8 @@ export const EFFECT_NAMES: Record<EffectKind, string> = {
   shadow: 'Drop shadow',
   glow: 'Outer glow',
   contact: 'Contact shadow',
+  innerShadow: 'Inner shadow',
+  innerGlow: 'Inner glow',
   blur: 'Blur',
   haze: 'Haze',
 };
@@ -24,6 +26,11 @@ export function createEffect(kind: EffectKind, id: string, background = '#ffffff
       return { id, kind, color: '#000000', opacity: 0.45, angle: 60, distance: 14, softness: 10 };
     case 'glow':
       return { id, kind, color: '#ffe680', opacity: 0.9, size: 18, strength: 1.5 };
+    case 'innerShadow':
+      // Falling up and to the left, so the shade lies along the bottom-right edge: light from the top left.
+      return { id, kind, color: '#000000', opacity: 0.35, angle: 225, distance: 12, softness: 10 };
+    case 'innerGlow':
+      return { id, kind, color: '#fff3b0', opacity: 0.8, size: 14 };
     case 'blur':
       return { id, kind, amount: 6 };
     case 'haze':

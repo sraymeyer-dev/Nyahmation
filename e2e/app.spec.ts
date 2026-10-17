@@ -1000,6 +1000,53 @@ test('a drop shadow on a group is one shadow of the whole group', async () => {
   await page.screenshot({ path: 'test-results/effects-shadow.png' });
 });
 
+test('inner shadow and inner glow stay inside the artwork', async () => {
+  await page.evaluate((json) => (window as any).__nyah.loadProjectJson(json), effectsScene());
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  // The red square (200–300) shows from 200 to 250; the green one covers the rest.
+  await outlineRow('Red').click();
+  await page.getByLabel('Add effect').selectOption('innerShadow');
+  for (const [label, value] of [
+    ['Inner shadow direction', '0'], // falling to the right: the shade lies inside the left edge
+    ['Inner shadow distance', '15'],
+    ['Inner shadow softness', '0'],
+    ['Inner shadow opacity', '50'],
+  ]) {
+    await page.getByLabel(label).fill(value);
+    await page.getByLabel(label).press('Enter');
+  }
+  expect(near(await stagePixel(206, 250), [128, 0, 0], 20)).toBe(true); // shaded, inside the left edge
+  expect(near(await stagePixel(235, 250), [255, 0, 0])).toBe(true); // further in: untouched
+  expect(near(await stagePixel(190, 250), [255, 255, 255])).toBe(true); // nothing outside
+  await page.getByRole('button', { name: 'Remove Inner shadow' }).click();
+
+  await page.getByLabel('Add effect').selectOption('innerGlow');
+  await page.getByLabel('Inner glow colour').fill('#ffffff');
+  await page.getByLabel('Inner glow size').fill('20');
+  await page.getByLabel('Inner glow size').press('Enter');
+  const edge = await stagePixel(202, 250);
+  expect(edge[1]!).toBeGreaterThan(60); // lighter just inside the edge
+  expect(near(await stagePixel(235, 250), [255, 0, 0], 20)).toBe(true);
+  expect(near(await stagePixel(190, 250), [255, 255, 255])).toBe(true);
+  await page.screenshot({ path: 'test-results/inner-effects.png' });
+
+  // Half off the canvas, the edge of the canvas isn't an edge of the square: no glow along it.
+  const zoom = await page.evaluate(() => (window as any).__nyah.store.getState().view.zoom);
+  await page.evaluate((z) => {
+    const s = (window as any).__nyah.store;
+    s.set({ view: { ...s.getState().view, panX: -230 * z } });
+  }, zoom);
+  await page.waitForTimeout(100);
+  const atCut = await page.evaluate(() => {
+    const p = (window as any).__nyah.stageScreen({ x: 230, y: 250 });
+    const c = document.querySelector<HTMLCanvasElement>('[data-testid="stage"]')!;
+    const dpr = window.devicePixelRatio || 1;
+    return [...c.getContext('2d')!.getImageData(Math.round((p.x + 1) * dpr), Math.round(p.y * dpr), 1, 1).data.slice(0, 3)];
+  });
+  expect(near(atCut, [255, 0, 0], 20)).toBe(true);
+  await menu('zoomFit');
+});
+
 test('blend modes, clipping, haze and an animated glow', async () => {
   // Multiply: green over red makes black, only inside the group.
   await outlineRow('Green').click();

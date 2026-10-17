@@ -274,7 +274,7 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 - **FX1** Each part, group or layer can have an **effects stack**:
   - **Drop shadow**: color, opacity, offset (angle and distance), blur.
   - **Outer glow**: color, opacity, size, strength.
-  - (Could) **Inner shadow** and **inner glow**.
+  - (Could) **Inner shadow** and **inner glow**. (Built: see FX12.)
 - **FX2** **Effects on a group apply to the group as a whole.** A shadow on a character's root casts one shadow of the whole character. If each part cast its own shadow, the shadows would double up and look darker wherever parts overlap, such as the arm over the torso. Technically, the group is drawn to an off-screen image first and the effect is applied to that image.
 - **FX3** Effect settings are **animatable** like any other value, such as a glow that pulses or a shadow that lengthens.
 - **FX4** **Blend modes** per part or layer: Normal, Multiply (for shading), Screen and Add (for light and glows), Overlay.
@@ -287,7 +287,7 @@ A scene is a **stack of layers**, like sheets of glass in a traditional animatio
 - **FX9** In Animate mode, changing an effect's number records a pose on that frame (FX3), with the first-pose rule (A2a); effect poses show as marks on the part's timeline row and retime like any other. Colours don't animate. Effect settings step with the character on twos (ST3).
 - **FX10** Blend modes inside a unit mix with the unit's other members only (the unit is isolated); on an ordinary part they mix with everything behind it.
 - **FX11** Each finished unit is kept with a note of everything that decides its pixels (the view, each member's position, artwork, opacity, effects and whether its images are loaded); if the next frame's note is identical, the kept picture is reused. Onion skins skip effects.
-- Not built: inner shadow and inner glow (Could).
+- **FX12** **Inner shadow** (colour, opacity, direction, distance, softness) and **inner glow** (colour, opacity, size) shade the inside of a unit's picture along its edges: the area outside the silhouette is tinted, blurred (and, for the shadow, moved), kept only where it falls on the picture and drawn over it. They come after blur and haze and before the effects drawn behind. Where a unit is cut off by the edge of the canvas, beyond the cut counts as inside, so a cut is never shaded like an edge. The inner shadow is the shadow of a hole's rim, as in a pressed button or a carved letter; the inner glow is light caught along the edge, as in a glass bead or rim light.
 
 ## 9. Animation
 

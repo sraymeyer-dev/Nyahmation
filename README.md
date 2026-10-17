@@ -152,7 +152,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 - **Gradients:** select a shape and choose a **Fill type** (straight or round gradient) with two colours and an angle. With nothing selected, the scene's **Sky** option paints a gradient sky behind everything. Gradients in imported SVGs come in too.
 
 **Effects (Properties → Effects, or Layer effects for a whole layer):**
-- **Add an effect…**: **Drop shadow**, **Outer glow**, **Contact shadow** (a soft shadow on the ground under a character, which shrinks as it jumps), **Blur** or **Haze**. Effects on a group or layer apply to it as a whole, so a shadow on Pip is one shadow of all of Pip, not darker where his arm crosses his body. Remove one with ×.
+- **Add an effect…**: **Drop shadow**, **Outer glow**, **Inner shadow** (shading just inside the edge, for a pressed button or carved letters), **Inner glow** (light along the inside of the edge, for glass or rim light), **Contact shadow** (a soft shadow on the ground under a character, which shrinks as it jumps), **Blur** or **Haze**. Effects on a group or layer apply to it as a whole, so a shadow on Pip is one shadow of all of Pip, not darker where his arm crosses his body. Remove one with ×.
 - In **Animate** mode, changing an effect's number (a glow's size, a shadow's distance) records it on that frame, so effects can pulse or grow. The marks appear on that part's timeline row.
 - **Blend**: Multiply for shading, Screen or Add for light, Overlay for contrast.
 - **Clip**: put parts inside a shape (drag the pupil onto the eye in the Layers panel), select the shape and tick **Clip**: the pupil only shows on the eye.
