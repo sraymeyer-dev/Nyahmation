@@ -24,6 +24,12 @@ const clip = ((polygonClipping as unknown as { default?: typeof polygonClipping 
 const FLATNESS = 0.25;
 /** Turns sharper than this (degrees) stay corners. */
 const CORNER_DEGREES = 35;
+/**
+ * polygon-clipping now and then can't join up its result where edges nearly
+ * touch. Snapping the outlines to a fine grid and trying again gets round it;
+ * these grids (stage pixels) are each tried in turn. Exact first.
+ */
+const RETRY_GRIDS = [0, 1 / 1024, 1 / 64, 1 / 8];
 
 /** A path as a closed ring of points, curves split finely enough to look smooth. */
 export function flattenPath(path: VectorPath): Ring {
@@ -59,9 +65,22 @@ function signedArea(ring: Ring): number {
   return a / 2;
 }
 
-/** The area a shape fills, following its fill rule. */
-export function shapeArea(paths: readonly VectorPath[], fillRule: ShapeStyle['fillRule']): MultiPolygon {
-  const rings = paths.map(flattenPath).filter((r) => r.length >= 3 && Math.abs(signedArea(r)) > 1e-6);
+/** A ring with its points moved onto a grid `size` apart, dropping points that land together. */
+function snapRing(ring: Ring, size: number): Ring {
+  const out: Ring = [];
+  for (const [x, y] of ring) {
+    const p: Pair = [Math.round(x / size) * size, Math.round(y / size) * size];
+    const last = out.at(-1);
+    if (!last || last[0] !== p[0] || last[1] !== p[1]) out.push(p);
+  }
+  return out;
+}
+
+/** The area a shape fills, following its fill rule. With `grid`, its outline is snapped to a grid that fine. */
+export function shapeArea(paths: readonly VectorPath[], fillRule: ShapeStyle['fillRule'], grid = 0): MultiPolygon {
+  const rings = paths
+    .map((p) => (grid ? snapRing(flattenPath(p), grid) : flattenPath(p)))
+    .filter((r) => r.length >= 3 && Math.abs(signedArea(r)) > 1e-6);
   if (rings.length === 0) return [];
   const polys: Polygon[] = rings.map((r) => [r]);
   if (fillRule === 'evenodd') return clip.xor(polys[0]!, ...polys.slice(1));
@@ -153,11 +172,20 @@ export function booleanShapes(project: Project, ids: readonly string[], op: Bool
   shapes.sort((a, b) => a.part.drawOrder - b.part.drawOrder);
   const target = shapes[0]!;
   const toTarget = invert(restWorldMatrix(target));
-  const areas = shapes.map((l) => {
+  const outlines = shapes.map((l) => {
     const m = multiply(toTarget, restWorldMatrix(l));
-    return shapeArea(l.part.paths!.map((p) => transformPath(p, m)), l.part.style?.fillRule ?? 'nonzero');
+    return { paths: l.part.paths!.map((p) => transformPath(p, m)), fillRule: l.part.style?.fillRule ?? 'nonzero' };
   });
-  const result = combineAreas(op, areas);
+  let result: MultiPolygon | null = null;
+  for (const grid of RETRY_GRIDS) {
+    try {
+      result = combineAreas(op, outlines.map((o) => shapeArea(o.paths, o.fillRule, grid)));
+      break;
+    } catch {
+      // Try again on a coarser grid.
+    }
+  }
+  if (!result) throw new Error("These shapes couldn't be combined: their outlines meet in too complicated a way. Moving one of them a little usually helps.");
   const paths = areaToPaths(result);
   let next = removeParts(project, shapes.slice(1).map((l) => l.part.id));
   if (paths.length === 0) {

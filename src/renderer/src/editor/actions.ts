@@ -211,7 +211,13 @@ export function booleanOp(op: BooleanOp): void {
     return;
   }
   const count = s.selection.filter((id) => locatePart(s.project, id)?.part.kind === 'shape').length;
-  const r = booleanShapes(s.project, s.selection, op);
+  let r: ReturnType<typeof booleanShapes>;
+  try {
+    r = booleanShapes(s.project, s.selection, op);
+  } catch (err) {
+    store.set({ notice: { title: "Couldn't combine the shapes", lines: [(err as Error).message] } });
+    return;
+  }
   if (!r.shapeId && !r.empty) {
     store.set({ status: 'Select two or more shapes (not groups) first.' });
     return;

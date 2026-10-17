@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { booleanShapes, flattenPath, shapeArea } from './boolean';
+import unjoinable from './fixtures/boolean-unfinished-ring.json';
+import { booleanShapes, combineAreas, flattenPath, shapeArea } from './boolean';
 import { locatePart } from './edit';
 import { defaultStyle, ellipsePath, rectPath } from './geometry';
 import { createPart, createProject } from './project';
@@ -91,5 +92,17 @@ describe('boolean operations on shapes', () => {
     const polys = shapeArea([outer, inner], 'nonzero');
     expect(polys).toHaveLength(1);
     expect(polys[0]).toHaveLength(2);
+  });
+
+  it('gets round outlines the clipping library cannot join up (found by the fuzz test)', () => {
+    // Three outlines where polygon-clipping fails exactly: snapping them to a fine grid works.
+    const shapes = unjoinable as { paths: VectorPath[] }[];
+    expect(() => combineAreas('union', shapes.map((s) => shapeArea(s.paths, 'nonzero')))).toThrow(/Unable to complete output ring/);
+    const { project, ids } = scene(...shapes.map((s, i) => ({ name: `S${i}`, paths: s.paths })));
+    for (const op of ['union', 'exclude'] as const) {
+      const r = booleanShapes(project, ids, op);
+      expect(r.shapeId).toBe(ids[0]);
+      expect(area(r.project, ids[0]!)).toBeGreaterThan(area(project, ids[1]!));
+    }
   });
 });
