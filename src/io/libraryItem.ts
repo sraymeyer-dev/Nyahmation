@@ -184,6 +184,27 @@ export function withLibraryIds(item: LibraryItem, source: LayerSource): LibraryI
 }
 
 /**
+ * The link a layer has once it has been saved as a new version of its item
+ * (with withLibraryIds): every part and drawing set it has now is in the
+ * library, under the id withLibraryIds gave it. Without this, parts added
+ * since the layer came from the library would count as new on the next
+ * update, and lose their animation.
+ */
+export function linkAfterSaving(layer: Layer, savedAt: number): LayerSource | undefined {
+  const source = layer.source;
+  if (!source) return undefined;
+  const partBack = new Map(Object.entries(source.parts).map(([lib, here]) => [here, lib]));
+  const setBack = new Map(Object.entries(source.sets).map(([lib, here]) => [here, lib]));
+  const parts: Record<string, string> = {};
+  const sets: Record<string, string> = {};
+  for (const p of walkParts(layer.root)) {
+    parts[partBack.get(p.id) ?? p.id] = p.id;
+    if (p.drawingSetId) sets[setBack.get(p.drawingSetId) ?? p.drawingSetId] = p.drawingSetId;
+  }
+  return { ...source, savedAt, parts, sets };
+}
+
+/**
  * Replaces a layer's drawings and rig with a newer version of the library
  * item it came from, keeping its animation: parts that were in the old
  * version keep their ids (so their poses still apply), new parts are added,

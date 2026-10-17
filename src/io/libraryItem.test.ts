@@ -3,7 +3,7 @@ import { insertPart, locatePart, restWorldMatrix, walkParts } from '../engine/ed
 import { rectPath } from '../engine/geometry';
 import { createLayer, createPart, createProject } from '../engine/project';
 import type { Part, Project } from '../engine/types';
-import { insertLibraryItem, itemFromLayer, itemFromParts, packLibraryItem, readLibraryMeta, unpackLibraryItem, updateLayerFromLibrary, withLibraryIds } from './libraryItem';
+import { insertLibraryItem, itemFromLayer, itemFromParts, linkAfterSaving, packLibraryItem, readLibraryMeta, unpackLibraryItem, updateLayerFromLibrary, withLibraryIds } from './libraryItem';
 
 function sample() {
   const photo = createPart({ name: 'Photo', kind: 'image', image: { assetId: 'img1', width: 10, height: 10 } });
@@ -211,5 +211,32 @@ describe('saving a new version of a library item (L5)', () => {
     const u = updateLayerFromLibrary(animated, new Map(), layerB.id, v2, 2);
     expect(u).toMatchObject({ added: 1, removed: 0 });
     expect(u.project.scene.tracks[0]!.partId).toBe(armB);
+  });
+
+  it('the project that saved it stays linked to its new parts, so a later update keeps their animation', () => {
+    const arm = createPart({ name: 'Arm', kind: 'shape', paths: [rectPath(0, 0, 10, 40)] });
+    const lib = createProject({ layers: [createLayer('character', 'Pip', [arm])] });
+    const v1 = itemFromLayer(lib, new Map(), lib.scene.layers[0]!.id, 'Pip');
+    const a = insertLibraryItem(createProject(), new Map(), v1, { source: { relPath: 'Pip.nyahitem', savedAt: 1 } });
+    const layerA = a.project.scene.layers[0]!;
+    // Project A gives Pip a hat, animates it, and saves version 2.
+    const hat = createPart({ name: 'Hat', kind: 'shape', paths: [rectPath(0, 0, 5, 5)] });
+    let project: Project = {
+      ...a.project,
+      scene: {
+        ...a.project.scene,
+        layers: [{ ...layerA, root: { ...layerA.root, children: [...layerA.root.children, hat] } }],
+        tracks: [{ partId: hat.id, channel: 'rotation', poses: [{ frame: 0, value: 0 }, { frame: 9, value: 20 }] }],
+      },
+    };
+    const v2 = withLibraryIds(itemFromLayer(project, new Map(), layerA.id, 'Pip'), layerA.source!);
+    const linked = linkAfterSaving(project.scene.layers[0]!, 2)!;
+    expect(linked.parts[hat.id]).toBe(hat.id);
+    expect(linked.savedAt).toBe(2);
+    project = { ...project, scene: { ...project.scene, layers: [{ ...project.scene.layers[0]!, source: linked }] } };
+    // Later (say after another project saved version 3), A updates: the hat is the same part, still animated.
+    const u = updateLayerFromLibrary(project, new Map(), layerA.id, v2, 3);
+    expect(u).toMatchObject({ added: 0, removed: 0 });
+    expect(u.project.scene.tracks.map((t) => t.partId)).toEqual([hat.id]);
   });
 });

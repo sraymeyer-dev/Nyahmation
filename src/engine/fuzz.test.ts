@@ -30,6 +30,7 @@ import { changeFrameRate, deletePoses, retimePoses, stretchPoses } from './retim
 import { setPivot } from './rig';
 import { recordStepping } from './stepping';
 import { EFFECT_SETTINGS, type Part, type Project, type Stepping } from './types';
+import { insertLibraryItem, itemFromLayer, itemFromParts, linkAfterSaving, packLibraryItem, unpackLibraryItem, updateLayerFromLibrary, withLibraryIds } from '../io/libraryItem';
 
 // Random sequences of edits, checking after every one that the project is
 // still valid (it saves and opens again) and that every frame can be worked
@@ -162,6 +163,32 @@ const EDITS: Record<string, (p: Project, r: Rng) => Project> = {
     if (!layer) return p;
     const from = r.int(0, 20);
     return updateLayer(p, layer.id, (l) => ({ ...l, cycle: { from, to: from + r.int(1, 30), travel: r.next() < 0.5 } }));
+  },
+  // Saving to the library and adding it back, as a new layer or as parts
+  // (also how copy and paste work), and updating a layer to a new version.
+  libraryLayer(p, r) {
+    const layer = r.pick(p.scene.layers);
+    if (!layer) return p;
+    const item = unpackLibraryItem(packLibraryItem(itemFromLayer(p, new Map(), layer.id, layer.name)));
+    return insertLibraryItem(p, new Map(), item, { source: { relPath: `${layer.name}.nyahitem`, savedAt: 1 } }).project;
+  },
+  libraryParts(p, r) {
+    const container = r.pick([...roots(p), ...groups(p)]);
+    if (!ids(p).length || !container) return p;
+    const item = unpackLibraryItem(packLibraryItem(itemFromParts(p, new Map(), r.some(ids(p)), 'Parts')));
+    return insertLibraryItem(p, new Map(), item, { containerId: container, reuseExisting: r.next() < 0.5 }).project;
+  },
+  libraryUpdate(p, r) {
+    const layer = r.pick(p.scene.layers.filter((l) => l.source));
+    if (!layer?.source) return p;
+    // A new version of the item: the layer as it is now, saved back with the
+    // library's ids, after which the layer is linked to that version.
+    const item = unpackLibraryItem(packLibraryItem(withLibraryIds(itemFromLayer(p, new Map(), layer.id, layer.name), layer.source)));
+    const linked = updateLayer(p, layer.id, (l) => ({ ...l, source: linkAfterSaving(l, l.source!.savedAt + 1)! }));
+    const r2 = updateLayerFromLibrary(linked, new Map(), layer.id, item, layer.source.savedAt + 2);
+    // Updating to the version just saved from this very layer changes nothing.
+    if (r2.added || r2.removed) throw new Error(`updating to its own new version added ${r2.added} and removed ${r2.removed} parts`);
+    return r2.project;
   },
   stepping(p, r) {
     const layer = r.pick(p.scene.layers);

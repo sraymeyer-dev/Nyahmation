@@ -7,6 +7,7 @@ import type { LibraryEntry } from '../../../preload/api';
 import {
   insertLibraryItem,
   itemFromLayer,
+  linkAfterSaving,
   itemFromParts,
   packLibraryItem,
   unpackLibraryItem,
@@ -92,7 +93,7 @@ export async function saveSelectionToLibrary(name: string, tags: string[], repla
     if (layer && source) {
       // This layer now matches the library's version.
       const modified = get().library.items.find((e) => e.relPath === relPath)?.modified ?? Date.now();
-      store.commit(updateLayer(get().project, layer.id, (l) => (l.source ? { ...l, source: { ...l.source, savedAt: modified } } : l)));
+      store.commit(updateLayer(get().project, layer.id, (l) => (l.source ? { ...l, source: linkAfterSaving(l, modified)! } : l)));
     }
     store.set({ status: source ? `Saved a new version of “${name}” to the library. Other projects using it can now Update from library.` : `Saved “${name}” to the library (${relPath}).` });
     return true;
