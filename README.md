@@ -196,7 +196,7 @@ While a switch layer is selected in Animate mode, the mouth letters take priorit
 ## Checks
 
 ```sh
-npm run check     # type-check + unit tests
+npm run check     # type-check, lint (React's rules of hooks) and unit tests (with fuzz tests)
 npm run test:e2e  # builds the app and drives it with Playwright (on Linux, run under xvfb-run)
 ```
 

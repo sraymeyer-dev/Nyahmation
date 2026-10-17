@@ -17,10 +17,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node scripts/setup.mjs && electron-vite build && playwright test",
-    "check": "npm run typecheck && npm run test",
+    "check": "npm run typecheck && npm run lint && npm run test",
     "manual": "node scripts/setup.mjs && electron-vite build && playwright test -c docs/manual/playwright.config.ts && node scripts/manual.mjs",
     "dist:mac": "node scripts/setup.mjs && electron-vite build && electron-builder --mac && open release",
-    "dist:win": "node scripts/setup.mjs && electron-vite build && electron-builder --win"
+    "dist:win": "node scripts/setup.mjs && electron-vite build && electron-builder --win",
+    "lint": "eslint"
   },
   "dependencies": {
     "fflate": "^0.8.3",
@@ -38,10 +39,13 @@
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "jsdom": "^30.1.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.2",
     "vite": "^7.3.6",
     "vitest": "^5.0.1"
   }
