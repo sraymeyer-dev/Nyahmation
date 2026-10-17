@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import ffmpegPath from 'ffmpeg-static';
 
 // Video export (docs/DESIGN.md §11). The renderer draws every frame at full
@@ -41,6 +41,8 @@ interface Session {
 
 const sessions = new Map<number, Session>();
 let nextId = 1;
+/** Files and folders exported in this run of the app, which may be shown in Finder or Explorer. */
+const exported = new Set<string>();
 
 /** FFmpeg ships inside the app; in a packaged app it lives outside the asar archive. */
 export function ffmpegBinary(): string | null {
@@ -138,6 +140,11 @@ const ARGS: Record<Exclude<Format, 'png'>, (s: Session, fps: number, soundtrack:
   webm: webmArgs,
 };
 
+/** PNG sequences are exported into a folder (anything without a video extension). */
+function isFrameFolder(path: string): boolean {
+  return !Object.values(EXTENSIONS).some(({ ext }) => path.toLowerCase().endsWith(`.${ext}`));
+}
+
 async function cleanUp(s: Session): Promise<void> {
   if (s.tempDir) await rm(s.tempDir, { recursive: true, force: true }).catch(() => undefined);
 }
@@ -214,12 +221,23 @@ export function registerExportHandlers(): void {
     const s = sessions.get(id);
     sessions.delete(id);
     if (!s) throw new Error('Export was stopped.');
-    if (s.format === 'png') return { path: s.path };
+    if (s.format === 'png') {
+      exported.add(s.path);
+      return { path: s.path };
+    }
     s.ffmpeg!.stdin.end();
     const code = await s.exited;
     await cleanUp(s);
     if (code !== 0) throw new Error(`The video encoder failed (code ${code}): ${s.stderr.split('\n').slice(-4).join(' ')}`);
+    exported.add(s.path);
     return { path: s.path, name: basename(s.path) };
+  });
+
+  ipcMain.handle('export:reveal', (_event, path: unknown) => {
+    if (typeof path !== 'string' || !exported.has(path)) return;
+    // A PNG export is a folder: open it. A video is shown selected in its folder.
+    if (isFrameFolder(path)) void shell.openPath(path);
+    else shell.showItemInFolder(path);
   });
 
   ipcMain.handle('export:cancel', async (_event, id: number) => {

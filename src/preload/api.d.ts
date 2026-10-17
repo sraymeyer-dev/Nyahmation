@@ -105,6 +105,8 @@ export interface ExportApi {
   frame(session: number, index: number, bytes: Uint8Array): Promise<void>;
   end(session: number): Promise<{ path: string }>;
   cancel(session: number): Promise<void>;
+  /** Shows an exported video in Finder / Explorer, or opens a folder of PNG frames. */
+  reveal(path: string): Promise<void>;
 }
 
 /** Commands sent from the native menu (see src/main/menu.ts). */

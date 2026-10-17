@@ -39,6 +39,7 @@ const api: NyahApi = {
     frame: (session, index, bytes) => ipcRenderer.invoke('export:frame', session, index, bytes),
     end: (session) => ipcRenderer.invoke('export:end', session),
     cancel: (session) => ipcRenderer.invoke('export:cancel', session),
+    reveal: (path) => ipcRenderer.invoke('export:reveal', path),
   },
   lipSync: {
     available: () => ipcRenderer.invoke('lipsync:available'),

@@ -77,6 +77,17 @@ export function enlargedImages(project: Project, assets: ReadonlyMap<string, Uin
   return out;
 }
 
+/** Roughly how long the rest of an export will take, from how long the frames so far took. */
+export function timeLeft(done: number, total: number, elapsedMs: number): string | null {
+  // Too early to tell: the first frames include starting the encoder.
+  if (done < 3 || elapsedMs < 1500 || done >= total) return null;
+  const seconds = ((elapsedMs / done) * (total - done)) / 1000;
+  if (seconds < 10) return 'a few seconds left';
+  if (seconds < 60) return `about ${Math.round(seconds / 5) * 5} seconds left`;
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? 'about a minute left' : `about ${minutes} minutes left`;
+}
+
 async function decodeImages(): Promise<Map<string, ImageBitmap>> {
   const s = store.getState();
   const out = new Map<string, ImageBitmap>();

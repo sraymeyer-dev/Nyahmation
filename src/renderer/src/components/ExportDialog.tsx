@@ -1,10 +1,13 @@
 import { useRef, useState } from 'react';
-import { canBeSeeThrough, enlargedImages, exportSize, runExport, type ExportProgress, type ExportSettings } from '../editor/exporter';
+import { canBeSeeThrough, enlargedImages, exportSize, runExport, timeLeft, type ExportProgress, type ExportSettings } from '../editor/exporter';
 import { store, useEditor } from '../editor/store';
 
 // File → Export Video… (docs/DESIGN.md §11).
 
 const HEIGHTS = [720, 1080, 1440, 2160];
+
+const isMac = navigator.platform.toLowerCase().includes('mac');
+
 
 export function ExportDialog() {
   const open = useEditor((s) => s.exportOpen);
@@ -17,6 +20,7 @@ export function ExportDialog() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const cancelled = useRef(false);
+  const started = useRef(0);
   if (!open) return null;
 
   const height = settings.height || scene.height;
@@ -25,6 +29,7 @@ export function ExportDialog() {
   const sounds = project.scene.audio.filter((c) => !c.muted && c.volume > 0).length;
   const enlarged = enlargedImages(project, assets, size.scale);
   const busy = progress !== null && !done && !error;
+  const left = busy ? timeLeft(progress.done, progress.total, performance.now() - started.current) : null;
   const close = () => {
     if (busy) return;
     setProgress(null);
@@ -38,6 +43,7 @@ export function ExportDialog() {
     setError(null);
     setDone(null);
     setProgress({ done: 0, total: frames });
+    started.current = performance.now();
     try {
       const path = await runExport({ ...settings, height }, setProgress, () => cancelled.current);
       if (path) {
@@ -125,10 +131,16 @@ export function ExportDialog() {
             <div className="bar" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
             <span>
               {done ? 'Done' : `Frame ${progress.done} of ${progress.total}`}
+              {left && ` · ${left}`}
             </span>
           </div>
         )}
-        {done && <p className="hint" data-testid="export-done">Saved to {done}</p>}
+        {done && (
+          <p className="hint" data-testid="export-done">
+            Saved to {done}{' '}
+            <button onClick={() => void window.nyah?.export.reveal(done)}>{isMac ? 'Show in Finder' : 'Show in folder'}</button>
+          </p>
+        )}
         {error && <p className="hint warn">Export failed: {error}</p>}
         <div className="buttons">
           {busy ? (

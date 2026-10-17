@@ -585,6 +585,13 @@ test('exports a PNG sequence and an MP4 of the loop range', async () => {
   // The video has the sound in it, and the PNG folder has it as a WAV.
   expect(await streams(mp4)).toEqual(expect.arrayContaining(['Video: h264', 'Audio: aac']));
   expect(existsSync(join(pngDir, 'soundtrack.wav'))).toBe(true);
+  // Show in Finder / Explorer.
+  await app.evaluate(({ shell }) => {
+    (globalThis as any).revealed = [];
+    shell.showItemInFolder = (p: string) => (globalThis as any).revealed.push(p);
+  });
+  await dialogBox.getByRole('button', { name: /Show in (Finder|folder)/ }).click();
+  await expect.poll(() => app.evaluate(() => (globalThis as any).revealed)).toEqual([mp4]);
 
   // MOV with ProRes 4444, see-through, for video editors (E3).
   const mov = join(dir, 'clip.mov');
