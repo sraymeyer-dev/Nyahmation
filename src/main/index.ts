@@ -3,7 +3,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { registerExportHandlers } from './export';
 import { registerLibraryHandlers } from './library';
-import { buildMenu } from './menu';
+import { buildMenu, openManual } from './menu';
 import { forgetProject, onRecentChange, rememberProject } from './recent';
 import { forgetWindow, registerRecoveryHandlers, releaseWindow } from './recovery';
 import { registerLipSyncHandlers } from './lipsync';
@@ -85,6 +85,8 @@ ipcMain.on('edit:text', (event, command: unknown) => {
   else if (command === 'copy') event.sender.copy();
   else if (command === 'paste') event.sender.paste();
 });
+
+ipcMain.on('help:manual', () => openManual());
 
 ipcMain.on('project:ready', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -193,11 +195,10 @@ ipcMain.handle('file:importMany', async (event) => {
 
 ipcMain.handle('file:import', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  const options = { properties: ['openFile' as const], filters: IMPORT_FILTERS };
+  const options = { properties: ['openFile' as const, 'multiSelections' as const], filters: IMPORT_FILTERS };
   const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-  const path = result.filePaths[0];
-  if (result.canceled || !path) return null;
-  return { name: basename(path), bytes: new Uint8Array(await readFile(path)) };
+  if (result.canceled) return [];
+  return Promise.all(result.filePaths.map(async (path) => ({ name: basename(path), bytes: new Uint8Array(await readFile(path)) })));
 });
 
 ipcMain.on('document:state', (event, state: { title?: unknown; path?: unknown; dirty?: unknown }) => {

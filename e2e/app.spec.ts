@@ -92,6 +92,8 @@ test('starts with an empty scene and one background layer', async () => {
   expect(await page.evaluate(() => typeof window.nyah?.importFile)).toBe('function');
   await expect(page.getByTestId('layer-row')).toHaveCount(1);
   await expect(page.getByTestId('layer-row')).toContainText('Background');
+  // A first step for the empty scene, which goes once something is drawn.
+  await expect(page.getByTestId('empty-scene')).toContainText('Open the demo puppet');
 });
 
 test('draws a rectangle, then undo and redo it', async () => {
@@ -99,6 +101,7 @@ test('draws a rectangle, then undo and redo it', async () => {
   await drag([300, 200], [460, 320]);
   let s = await state();
   expect(s.names).toContain('Rectangle 1');
+  await expect(page.getByTestId('empty-scene')).toHaveCount(0);
   expect(s.selection).toHaveLength(1);
   await expect(page.getByTestId('properties')).toContainText('Fill & stroke');
 
@@ -181,15 +184,17 @@ test('imports an SVG with its layers, and reports what it skipped', async () => 
   await page.screenshot({ path: 'test-results/editor.png' });
 });
 
-test('imports a PNG as an image part', async () => {
+test('imports PNGs as image parts, several at once', async () => {
   const pngPath = join(dir, 'dot.png');
+  const pngPath2 = join(dir, 'spot.png');
   // A 1×1 PNG.
   writeFileSync(pngPath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
-  await app.evaluate(({ dialog }, p) => {
-    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [p] })) as typeof dialog.showOpenDialog;
-  }, pngPath);
+  copyFileSync(pngPath, pngPath2);
+  await app.evaluate(({ dialog }, paths) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: paths })) as typeof dialog.showOpenDialog;
+  }, [pngPath2, pngPath]);
   await menu('import');
-  await expect.poll(async () => (await state()).names).toContain('dot');
+  await expect.poll(async () => (await state()).names).toEqual(expect.arrayContaining(['dot', 'spot']));
   await expect(page.getByTestId('properties')).toContainText('1 × 1 pixels');
 });
 

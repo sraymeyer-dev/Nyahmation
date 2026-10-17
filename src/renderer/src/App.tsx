@@ -12,6 +12,7 @@ import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
 import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
 import { toolsFor, TOOLS } from './editor/tools';
+import { EmptyScene } from './components/EmptyScene';
 import { ExportDialog } from './components/ExportDialog';
 import { LipSyncDialog } from './components/LipSyncDialog';
 import { Notice } from './components/Notice';
@@ -275,6 +276,7 @@ export function App() {
           <div className="stage">
             <Viewport />
             <Notice />
+            <EmptyScene />
             <RecoveryPrompt />
           </div>
           {mode === 'animate' && <Timeline />}

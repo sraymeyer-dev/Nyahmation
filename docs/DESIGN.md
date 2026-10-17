@@ -1,7 +1,7 @@
 # Nyahmation — Design Document
 
-> **Status:** v1.6. Every phase in the roadmap is built: 0–4 (the MVP), 4.5 (hardening), 5a–5c and 6. Next is a full review and test. See §16.
-> **Last updated:** 2026-09-26
+> **Status:** v1.7. Every phase in the roadmap is built: 0–4 (the MVP), 4.5 (hardening), 5a–5c and 6. The full review is under way; checking on the reference machine is still to do. See §16.
+> **Last updated:** 2026-10-17
 
 ---
 
@@ -556,7 +556,7 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | **5b** ✅ | Look | **Off-screen group rendering** (FX8). On top of it: drop shadow and outer glow (FX1), effects on a whole group (FX2), animatable effect settings (FX3), blend modes (FX4), layer blur and haze (BG6), clipping masks (D12). Unchanged groups are reused from frame to frame (FX6, FX11). |
 | **5c** ✅ | Craft | Draw-order swaps in Animate mode (R9); easing curve editor (A10); MOV ProRes 4444 export (E3); copy and paste poses (A13, without mirror); **cut, copy and paste parts in Build mode** (D9a); stretching a range of poses (A6); dragging lip-sync block edges (LS4). |
 | **6** ✅ | Stretch | Automatic lip sync with Rhubarb (LS7); mirror poses and swap sides (§9.4); animation cycles (§9.5); boolean operations (D11); stepping that changes over time (ST7); contact shadows (FX5); WebM and H.265 (E4); swatches and eyedropper (D13); update from library (L5). |
-| **Next** | Review | A full review and test of the whole app, on the reference machine too. |
+| **Review** | Review | A full review and test of the whole app, on the reference machine too. Under way: see v1.7 in the revision history. Still to do: the reference machine (N2, N8). |
 
 **Why phase 5 is split, and in this order.** Several phase 5 features rest on the same foundations, so those come first. The camera is what gives parallax, scrolling and haze any meaning. Off-screen group rendering is what whole-group shadows, blend modes, blur and clipping masks all need. Preview quality (built in 4.5) has to exist before blur, the most expensive thing Nyahmation will draw (FX6). Each sub-phase ends usable, and changes the file format at most once.
 
@@ -667,6 +667,7 @@ None right now. New questions will be added here as implementation raises them.
 
 ## Revision history
 
+- **v1.7 (2026-10-17):** Review, first part. Fixed: the scene sat partly under the timeline in Animate mode (a fitted view now stays fitted); poses recorded on frames a cycle repeats never showed (now refused with an explanation, D-68, CY4); changing the frame rate left lip sync off the dialogue (D-67); undoing back to the saved state still counted as unsaved; shape tools could fail where outlines nearly touch (D11, retried on a fine grid); a layer saved as a new library version lost track of parts added since, so a later update dropped their animation (L5). Added: drag and drop of files onto the window (and the window can no longer be navigated away from), File → Open Recent, Help → Keyboard Shortcuts and User Manual, a hint for every tool, onion skin settings, Show in Finder and time left when exporting, Shift+Enter and pose jumps into groups in Animate mode, timeline zoom with Cmd/Ctrl+scroll, several files at once in File → Import. The timeline no longer rebuilds its rows every frame while playing. A seeded fuzz test now runs random edits and checks the project stays valid, artwork doesn't move when rearranged, and retiming keeps every pose.
 - **v1.6 (2026-09-27):** Phase 6 built: automatic lip sync with Rhubarb (LS7), mirrored poses and swap sides (§9.4), animation cycles (§9.5), stepping over time (ST7), boolean shape tools (D11), swatches and eyedropper (D13), contact shadows (FX5), WebM and H.265 export (E4), update from library (L5). Added D-61 to D-66. The roadmap is complete; a full review is next.
 - **v1.5 (2026-09-27):** Phase 5c built: draw-order swaps in Animate mode (R9), the easing curve editor (A10), ProRes 4444 MOV export (E3), copy and paste of poses (A13) and of parts in Build mode (D9a), stretching a range (A6), lip-sync block edges (LS4). Added D-58 to D-60.
 - **v1.4 (2026-09-26):** Phase 5b built: effects on parts and layers (§8b: drop shadow, outer glow, blur, haze), applied to groups as a whole off-screen (FX8), animatable (FX9), blend modes (FX4), clipping (D12), reuse of unchanged groups (FX11). Added D-55 to D-57.

@@ -158,8 +158,8 @@ export interface NyahApi {
   openProject(): Promise<OpenedFile | null>;
   /** Saves to `path`, or shows a Save dialog when no path is given. Null if cancelled. */
   saveProject(bytes: Uint8Array, path?: string): Promise<SavedFile | null>;
-  /** Shows an Import dialog for SVG, PNG, JPEG and sound files. Null if cancelled. */
-  importFile(): Promise<ImportedFile | null>;
+  /** Shows an Import dialog for SVG, PNG, JPEG and sound files; several can be chosen. Empty if cancelled. */
+  importFile(): Promise<ImportedFile[]>;
   /** Picks several SVG/PNG/JPEG files at once (for adding drawings to a switch layer). */
   importFiles(): Promise<ImportedFile[]>;
   /** Subscribes to native menu commands. Returns an unsubscribe function. */
@@ -179,6 +179,8 @@ export interface NyahApi {
   export: ExportApi;
   recovery: RecoveryApi;
   lipSync: LipSyncApi;
+  /** Opens the illustrated user manual (a PDF) in the system's viewer. */
+  openManual(): void;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */
   setDocumentState(state: { title: string; path: string | null; dirty: boolean }): void;
 }

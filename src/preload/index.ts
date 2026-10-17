@@ -26,6 +26,7 @@ const api: NyahApi = {
   },
   editText: (command) => ipcRenderer.send('edit:text', command),
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
+  openManual: () => ipcRenderer.send('help:manual'),
   library: {
     list: () => ipcRenderer.invoke('library:list'),
     read: (relPath) => ipcRenderer.invoke('library:read', relPath),

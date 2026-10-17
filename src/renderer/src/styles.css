@@ -1314,3 +1314,36 @@ input[type='color'] {
   color: var(--text);
   font-weight: 600;
 }
+
+/* The first step for an empty scene. */
+.empty-scene {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90%);
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.empty-scene p {
+  margin: 6px 0 10px;
+  color: var(--muted);
+}
+
+.empty-scene .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.empty-scene .link {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+}

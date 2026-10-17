@@ -18,7 +18,7 @@ The full requirements and decisions are in [docs/DESIGN.md](docs/DESIGN.md).
 - **Phase 5b (look):** done. Drop shadows, glows, blur and haze on parts or whole layers (animatable), blend modes, and clipping (pupils that stay inside the eye).
 - **Phase 5c (craft):** done. Copy and paste of parts and poses, arms that swing behind the body, a custom easing curve, stretching or squashing a section of animation, and ProRes 4444 export for video editors.
 - **Phase 6 (stretch goals):** done. Automatic lip sync, mirrored poses, walk cycles, stepping that changes over time, shape tools (union, subtract…), colour swatches and an eyedropper, contact shadows, WebM and H.265 export, and updating characters from the library.
-- Next: a full review and test of the whole app. See the roadmap in the design document.
+- **Review (in progress):** a review of the whole app found and fixed bugs (the scene hidden under the timeline in Animate mode, poses recorded where a cycle repeats, shape tools failing on some outlines, library updates losing animation of parts added before saving a new version, frame-rate changes breaking lip sync) and added drag and drop, Open Recent, a Help menu, tool hints, onion skin settings and a fuzz test of the engine. Still to do: checking it on the reference machine.
 
 ## Running it on a Mac (step by step)
 

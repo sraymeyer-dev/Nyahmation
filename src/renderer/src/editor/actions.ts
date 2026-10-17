@@ -392,12 +392,14 @@ export async function save(saveAs = false): Promise<void> {
   }
 }
 
-/** Imports an SVG or PNG/JPEG file into the active layer, centred in the scene. */
+/** File → Import: SVG, PNG or JPEG art into the active layer, centred in the scene, and sounds onto the Sound row. */
 export async function importFile(): Promise<void> {
   const api = window.nyah;
   if (!api) return;
-  const file = await api.importFile();
-  if (file) importBytes(file.name, file.bytes);
+  for (const file of await api.importFile()) {
+    if (isSoundFile(file.name)) await importAudio(file.name, file.bytes);
+    else importBytes(file.name, file.bytes);
+  }
 }
 
 const AUDIO_TYPES: Record<string, string> = {

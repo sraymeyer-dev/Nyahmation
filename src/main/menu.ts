@@ -23,7 +23,7 @@ function manualPath(): string {
   return app.isPackaged ? join(process.resourcesPath, name) : join(app.getAppPath(), 'docs', 'manual', name);
 }
 
-function openManual(): void {
+export function openManual(): void {
   const path = manualPath();
   if (!existsSync(path)) {
     dialog.showErrorBox("Couldn't find the user manual", `It should be at ${path}.`);
