@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { locatePart } from '../../../engine/edit';
 import { pinIntervals } from '../../../engine/pins';
 import type { Project } from '../../../engine/types';
 import { removeClip, select } from '../editor/actions';
@@ -11,6 +12,7 @@ import { clipPeaks, playbackClock, playFrom, scrubAt, stopPlayback } from '../au
 import { activeSwitch, enterDrawing } from '../editor/lipsync';
 import { playbackStats, resetPlaybackStats } from '../render/perf';
 import { DrawingThumb } from './DrawingThumb';
+import { revealRow } from './reveal';
 
 // The timeline (docs/DESIGN.md A1, A6): one row for the whole scene, one per
 // layer and one per part. Each diamond is a pose mark. Drag a mark to retime
@@ -85,6 +87,19 @@ export function Timeline() {
   );
   const scroller = useRef<HTMLDivElement>(null);
   const { durationFrames: duration, fps } = project.scene;
+
+  // A part selected on the canvas is shown here too: its layer opens, and its row scrolls into view.
+  useEffect(() => {
+    const layers = new Set(
+      selection.map((id) => locatePart(store.getState().project, id)).flatMap((loc) => (loc?.parent ? [loc.layer.id] : [])), // not for a layer's own row
+    );
+    setCollapsed((c) => ([...c].some((id) => layers.has(id)) ? new Set([...c].filter((id) => !layers.has(id))) : c));
+  }, [selection]);
+  useEffect(() => {
+    const body = scroller.current;
+    const row = body?.querySelector('.tl-row.active');
+    if (body && row) revealRow(body, row, body.querySelector('.tl-ruler-row')?.getBoundingClientRect().height ?? 0);
+  }, [selection, cameraSelected, collapsed]);
 
   const rows = useMemo(() => buildRows(project, collapsed), [project, collapsed]);
   const stepped = project.scene.stepping !== 1 || project.scene.layers.some((l) => (l.stepping ?? 1) !== 1);

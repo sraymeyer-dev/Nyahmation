@@ -1,10 +1,11 @@
-import { useState, type DragEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactElement } from 'react';
 import { locatePart, moveLayer, reparentPart, restackPart, updateLayer, updatePart } from '../../../engine/edit';
 import type { Layer, Part, Project } from '../../../engine/types';
 import { deleteSelection, duplicate, newLayer, select } from '../editor/actions';
 import { openLibrarySave } from '../editor/library';
 import { store, useEditor } from '../editor/store';
 import { EyeIcon, LockIcon } from './icons';
+import { revealRow } from './reveal';
 
 // The Layers panel. Layers are listed front to back; inside each, parts show
 // their parent/child tree, with siblings listed front to back by stacking
@@ -38,6 +39,18 @@ export function Outliner() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; at: DropAt } | null>(null);
   const selected = new Set(selection);
+  const list = useRef<HTMLDivElement>(null);
+
+  // A part selected on the canvas is shown here: the groups around it open,
+  // and its row scrolls into view.
+  useEffect(() => {
+    const around = new Set(selection.flatMap((id) => locatePart(store.getState().project, id)?.ancestors.map((a) => a.id) ?? []));
+    setCollapsed((c) => ([...c].some((id) => around.has(id)) ? new Set([...c].filter((id) => !around.has(id))) : c));
+  }, [selection]);
+  useEffect(() => {
+    const row = list.current?.querySelector('.outline-row.selected');
+    if (row) revealRow(list.current!, row);
+  }, [selection, collapsed]);
 
   const toggle = (id: string) =>
     setCollapsed((c) => {
@@ -202,7 +215,7 @@ export function Outliner() {
         <button onClick={() => newLayer('character')} title="New character layer">+ Character</button>
         <button onClick={() => newLayer('background')} title="New background layer">+ Background</button>
       </div>
-      <div className="outline-list" role="tree">
+      <div className="outline-list" role="tree" ref={list}>
         {layers.length === 0 && <p className="empty">No layers yet. Draw something, or add a layer.</p>}
         {layers.map((layer) => [renderRow(layer.root, layer, 0, true), ...renderTree(layer.root, layer, 1)])}
       </div>

@@ -160,8 +160,8 @@ function SceneProperties({ project }: { project: Project }) {
           >
             {preset < 0 && <option value={-1}>Custom</option>}
             {SCENE_SIZES.map((p, i) => (
-              <option key={i} value={i}>
-                {p.name}, {p.width} × {p.height}
+              <option key={i} value={i} title={`${p.width} × ${p.height}, for ${p.use}`}>
+                {p.name} ({p.use})
               </option>
             ))}
           </select>

@@ -1556,6 +1556,31 @@ test('changing the frame rate keeps the timing of poses and lip sync', async () 
   expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
 });
 
+test('a part picked on the canvas is shown in the Layers list and the timeline', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await switchMode('Animate');
+  await page.keyboard.press('Escape');
+  const named = (testId: string) => page.getByTestId(testId).filter({ has: page.locator('.name', { hasText: /^Sun$/ }) });
+  const sunRows = () => [named('part-row'), named('tl-part')];
+  // Background layers start closed on the timeline.
+  await expect(sunRows()[1]!).toHaveCount(0);
+  // Scroll both lists to the top, so the Sun is out of sight in the Layers list.
+  await page.evaluate(() => document.querySelectorAll('.outline-list, .timeline-body').forEach((e) => (e.scrollTop = 0)));
+  // Click the sun.
+  const sun = await page.evaluate(() => {
+    const n = (window as any).__nyah;
+    const s = n.store.getState();
+    return { x: 1560 * s.view.zoom + s.view.panX, y: 220 * s.view.zoom + s.view.panY };
+  });
+  const b = await canvasBox();
+  await page.mouse.click(b.x + sun.x, b.y + sun.y);
+  expect((await state()).selection).toEqual([await page.evaluate(() => (window as any).__nyah.part('Sun').id)]);
+  for (const row of sunRows()) await expect(row).toBeInViewport();
+});
+
 test('a new scene shape keeps the characters in the middle', async () => {
   await switchMode('Build');
   await page.keyboard.press('Escape');
@@ -1566,7 +1591,7 @@ test('a new scene shape keeps the characters in the middle', async () => {
       return { w: s.project.scene.width, h: s.project.scene.height, x: pip.rest.x, y: pip.rest.y };
     });
   const before = await state();
-  await page.getByLabel('Scene shape').selectOption({ label: 'Tall (Shorts, Reels, TikTok), 1080 × 1920' });
+  await page.getByLabel('Scene shape').selectOption({ label: 'Tall (Shorts, Reels, TikTok)' });
   const after = await state();
   expect(after).toEqual({ w: 1080, h: 1920, x: before.x + (1080 - before.w) / 2, y: before.y + (1920 - before.h) / 2 });
   await expect(page.getByLabel('Scene width')).toHaveValue('1080');

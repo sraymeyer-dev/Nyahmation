@@ -38,12 +38,12 @@ export function resizeScene(project: Project, width: number, height: number): Pr
   return { ...moved, scene: { ...moved.scene, width, height } };
 }
 
-/** Common video shapes for the scene, with where they're used. */
-export const SCENE_SIZES: readonly { width: number; height: number; name: string }[] = [
-  { width: 1920, height: 1080, name: 'Widescreen (YouTube, TV)' },
-  { width: 1080, height: 1920, name: 'Tall (Shorts, Reels, TikTok)' },
-  { width: 1080, height: 1080, name: 'Square' },
-  { width: 1080, height: 1350, name: 'Portrait 4:5 (Instagram)' },
-  { width: 1440, height: 1080, name: '4:3 (classic TV)' },
-  { width: 3840, height: 2160, name: '4K widescreen' },
+/** Common video shapes for the scene, and where each is used. */
+export const SCENE_SIZES: readonly { width: number; height: number; name: string; use: string }[] = [
+  { width: 1920, height: 1080, name: 'Widescreen', use: 'YouTube, TV' },
+  { width: 1080, height: 1920, name: 'Tall', use: 'Shorts, Reels, TikTok' },
+  { width: 1080, height: 1080, name: 'Square', use: 'social posts' },
+  { width: 1080, height: 1350, name: 'Portrait 4:5', use: 'Instagram posts' },
+  { width: 1440, height: 1080, name: 'Classic 4:3', use: 'old TV' },
+  { width: 3840, height: 2160, name: '4K widescreen', use: 'YouTube, TV' },
 ];
