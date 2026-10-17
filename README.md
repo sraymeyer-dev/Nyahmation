@@ -117,6 +117,8 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 
 **File → Open Recent** lists the last ten projects you opened or saved.
 
+**Right-click** a part on the canvas for what you can do with it: in Build mode cut, copy, paste, duplicate, group, arrange, edit points, make a switch layer, save to the library or delete; in Animate mode copy or paste its pose, mirror it, pin it there, or move it in front or behind from this frame.
+
 **Drag and drop:** drag files from Finder or Explorer onto the window. Art (SVG, PNG, JPEG) lands where you drop it on the canvas, sounds go on the Sound row, and a `.nyah` project opens.
 
 **Animating (Animate mode):**

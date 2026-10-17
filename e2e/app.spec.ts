@@ -1624,11 +1624,11 @@ test('the interface can be made bigger, and is remembered', async () => {
 });
 
 /**
- * Right-clicks `target` and picks `label` from the menu that opens (native
- * menus can't be clicked here, so the main process picks it). Returns the
- * menu's labels.
+ * Right-clicks `target` (an element, or a point on the canvas) and picks
+ * `label` from the menu that opens (native menus can't be clicked here, so
+ * the main process picks it). Returns the menu's labels.
  */
-async function contextPick(target: import('@playwright/test').Locator, label: string): Promise<string[]> {
+async function contextPick(target: import('@playwright/test').Locator | Pt, label: string): Promise<string[]> {
   await app.evaluate(({ Menu }, pick) => {
     const g = globalThis as any;
     g.realBuild ??= Menu.buildFromTemplate;
@@ -1642,7 +1642,10 @@ async function contextPick(target: import('@playwright/test').Locator, label: st
       return menu;
     };
   }, label);
-  await target.click({ button: 'right' });
+  if ('x' in target) {
+    const b = await canvasBox();
+    await page.mouse.click(b.x + target.x, b.y + target.y, { button: 'right' });
+  } else await target.click({ button: 'right' });
   await expect.poll(() => app.evaluate(() => (globalThis as any).menuLabels ?? null)).not.toBeNull();
   const labels = await app.evaluate(() => {
     const g = globalThis as any;
@@ -1687,9 +1690,24 @@ test('right-click menus on pose marks and layer rows', async () => {
   await page.locator('.outliner input.rename').fill('Left hand');
   await page.locator('.outliner input.rename').press('Enter');
   expect(await debug<object | null>('part', 'Left hand')).not.toBeNull();
+
+  // On the canvas: the part under the mouse, with what fits the mode.
+  await page.keyboard.press('Escape');
+  const hand = (await debug<Pt>('partScreen', 'Left hand', { x: 0, y: 18 }))!;
+  const inBuild = await contextPick(hand, 'Duplicate');
+  expect(inBuild).toEqual(expect.arrayContaining(['Cut', 'Copy', 'Group', 'Bring Forward', 'Edit Points', 'Select Parent', 'Delete']));
+  await expect.poll(async () => (await state()).names).toContain('Left hand copy');
+  await menu('undo');
+  await switchMode('Animate');
+  await goToFrame(3);
+  const handNow = (await debug<Pt>('framePartScreen', 'Left hand', { x: 0, y: 18 }))!;
+  const inAnimate = await contextPick(handNow, 'Pin Here from Frame 4');
+  expect(inAnimate).toEqual(expect.arrayContaining(['Copy Pose', 'Paste Pose', 'Mirror Pose', 'Swap Sides', 'Send Backward from Here']));
+  expect(await trackFrames('Left hand', 'pin')).toEqual([3]);
   await app.evaluate(({ Menu }) => {
     Menu.buildFromTemplate = (globalThis as any).realBuild;
   });
+  await switchMode('Build');
 });
 
 /** Drops files on the window at a canvas point, as if dragged from Finder. */

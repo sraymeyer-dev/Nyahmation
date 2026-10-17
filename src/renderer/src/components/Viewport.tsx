@@ -11,6 +11,7 @@ import { getImage } from '../render/images';
 import { recordPlaybackDraw } from '../render/perf';
 import { renderPreview } from '../render/preview';
 import { drawPins } from '../editor/tools/pin';
+import { canvasContextMenu } from '../editor/canvasMenu';
 
 // The drawing canvas: renders the scene, the editor overlays, and routes
 // mouse input to the active tool. Wheel scrolls/pans; pinch or Cmd/Ctrl+wheel
@@ -164,7 +165,11 @@ export function Viewport() {
     canvas.addEventListener('pointercancel', onUp);
     canvas.addEventListener('dblclick', onDoubleClick);
     canvas.addEventListener('wheel', onWheel, { passive: false });
-    const onContextMenu = (e: Event) => e.preventDefault();
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (buttonDown || panning) return;
+      void canvasContextMenu(pointer(e).scene);
+    };
     canvas.addEventListener('contextmenu', onContextMenu);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);

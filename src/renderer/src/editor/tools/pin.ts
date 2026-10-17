@@ -6,6 +6,8 @@ import { hitTopPart } from '../hitTest';
 import { store } from '../store';
 import { GRAB_PX, pixel } from './common';
 import type { OverlayContext, Tool } from './types';
+import type { ResolvedPart } from '../../../../engine/evaluate';
+import type { Vec2 } from '../../../../engine/types';
 
 // Pin tool (Animate mode, docs/DESIGN.md §6.3): click a part to pin the spot
 // you clicked to the stage from this frame on (a planted foot). Click a
@@ -24,24 +26,30 @@ export const pinTool: Tool = {
       return;
     }
     select([hit.id]);
-    if (!canPoseOnFrame([hit.id], s)) return;
-    if (activePin(s.project, hit.id, s.frame)) {
-      store.commit(unpinPart(s.project, hit.id, s.frame), { status: `Unpinned “${hit.name}” from frame ${s.frame + 1}.` });
-      return;
-    }
-    const point = applyToPoint(invert(hit.world), p.scene);
-    // Pins live in the layer's own space: the stage, unless the layer has a parallax depth.
-    const layer = resolved.layerMatrices.get(hit.layerId);
-    const at = layer ? applyToPoint(invert(layer), p.scene) : p.scene;
-    store.commit(pinPart(s.project, hit.id, s.frame, point, at), {
-      status: `Pinned “${hit.name}” from frame ${s.frame + 1}. Click it again on a later frame to release it.`,
-    });
+    togglePin(hit, p.scene);
   },
 
   drawOverlay(o: OverlayContext) {
     drawPins(o);
   },
 };
+
+/** Pins the spot `scene` on `hit` from this frame, or releases the part if it's pinned now. */
+export function togglePin(hit: ResolvedPart, scene: Vec2): void {
+  const s = store.getState();
+  if (!canPoseOnFrame([hit.id], s)) return;
+  if (activePin(s.project, hit.id, s.frame)) {
+    store.commit(unpinPart(s.project, hit.id, s.frame), { status: `Unpinned “${hit.name}” from frame ${s.frame + 1}.` });
+    return;
+  }
+  const point = applyToPoint(invert(hit.world), scene);
+  // Pins live in the layer's own space: the stage, unless the layer has a parallax depth.
+  const layer = resolvedScene(s).layerMatrices.get(hit.layerId);
+  const at = layer ? applyToPoint(invert(layer), scene) : scene;
+  store.commit(pinPart(s.project, hit.id, s.frame, point, at), {
+    status: `Pinned “${hit.name}” from frame ${s.frame + 1}. Click it again on a later frame to release it.`,
+  });
+}
 
 /** Pin markers: a pushpin head where each pinned part is held; red when it can't reach. */
 export function drawPins(o: OverlayContext): void {
