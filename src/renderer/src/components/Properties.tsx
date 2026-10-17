@@ -1,7 +1,7 @@
 import { locatePart, restWorldMatrix, updateLayer, updatePart, type PartLocation } from '../../../engine/edit';
 import { channelValueAt, frameAccess, recordValue } from '../../../engine/access';
 import { applyToPoint } from '../../../engine/math';
-import { poseEaseAt } from '../../../engine/retime';
+import { changeFrameRate, poseEaseAt } from '../../../engine/retime';
 import { canPoseOnFrame, shownFrame, deleteSelectedMarks, editAccess, markTargets, setSelectedMarksEase } from '../editor/animate';
 import { autoChainRoots, setPivotAtScene } from '../../../engine/rig';
 import type { Ease, Layer, Part, Project, Scene, ShapeStyle, Stepping, Transform } from '../../../engine/types';
@@ -115,6 +115,19 @@ function SceneProperties({ project }: { project: Project }) {
   const scene = project.scene;
   const style = useEditor((s) => s.style);
   const set = (patch: Partial<Scene>, key: string) => store.commit({ ...project, scene: { ...scene, ...patch } }, {}, key);
+  // Poses, lip sync and sounds keep their timing in seconds, so the playhead and loop range move with them.
+  const setFrameRate = (fps: number) => {
+    const s = store.getState();
+    const k = fps / scene.fps;
+    const at = (f: number) => Math.round(f * k);
+    const next = changeFrameRate(project, fps);
+    const last = next.scene.durationFrames - 1;
+    store.commit(next, {
+      frame: Math.min(at(s.frame), last),
+      loop: s.loop ? { in: Math.min(at(s.loop.in), last), out: Math.min(at(s.loop.out), last) } : null,
+      status: `Now ${fps} frames a second. Poses, lip sync and sounds keep their timing: the scene is ${next.scene.durationFrames} frames (${(next.scene.durationFrames / fps).toFixed(1)} s).`,
+    });
+  };
   // A new scene size: keep the whole scene in view if it was fitted.
   const resize = (patch: Partial<Scene>, key: string) => {
     const fitted = isViewFitted(store.getState());
@@ -131,7 +144,7 @@ function SceneProperties({ project }: { project: Project }) {
           <NumberField label="Scene height" value={scene.height} digits={0} min={16} max={8192} onCommit={(v) => resize({ height: Math.round(v) }, 'h')} suffix="px" />
         </Row>
         <Row label="Frame rate">
-          <select aria-label="Frame rate" value={scene.fps} onChange={(e) => set({ fps: Number(e.target.value) }, 'fps')}>
+          <select aria-label="Frame rate" value={scene.fps} onChange={(e) => setFrameRate(Number(e.target.value))}>
             {[24, 25, 30, 60].map((f) => (
               <option key={f} value={f}>{f} fps</option>
             ))}

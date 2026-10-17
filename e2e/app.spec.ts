@@ -1401,6 +1401,28 @@ test('in Animate mode, Shift+Enter selects the parent and Shift+→ finds poses 
   await page.getByRole('tab', { name: 'Build' }).click();
 });
 
+test('changing the frame rate keeps the timing of poses and lip sync', async () => {
+  await page.evaluate(() => {
+    window.confirm = () => true;
+  });
+  await menu('openDemo');
+  await page.getByRole('tab', { name: 'Build' }).click();
+  await page.keyboard.press('Escape');
+  const mouthFrames = () =>
+    page.evaluate(() => {
+      const nyah = (window as any).__nyah;
+      const id = nyah.part('Mouth').id;
+      return nyah.store.getState().project.scene.tracks.find((t: any) => t.partId === id && t.channel === 'drawing').poses.map((p: any) => p.frame);
+    });
+  expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
+  await page.getByLabel('Frame rate').selectOption('30');
+  await expect(page.locator('.topbar .status')).toContainText('keep their timing');
+  expect(await mouthFrames()).toEqual([0, 20, 23, 28, 33, 55, 58]);
+  await expect(page.getByLabel('Length in frames')).toHaveValue('90');
+  await menu('undo');
+  expect(await mouthFrames()).toEqual([0, 16, 18, 22, 26, 44, 46]);
+});
+
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
 async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
   const b = await canvasBox();

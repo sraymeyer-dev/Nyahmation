@@ -633,6 +633,8 @@ Each phase ends with something usable. Video export arrives early so the full pi
 | D-64 | Boolean operations flatten outlines, combine polygons and fit curves back, rather than working on the curves directly (D11) | Proposed |
 | D-65 | Stepping changes over time are a discrete `stepping` channel on the layer's root (ST7) | Proposed |
 | D-66 | Layers from the library keep a link with an id map, so they can be updated keeping their animation (L5) | Proposed |
+| D-67 | Changing the scene's frame rate keeps timing in seconds: poses, lip sync, sound starts, cycles, the length and the loop range move to the frame at the same moment (when two poses meet, the later one is kept). Undo restores the frame numbers | Proposed |
+| D-68 | Poses aren't recorded on frames that repeat a layer's cycle, where they would never play; the status bar explains instead (CY4) | Proposed |
 | D-36 | Library items are `.nyahitem` files (zip: item.json, thumbnail, images) in `Documents/Nyahmation Library`; items can be characters, backgrounds or shapes (parts) | Proposed |
 
 ---
