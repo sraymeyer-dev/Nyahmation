@@ -524,7 +524,7 @@ class SvgImporter {
     }
     const width = parseLength(el.getAttribute('width'));
     const height = parseLength(el.getAttribute('height'));
-    if (!width || !height) {
+    if (!width || !height || width < 0 || height < 0) {
       this.warn('Images without a width and height were skipped.');
       return null;
     }

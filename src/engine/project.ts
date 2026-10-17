@@ -296,7 +296,8 @@ function validStyle(s: unknown): boolean {
 }
 
 function validImage(i: unknown): boolean {
-  return isObject(i) && typeof i.assetId === 'string' && Number.isFinite(i.width) && Number.isFinite(i.height) && i.width > 0 && i.height > 0;
+  // Older versions could import an SVG <image> with a negative size; it draws flipped.
+  return isObject(i) && typeof i.assetId === 'string' && sane(i.width) && sane(i.height) && i.width !== 0 && i.height !== 0;
 }
 
 function validEffect(e: unknown): e is Effect {
