@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webFrame, webUtils, type IpcRendererEvent } from 'electron';
 import type { MenuCommand, NyahApi, OpenedFile } from './api';
 
 /** File-system failures in plain words (the system's own message, which starts with the code, follows). */
@@ -52,6 +52,7 @@ const api: NyahApi = {
   setDocumentState: (state) => ipcRenderer.send('document:state', state),
   openManual: () => ipcRenderer.send('help:manual'),
   askForMicrophone: () => invoke('media:microphone'),
+  setInterfaceSize: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, factor))),
   library: {
     list: () => invoke('library:list'),
     read: (relPath) => invoke('library:read', relPath),

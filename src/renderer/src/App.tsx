@@ -8,6 +8,7 @@ import * as lipsync from './editor/lipsync';
 import { measurePreviewSpeed } from './editor/measure';
 import { startAutosave } from './editor/recovery';
 import { acceptDroppedFiles } from './editor/dropFiles';
+import { restoreInterfaceSize, setInterfaceSize } from './editor/interfaceSize';
 import * as clipboard from './editor/clipboard';
 import { store, useEditor, type EditorState, type ToolId } from './editor/store';
 import { deleteSelectedMarks, jumpToPose, mirrorSelected, setFrame, setLoopPoint } from './editor/animate';
@@ -86,6 +87,10 @@ const MENU: Record<MenuCommand, () => void> = {
   swapSides: () => mirrorSelected('swap'),
   shortcuts: () => store.set({ shortcutsOpen: true }),
   recordDialogue: () => store.set({ recordOpen: true, playing: false }),
+  interfaceSmaller: () => setInterfaceSize('smaller'),
+  interfaceNormal: () => setInterfaceSize('normal'),
+  interfaceLarger: () => setInterfaceSize('larger'),
+  interfaceLargest: () => setInterfaceSize('largest'),
 };
 
 let menuCommandsHandled = 0;
@@ -228,6 +233,7 @@ export function App() {
     window.nyah?.readyForFiles();
     const stopAutosave = startAutosave();
     const stopDrops = acceptDroppedFiles();
+    restoreInterfaceSize();
     return () => {
       unsubscribe?.();
       stopAutosave();

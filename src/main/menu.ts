@@ -129,6 +129,10 @@ export function buildMenu(openRecent: (path: string) => void): void {
         item('Show Grid', 'toggleGrid', "CmdOrCtrl+'"),
         item('Snap to Grid', 'toggleSnap', "Shift+CmdOrCtrl+'"),
         { type: 'separator' },
+        {
+          label: 'Interface Size',
+          submenu: [item('Smaller', 'interfaceSmaller'), item('Normal', 'interfaceNormal'), item('Larger', 'interfaceLarger'), item('Largest', 'interfaceLargest')],
+        },
         item('Measure Preview Speed', 'measurePreview'),
         { type: 'separator' },
         { role: 'toggleDevTools' },

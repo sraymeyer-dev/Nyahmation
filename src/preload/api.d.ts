@@ -152,7 +152,11 @@ export type MenuCommand =
   | 'boolIntersect'
   | 'boolExclude'
   | 'shortcuts'
-  | 'recordDialogue';
+  | 'recordDialogue'
+  | 'interfaceSmaller'
+  | 'interfaceNormal'
+  | 'interfaceLarger'
+  | 'interfaceLargest';
 
 export interface NyahApi {
   /** Shows an Open dialog. Resolves to null if cancelled. */
@@ -182,6 +186,8 @@ export interface NyahApi {
   lipSync: LipSyncApi;
   /** Asks the system to let Nyahmation use the microphone (macOS asks the user once). Resolves to whether it may. */
   askForMicrophone(): Promise<boolean>;
+  /** Draws the whole window bigger or smaller (1 is normal). */
+  setInterfaceSize(factor: number): void;
   /** Opens the illustrated user manual (a PDF) in the system's viewer. */
   openManual(): void;
   /** Tells the window about the document, for its title and the unsaved-changes prompt. */

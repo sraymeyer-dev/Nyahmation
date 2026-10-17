@@ -1610,6 +1610,19 @@ test('adds the built-in Pip and scenery to a new project', async () => {
   await page.getByRole('tab', { name: 'Layers' }).click();
 });
 
+test('the interface can be made bigger, and is remembered', async () => {
+  const ratio = () => page.evaluate(() => window.devicePixelRatio);
+  const normal = await ratio();
+  await menu('interfaceLarger');
+  await expect.poll(ratio).toBeCloseTo(normal * 1.15, 2);
+  expect(await page.evaluate(() => localStorage.getItem('nyah.interfaceSize'))).toBe('larger');
+  // The scene is still all in view.
+  const corner = (await debug<Pt>('stageScreen', { x: 1920, y: 1080 }))!;
+  expect(corner.y).toBeLessThanOrEqual((await canvasBox()).height);
+  await menu('interfaceNormal');
+  await expect.poll(ratio).toBeCloseTo(normal, 2);
+});
+
 /** Drops files on the window at a canvas point, as if dragged from Finder. */
 async function dropFiles(files: { name: string; base64: string; type?: string }[], at: [number, number]) {
   const b = await canvasBox();
