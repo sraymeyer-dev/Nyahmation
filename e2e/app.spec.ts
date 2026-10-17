@@ -1625,6 +1625,20 @@ test('Add Blinks scatters short blinks over the scene as poses', async () => {
   expect(await eyePoses()).toBe(before);
 });
 
+test('the camera shakes from the playhead and settles where it was', async () => {
+  await switchMode('Animate');
+  await page.evaluate(() => (window as any).__nyah.store.set({ frame: 20, cameraSelected: true, selection: [] }));
+  const camX = (f: number) => page.evaluate((frame) => { const s = (window as any).__nyah.store; const was = s.getState().frame; s.set({ frame }); const x = (window as any).__nyah.camera().x; s.set({ frame: was }); return x; }, f);
+  const still = await camX(20);
+  await page.getByLabel('Shake strength').selectOption('strong');
+  await page.getByRole('button', { name: 'Shake from this frame' }).click();
+  await expect(page.locator('.topbar .status')).toContainText('Camera shake on frames 21–33');
+  expect(await camX(21)).not.toBeCloseTo(still);
+  expect(await camX(32)).toBeCloseTo(still);
+  await menu('undo');
+  expect(await camX(21)).toBeCloseTo(still);
+});
+
 test('a new scene shape keeps the characters in the middle', async () => {
   await switchMode('Build');
   await page.keyboard.press('Escape');

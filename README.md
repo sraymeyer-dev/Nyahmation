@@ -143,6 +143,7 @@ Other shortcuts (Cmd on Mac, Ctrl on Windows): Undo Cmd+Z, Redo Shift+Cmd+Z (Ctr
 
 **The camera (Animate mode):**
 - Press **C** for the **Camera** tool. Drag to pan, Shift-drag to turn, Option-drag (Alt on Windows) up or down to zoom. Each change is a camera pose on the current frame, and the camera glides between poses like a character does. The **Camera** row on the timeline shows its poses; drag them to retime.
+- **Camera shake:** select the Camera row, choose Gentle, Medium or Strong and a length, then **Shake from this frame**, for landings, slams and big footsteps.
 - **Camera view** (on the timeline) shows the picture as the video will be. Untick it to see the whole stage with the camera's frame drawn on it.
 - The camera only changes what you see: characters, poses and pinned feet stay where they are on the stage.
 - **Layer options** (select a layer, then Properties → Camera and scrolling):

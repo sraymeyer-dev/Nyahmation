@@ -1,4 +1,5 @@
-import { cameraAt, defaultCamera, isCameraAnimated, recordCamera, resetCamera } from '../../../engine/camera';
+import { useState } from 'react';
+import { cameraAt, defaultCamera, isCameraAnimated, recordCamera, resetCamera, shakeCamera } from '../../../engine/camera';
 import { updateLayer, walkParts } from '../../../engine/edit';
 import type { CameraState, Layer, Part } from '../../../engine/types';
 import { store, useEditor } from '../editor/store';
@@ -46,7 +47,42 @@ export function CameraSection() {
           <button onClick={() => store.commit(resetCamera(project), { status: 'Removed every camera move.' })}>Remove all camera moves</button>
         </Row>
       )}
+      <ShakeRow />
     </Section>
+  );
+}
+
+/** How hard a shake jolts the picture, in pixels at the scene's size. */
+const SHAKES = { gentle: 6, medium: 16, strong: 36 } as const;
+
+/** A camera shake from this frame (CAM8): for a landing, a slammed door, a giant's footstep. */
+function ShakeRow() {
+  const fps = useEditor((s) => s.project.scene.fps);
+  const [strength, setStrength] = useState<keyof typeof SHAKES>('medium');
+  const [seconds, setSeconds] = useState(0.5);
+  const shake = () => {
+    const s = store.getState();
+    const frames = Math.max(3, Math.round(seconds * s.project.scene.fps));
+    const next = shakeCamera(s.project, s.frame, { frames, strength: SHAKES[strength] });
+    if (next === s.project) return store.set({ status: 'Too near the end of the scene for a shake.' });
+    store.commit(next, { status: `Camera shake on frames ${s.frame + 1}–${Math.min(s.frame + frames, s.project.scene.durationFrames - 1) + 1}: a camera pose on each frame. Undo removes it.` });
+  };
+  return (
+    <>
+      <Row label="Shake">
+        <select aria-label="Shake strength" value={strength} onChange={(e) => setStrength(e.target.value as keyof typeof SHAKES)}>
+          <option value="gentle">Gentle</option>
+          <option value="medium">Medium</option>
+          <option value="strong">Strong</option>
+        </select>
+        <NumberField label="Shake length" value={seconds} min={0.1} max={5} step={0.1} digits={1} onCommit={setSeconds} suffix={`s · ${Math.max(3, Math.round(seconds * fps))} frames`} />
+      </Row>
+      <Row label="">
+        <button onClick={shake} title="Jolts the picture back and forth from this frame, dying away. Best while the camera holds still.">
+          Shake from this frame
+        </button>
+      </Row>
+    </>
   );
 }
 
