@@ -33,7 +33,9 @@ export function RecordDialog() {
   useEffect(() => {
     if (!recording) return;
     let raf = requestAnimationFrame(function tick() {
-      setLevel(recording.level());
+      // Peaks show at once and fall back gently, like a real meter.
+      const now = recording.level();
+      setLevel((was) => Math.max(now, was * 0.92));
       setElapsed(recording.elapsed());
       raf = requestAnimationFrame(tick);
     });

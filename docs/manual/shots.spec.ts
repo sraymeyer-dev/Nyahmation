@@ -24,7 +24,8 @@ test.describe.configure({ mode: 'serial' });
 test.beforeAll(async () => {
   mkdirSync(OUT, { recursive: true });
   app = await electron.launch({
-    args: ['--force-device-scale-factor=2', '.'],
+    // A pretend microphone, for the Record dialogue picture.
+    args: ['--force-device-scale-factor=2', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '.'],
     cwd: join(__dirname, '..', '..'),
     env: { ...process.env, NODE_ENV: 'production', NYAH_LIBRARY_DIR: join(dir, 'library'), NYAH_RECOVERY_DIR: join(dir, 'recovery') },
   });
@@ -512,7 +513,8 @@ test('onion', async () => {
   await setFrame(12);
   const b = await box(bar());
   const area = { x: s.x + s.width / 2 - 420, y: b.y + b.height - 600, width: 840, height: 600 };
-  await shot('onion', area, [pad(await box(barCheck('Onion skin')), 2), earlier, later]);
+  const settings = around(await box(page.getByLabel('Onion skin frames each way')), await box(page.getByLabel('Onion skin spacing')));
+  await shot('onion', area, [pad(await box(barCheck('Onion skin')), 2), earlier, later, pad(settings, 2)]);
   await barCheck('Onion skin').locator('input').uncheck();
 });
 
@@ -731,6 +733,24 @@ test('sound', async () => {
     pad(await box(barCheck('Sound while scrubbing')), 2),
     pad(await box(section('Sound')), 0),
   ]);
+});
+
+test('record', async () => {
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Record…' }).click();
+  const dlg = page.getByTestId('record-dialog');
+  await dlg.getByRole('button', { name: 'Start recording' }).click();
+  await expect(dlg.getByTestId('record-time')).toContainText(/Recording… [1-9]\./, { timeout: 10_000 });
+  // The pretend microphone beeps now and then: show the meter just after a beep.
+  await expect.poll(() => dlg.locator('.level .bar').evaluate((el) => parseFloat((el as HTMLElement).style.width)), { timeout: 15_000, intervals: [30] }).toBeGreaterThan(40);
+  await shot('record', pad(await box(dlg), 6), [
+    pad(await box(dlg.locator('.hint').first()), 2),
+    pad(await box(dlg.locator('.record-status')), 2),
+    pad(await box(dlg.getByLabel('Microphone level')), 2),
+    pad(await box(dlg.getByRole('button', { name: 'Stop' })), 2),
+  ]);
+  await dlg.getByRole('button', { name: 'Stop' }).click();
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
 });
 
 test('mouths', async () => {

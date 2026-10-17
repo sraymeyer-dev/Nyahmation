@@ -319,7 +319,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
 <!-- ============================================================== 2 getting started -->
 <section class="chapter" id="start" data-title="Getting started" data-sub="Installing, opening, and the demo puppet">
   <h2>Opening Nyahmation</h2>
-  <p>Once Nyahmation is installed in Applications, open it like any other app: from Launchpad, the Dock, or by double-clicking it. Double-clicking a saved project (a <b>.nyah</b> file) opens it too.</p>
+  <p>Once Nyahmation is installed in Applications, open it like any other app: from Launchpad, the Dock, or by double-clicking it. Double-clicking a saved project (a <b>.nyah</b> file) opens it too, and <b>File → Open Recent</b> lists the last ten projects you opened or saved.</p>
+  <p>A new scene starts empty, with a small card saying how to begin: draw with the tools on the left, drag pictures in from your computer, or open <b>Pip, the demo puppet</b>, to see how animating works. It goes away as soon as you draw something.</p>
 
   <h2>Installing it on a Mac (for grown-ups)</h2>
   <p>Nyahmation isn't in the App Store; you make the app from its source code once. You need <b>Node.js</b> (the LTS version from nodejs.org) and a copy of the code (from GitHub: pick the branch, then <b>Code → Download ZIP</b>). Then, in Terminal, inside the Nyahmation folder:</p>
@@ -377,10 +378,12 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
         <tr><th colspan="2">File</th></tr>
         <tr><td>New</td><td><k>⌘N</k></td></tr>
         <tr><td>Open…</td><td><k>⌘O</k></td></tr>
+        <tr><td>Open Recent</td><td></td></tr>
         <tr><td>Open Demo Puppet</td><td></td></tr>
         <tr><td>Save</td><td><k>⌘S</k></td></tr>
         <tr><td>Save As…</td><td><k>⇧⌘S</k></td></tr>
         <tr><td>Import Art or Sound…</td><td><k>⌘I</k></td></tr>
+        <tr><td>Record Dialogue…</td><td><k>⇧⌘R</k></td></tr>
         <tr><td>Export Video…</td><td><k>⌘E</k></td></tr>
       </table>
       <table class="keys">
@@ -427,8 +430,15 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
         <tr><td>Mark Branch Joints as Chain Roots</td><td></td></tr>
         <tr><td>Save Selection to Library…</td><td><k>⇧⌘L</k></td></tr>
       </table>
+      <table class="keys">
+        <tr><th colspan="2">Help</th></tr>
+        <tr><td>Nyahmation User Manual</td><td></td></tr>
+        <tr><td>Keyboard Shortcuts (every shortcut on one sheet)</td><td><k>⌘/</k></td></tr>
+      </table>
     </div>
   </div>
+
+  <p>The strip above the canvas reminds you how the current tool works, including what <kbd>Shift</kbd>, <kbd>⌥</kbd> and <kbd>⌘</kbd> do with it.</p>
 
   <h2>Moving around the canvas</h2>
   <ul>
@@ -526,7 +536,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <div class="note"><p><b>Typing?</b> While you're typing in a text field, the same keys cut, copy and paste the text instead.</p></div>
 
   <h2>Importing art</h2>
-  <p><b>File → Import Art or Sound…</b> (<k>⌘I</k>) brings in:</p>
+  <p><b>File → Import Art or Sound…</b> (<k>⌘I</k>) brings in one file or several at once. Or simply <b>drag files from Finder onto the window</b>: pictures land where you drop them on the canvas, sounds go on the Sound row, and a <b>.nyah</b> project opens. Nyahmation brings in:</p>
   <ul>
     <li><b>SVG</b> files from other drawing apps (Inkscape, Illustrator, Affinity, Figma…). Each layer or group in the file becomes a part, with its name, so a character drawn elsewhere arrives ready to rig. Gradients come along. Things Nyahmation can't use, such as text, are listed in a message.</li>
     <li><b>PNG</b> and <b>JPEG</b> pictures. PNGs can have see-through backgrounds. Pictures have a fixed number of pixels, so they look soft if you blow them up; Nyahmation warns you when you export.</li>
@@ -730,7 +740,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <p>An arm that swings behind the body needs to change its place in the stacking order partway through the move. In Animate mode, select the part, go to the frame where it should pass behind, and choose <b>Send Backward</b> (<k>⌘[</k>) or <b>Send to Back</b> (<k>⇧⌘[</k>); <b>Bring Forward</b> and <b>Bring to Front</b> go the other way. A mark on the part's row records the change, and the new order holds until the next change. Drag the mark to retime it like any other pose.</p>
 
   <h2>Scene settings</h2>
-  <p>With nothing selected (press <kbd>Esc</kbd>), Properties shows the scene: its size in pixels (1920 × 1080 is standard HD video), the frame rate (24, 25, 30 or 60 frames a second; 24 is the classic cartoon rate), the length in frames, the background colour, an optional <b>Sky</b> gradient (<a class="xref" data-ref="backgrounds"></a>), and <b>Animate on</b> (<a class="xref" data-ref="timing"></a>).</p>
+  <p>With nothing selected (press <kbd>Esc</kbd>), Properties shows the scene: its size in pixels (1920 × 1080 is standard HD video), the frame rate (24, 25, 30 or 60 frames a second; 24 is the classic cartoon rate; changing it keeps everything's timing in seconds, so moves keep their speed and lip sync stays on the words), the length in frames, the background colour, an optional <b>Sky</b> gradient (<a class="xref" data-ref="backgrounds"></a>), and <b>Animate on</b> (<a class="xref" data-ref="timing"></a>).</p>
 </section>
 
 <!-- ============================================================== 9 timing -->
@@ -801,9 +811,10 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
       <li>Onion skin is on</li>
       <li>Earlier frames show in red…</li>
       <li>…and later frames in green, so you can see the arc of a movement</li>
+      <li>How many frames each way, and how far apart they are</li>
     </ol>
   </figure>
-  <p>Tick <b>Onion skin</b> on the timeline to see faint copies of nearby frames: red for earlier, green for later. It shows the path a movement takes, so you can check that an arm swings in a nice arc.</p>
+  <p>Tick <b>Onion skin</b> on the timeline to see faint copies of nearby frames: red for earlier, green for later. It shows the path a movement takes, so you can check that an arm swings in a nice arc. Next to it, choose how many frames to show each way (1 to 4) and how far apart they are (every frame up to every 4th).</p>
 
   <h2>Pins: feet that stay on the floor</h2>
   <figure data-shot="pins">
@@ -862,6 +873,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <li><b>Frame To counts as frame From of the next repeat,</b> so pose them the same (copy and paste the pose). Otherwise the character jumps at every repeat.</li>
     <li><b>Keep moving</b> makes each repeat start where the last one ended. The character's top part and anything pinned move on by the distance one cycle covers, so a walk actually walks, with its feet still planted.</li>
     <li>Lip sync is never repeated: mouth shapes follow the dialogue. Everything else in the layer repeats, including blinks, draw-order changes, pins and changes of Animate on.</li>
+    <li>After frame <em>To</em> the layer only replays the cycle, so posing it there wouldn't show. Nyahmation doesn't record such a pose: the status line says which frame of the cycle is showing. Change the cycle itself, inside From–To.</li>
   </ul>
 
   <h2>A walk in six steps</h2>
@@ -1026,14 +1038,31 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <figure data-shot="sound">
     <figcaption>A voice recording on the Sound row, selected, with its properties.</figcaption>
     <ol class="callouts">
-      <li>Import… (⌘I) adds a sound at the current frame</li>
+      <li>Import… (⌘I) adds a sound file at the current frame; Record… on the timeline records one</li>
       <li>The Sound row, with the sound's waveform. Drag it to line it up</li>
       <li>Sound while scrubbing: hear each frame as you step or drag the playhead</li>
       <li>Sound properties: name, start frame, volume and mute</li>
     </ol>
   </figure>
 
-  <h2>Adding a sound</h2>
+  <h2>Recording dialogue</h2>
+  <figure data-shot="record" class="side" style="--pic: 50%">
+    <figcaption>Recording a line of dialogue.</figcaption>
+    <ol class="callouts">
+      <li>Where the recording will start: the playhead</li>
+      <li>Recording, and for how long</li>
+      <li>How loud the microphone hears you</li>
+      <li>Stop when you've finished the line</li>
+    </ol>
+  </figure>
+  <ol class="steps">
+    <li>In Animate mode, go to the frame where the line should start.</li>
+    <li>Click <b>Record…</b> on the timeline (or <b>File → Record Dialogue…</b>, <k>⇧⌘R</k>), then <b>Start recording</b>, and say the line. The bar shows how loud the microphone hears you.</li>
+    <li>Click <b>Stop</b>. Listen to it, then click <b>Keep it</b>, or <b>Try again</b>. A kept recording goes on the Sound row, named Line 1, Line 2 and so on, ready for lip sync.</li>
+  </ol>
+  <p>The first time, macOS asks whether Nyahmation may use the microphone: click <b>Allow</b>. If you clicked Don't Allow, turn it on in <b>System Settings → Privacy &amp; Security → Microphone</b>. Use headphones if the scene already has sounds, so the microphone doesn't hear them.</p>
+
+  <h2>Adding a sound file</h2>
   <ol class="steps">
     <li>In Animate mode, go to the frame where the sound should start.</li>
     <li>Choose <b>File → Import Art or Sound…</b> (<k>⌘I</k>) and pick a sound file: WAV, MP3, M4A, AAC, OGG or FLAC.</li>
@@ -1047,7 +1076,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
     <li><b>Sound while scrubbing</b> (a checkbox on the timeline, on by default) plays a tiny slice of sound for each frame as you step with the arrow keys or drag along the number row. This is how you find exactly where each word starts.</li>
     <li>During playback the picture follows the sound, so they never drift apart, even on a slow computer.</li>
   </ul>
-  <div class="note"><p><b>Recording tip.</b> Record dialogue with your phone's voice memo app or QuickTime Player (File → New Audio Recording), in a quiet room, and save or share it to the Mac. Speak a little more clearly and slowly than normal; it makes lip sync easier, for you and for Auto lip sync.</p></div>
+  <div class="note"><p><b>Recording tip.</b> Record in a quiet room, with the microphone close. Speak a little more clearly and slowly than normal; it makes lip sync easier, for you and for Auto lip sync. A recording from your phone's voice memo app works too: share it to the Mac and drag it onto the window.</p></div>
 </section>
 
 <!-- ============================================================== 15 lip sync -->
@@ -1102,7 +1131,7 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   </figure>
   <p>Nyahmation can listen to the dialogue and fill in the mouth shapes for you, using Rhubarb Lip Sync. It's a great first draft: it gets most shapes right, and you spend your time polishing instead of typing every letter.</p>
   <ol class="steps">
-    <li>Import the dialogue (<a class="xref" data-ref="sound"></a>) and switch to Animate mode.</li>
+    <li>Record or import the dialogue (<a class="xref" data-ref="sound"></a>) and switch to Animate mode.</li>
     <li>Click the Mouth row's name on the timeline. The mouth palette appears; click <b>Auto lip sync…</b></li>
     <li>Pick the sound, the language, and if you can, type the words. Click <b>Start</b>.</li>
     <li>After a few seconds to a minute, the Mouth row fills with shapes for the length of the sound. Play it, and fix any shape you don't like by typing its letter (below).</li>
@@ -1160,7 +1189,8 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <ol class="steps">
     <li>Choose <b>File → Export Video…</b> (<k>⌘E</k>), or click <b>Export…</b> on the timeline.</li>
     <li>Pick a format, a size and which frames.</li>
-    <li>Click <b>Export…</b> and choose where to save. A progress bar shows each frame; <b>Cancel</b> stops it.</li>
+    <li>Click <b>Export…</b> and choose where to save. A progress bar shows each frame and roughly how long is left; <b>Cancel</b> stops it.</li>
+    <li>When it's done, <b>Show in Finder</b> takes you to the video.</li>
   </ol>
 
   <h2>Which format?</h2>
@@ -1186,10 +1216,11 @@ h2 + figure, h3 + figure { margin-top: 4pt; }
   <h2>Projects</h2>
   <p>A project is one scene, saved as one <b>.nyah</b> file. The file holds everything: the drawings, the animation, the camera, pictures and sounds, so you can copy it to another computer or back it up in one piece.</p>
   <ul>
-    <li><b>Save</b> (<k>⌘S</k>) and <b>Save As…</b> (<k>⇧⌘S</k>). A dot after the project's name means there are unsaved changes.</li>
+    <li><b>Save</b> (<k>⌘S</k>) and <b>Save As…</b> (<k>⇧⌘S</k>). A dot after the project's name means there are unsaved changes; undoing back to how it was saved makes the dot go away.</li>
     <li>Nyahmation asks before closing, or opening another project, if there are unsaved changes.</li>
     <li>Saving is safe: the new file is written completely before it replaces the old one, so a crash can't damage your project.</li>
-    <li>Double-click a .nyah file in Finder, or drop it on Nyahmation's Dock icon, to open it.</li>
+    <li>Double-click a .nyah file in Finder, drop it on Nyahmation's Dock icon or window, or pick it from <b>File → Open Recent</b>, to open it.</li>
+    <li>If a file has been damaged (by a failing disk, say), Nyahmation says so instead of opening it, and your autosave or a backup can rescue the work.</li>
   </ul>
 
   <h2>Autosave: a safety net</h2>
